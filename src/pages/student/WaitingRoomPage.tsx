@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
 import { getOrCreateGameClientSync, type GameEventMessage } from '../../lib/gameSync';
-import { Gamepad2, Users, Sparkles, Smile, ShieldCheck, Wifi } from 'lucide-react';
+import { Gamepad2, Users, Sparkles, Smile, ShieldCheck, Wifi, Volume2, VolumeX } from 'lucide-react';
 
 export default function WaitingRoomPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -13,6 +13,7 @@ export default function WaitingRoomPage() {
   const [connectedPeers, setConnectedPeers] = useState<number>(1);
   const [isLiveConnected, setIsLiveConnected] = useState(false);
   const [readyEmote, setReadyEmote] = useState(false);
+  const [isMusicActive, setIsMusicActive] = useState(() => audioEngine.getSettings().musicEnabled);
 
   useEffect(() => {
     audioEngine.setContext('lobby');
@@ -79,6 +80,20 @@ export default function WaitingRoomPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              audioEngine.unlock();
+              const active = audioEngine.toggleMusic();
+              setIsMusicActive(active);
+              if (active) audioEngine.setContext('lobby');
+            }}
+            className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-white/70 hover:text-white"
+            title="Música de fondo"
+          >
+            {isMusicActive ? <Volume2 className="w-3.5 h-3.5 text-green-400" /> : <VolumeX className="w-3.5 h-3.5 text-red-400" />}
+          </button>
+
           <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
             isLiveConnected
               ? 'bg-green-500/10 border-green-500/30 text-green-400'

@@ -12,7 +12,7 @@ import {
   Play, Pause, SkipForward, Square, Users, QrCode,
   Zap, Share2, RefreshCw, Trophy, Medal, Crown,
   ArrowLeft, CheckCircle2, Sparkles, BarChart3,
-  Clock, Eye, Wifi, AlertCircle
+  Clock, Eye, Wifi, AlertCircle, Volume2, VolumeX
 } from 'lucide-react';
 
 const OPTION_STYLES = [
@@ -81,6 +81,7 @@ export default function SessionPage() {
   const [globalPowerModalOpen, setGlobalPowerModalOpen] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [globalPowerSuccess, setGlobalPowerSuccess] = useState<string | null>(null);
+  const [isMusicActive, setIsMusicActive] = useState(() => audioEngine.getSettings().musicEnabled);
 
   const hostSyncRef = useRef<GameHostSync | null>(null);
   const currentQ = questions[currentQIndex] || questions[0];
@@ -316,6 +317,28 @@ export default function SessionPage() {
 
         {/* Botones de Control de la Sesión */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* BOTÓN MÚSICA ON / OFF */}
+          <button
+            type="button"
+            onClick={() => {
+              audioEngine.unlock();
+              const active = audioEngine.toggleMusic();
+              setIsMusicActive(active);
+              if (active) {
+                audioEngine.setContext(gamePhase === 'finished' ? 'podium' : gamePhase === 'question' ? 'question' : 'lobby');
+              }
+            }}
+            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
+              isMusicActive
+                ? 'bg-purple-600/20 border-purple-500/40 text-purple-300 hover:bg-purple-600/30 shadow-md shadow-purple-600/20'
+                : 'bg-white/5 border-white/10 text-white/40 hover:text-white'
+            }`}
+            title="Activar o Silenciar Música de Fondo"
+          >
+            {isMusicActive ? <Volume2 className="w-4 h-4 text-green-400 animate-pulse" /> : <VolumeX className="w-4 h-4 text-red-400" />}
+            <span>{isMusicActive ? 'Música: ON' : 'Música: Mute'}</span>
+          </button>
+
           {/* BOTÓN PODER PARA TODOS (Solo si hay alumnos conectados) */}
           {gamePhase !== 'finished' && liveParticipants.length > 0 && (
             <button
