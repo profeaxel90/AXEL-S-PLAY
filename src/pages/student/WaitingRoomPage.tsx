@@ -1,41 +1,76 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
-import { P2PClient } from '../../lib/p2p';
-import { Gamepad2, Users, Sparkles, Smile, ShieldCheck } from 'lucide-react';
+import { getOrCreateP2PClient } from '../../lib/p2p';
+import { Gamepad2, Users, Sparkles, Smile, ShieldCheck, Wifi } from 'lucide-react';
 
 export default function WaitingRoomPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { session, currentParticipant, participants, phase, subscribeToSession, unsubscribeFromSession } = useSessionStore();
+  const { currentParticipant, participants, phase } = useSessionStore();
+
+  const [connectedPeers, setConnectedPeers] = useState<number>(participants.length || 1);
+  const [isP2PConnected, setIsP2PConnected] = useState(false);
+  const [readyEmote, setReadyEmote] = useState(false);
 
   useEffect(() => {
-    if (sessionId) {
-      subscribeToSession(sessionId);
-    }
     audioEngine.setContext('lobby');
 
-    // Conexión directa P2P con el docente
-    let client: P2PClient | null = null;
-    if (sessionId && currentParticipant) {
-      client = new P2PClient(sessionId);
-      client.connect(currentParticipant);
-      client.onMessage = (msg) => {
-        if (msg.type === 'START_GAME' || msg.type === 'QUESTION') {
-          audioEngine.setContext('game_start');
-          navigate(`/game/${sessionId}`);
-        }
-      };
-    }
+    if (!sessionId) return;
 
-    return () => {
-      unsubscribeFromSession();
-      client?.destroy();
+    // Conexión P2P persistente con el Host del Docente
+    const participantData = currentParticipant || {
+      id: `p-${Date.now()}`,
+      sessionId,
+      nickname: 'Estudiante',
+      avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Astro',
+      score: 0,
+      rank: 1,
+      isConnected: true,
+      joinedAt: new Date().toISOString(),
     };
-  }, [sessionId, subscribeToSession, unsubscribeFromSession, currentParticipant, navigate]);
 
-  // Si la partida arranca (phase pasa a 'question'), redirigir a la pantalla de juego
+    const client = getOrCreateP2PClient(sessionId);
+
+    client.onConnected = () => {
+      console.log('[WaitingRoom] P2P Conectado con el docente');
+      setIsP2PConnected(true);
+    };
+
+    client.onMessage = (msg) => {
+      console.log('[WaitingRoom] Mensaje recibido:', msg.type);
+
+      if (msg.type === 'ROOM_UPDATE') {
+        setConnectedPeers(msg.participants.length);
+        useSessionStore.setState({ participants: msg.participants });
+      } else if (msg.type === 'START_GAME' || msg.type === 'QUESTION') {
+        audioEngine.setContext('game_start');
+        if (msg.type === 'QUESTION') {
+          useSessionStore.setState({
+            currentQuestion: msg.question,
+            questionIndex: msg.index,
+            timeRemaining: msg.timeLimit,
+            phase: 'question',
+          });
+        }
+        navigate(`/game/${sessionId}`);
+      }
+    };
+
+    client.connect(participantData).then((success) => {
+      if (success || client.isConnected) {
+        setIsP2PConnected(true);
+      }
+    });
+
+    // Timeout de verificación de conexión: si ya está conectado
+    if (client.isConnected) {
+      setIsP2PConnected(true);
+    }
+  }, [sessionId, currentParticipant, navigate]);
+
+  // Si la fase cambia a pregunta por store, avanzar
   useEffect(() => {
     if (phase === 'question' && sessionId) {
       navigate(`/game/${sessionId}`);
@@ -43,40 +78,53 @@ export default function WaitingRoomPage() {
   }, [phase, sessionId, navigate]);
 
   const handleSendEmote = () => {
+    setReadyEmote(true);
     audioEngine.playEffect('sfx_tick');
+    setTimeout(() => setReadyEmote(false), 2000);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950/60 to-slate-950 text-white flex flex-col justify-between p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950/70 to-slate-950 text-white flex flex-col justify-between p-4 md:p-8 select-none">
       {/* Top Bar */}
-      <div className="flex items-center justify-between max-w-4xl mx-auto w-full">
+      <div className="flex items-center justify-between max-w-md mx-auto w-full pt-2">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center">
-            <Gamepad2 className="w-6 h-6" />
+          <div className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center shadow-lg shadow-purple-600/40">
+            <Gamepad2 className="w-5 h-5" />
           </div>
-          <span className="font-black text-xl">AXEL PLAY</span>
+          <span className="font-black text-lg tracking-tight">AXEL PLAY</span>
         </div>
 
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/15 text-xs font-semibold">
-          <Users className="w-4 h-4 text-purple-400" />
-          <span>{participants.length || 1} en la sala</span>
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+            isP2PConnected
+              ? 'bg-green-500/10 border-green-500/30 text-green-400'
+              : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400 animate-pulse'
+          }`}>
+            <Wifi className="w-3.5 h-3.5" />
+            <span>{isP2PConnected ? 'En línea' : 'Conectando...'}</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-semibold">
+            <Users className="w-3.5 h-3.5 text-purple-400" />
+            <span>{connectedPeers}</span>
+          </div>
         </div>
       </div>
 
       {/* Main Waiting Card */}
-      <div className="max-w-md mx-auto w-full text-center my-auto py-8">
+      <div className="max-w-md mx-auto w-full text-center my-auto py-4">
         {/* Animated Avatar */}
         <div className="relative inline-block mb-6">
-          <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-gradient-to-tr from-purple-500 via-indigo-500 to-pink-500 p-1.5 shadow-2xl shadow-purple-600/40 animate-float">
+          <div className="w-32 h-32 md:w-36 md:h-36 rounded-3xl bg-gradient-to-tr from-purple-500 via-indigo-500 to-pink-500 p-1.5 shadow-2xl shadow-purple-600/40 animate-float">
             <div className="w-full h-full bg-slate-900 rounded-[22px] flex items-center justify-center overflow-hidden border border-white/20">
               <img
                 src={currentParticipant?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=ProfeAxel'}
                 alt="Mi Avatar"
-                className="w-28 h-28 md:w-36 md:h-36 object-contain"
+                className="w-24 h-24 md:w-28 md:h-28 object-contain"
               />
             </div>
           </div>
-          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-green-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center gap-1 shadow-lg shadow-green-500/50">
+          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-green-500 text-slate-950 font-black text-[11px] uppercase tracking-wider flex items-center gap-1 shadow-lg shadow-green-500/50">
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>¡Conectado!</span>
           </div>
@@ -85,9 +133,9 @@ export default function WaitingRoomPage() {
         <h2 className="text-2xl md:text-3xl font-black mb-1">
           {currentParticipant?.nickname || 'Participante'}
         </h2>
-        <p className="text-purple-300 text-sm font-semibold flex items-center justify-center gap-1 mb-8">
-          <Sparkles className="w-4 h-4 text-yellow-400 animate-spin" />
-          <span>{session?.game?.title || 'Esperando inicio de la partida...'}</span>
+        <p className="text-purple-300 text-xs font-semibold flex items-center justify-center gap-1.5 mb-6">
+          <Sparkles className="w-3.5 h-3.5 text-yellow-400 animate-spin" />
+          <span>Esperando que el docente inicie la partida...</span>
         </p>
 
         {/* Status Message */}
@@ -97,23 +145,27 @@ export default function WaitingRoomPage() {
             Mira la pantalla del Docente
           </h3>
           <p className="text-white/60 text-xs">
-            La actividad comenzará en cuanto el docente presione "Iniciar Partida".
+            Las preguntas y opciones aparecerán aquí en cuanto el docente presione "INICIAR PARTIDA".
           </p>
         </div>
 
         {/* Emote button */}
         <button
           onClick={handleSendEmote}
-          className="btn-secondary py-2.5 px-6 rounded-xl text-xs font-bold inline-flex items-center gap-2 border-white/20 hover:border-purple-400"
+          className={`py-3 px-6 rounded-2xl text-xs font-bold inline-flex items-center gap-2 border transition-all ${
+            readyEmote
+              ? 'bg-green-500/20 border-green-400 text-green-300 scale-105'
+              : 'btn-secondary border-white/20 hover:border-purple-400'
+          }`}
         >
           <Smile className="w-4 h-4 text-yellow-400" />
-          <span>¡Estoy Listo! 🎉</span>
+          <span>{readyEmote ? '¡El profe ya te ve listo! 🚀' : '¡Estoy Listo! 🎉'}</span>
         </button>
       </div>
 
       {/* Footer Info */}
-      <div className="text-center text-xs text-white/40 max-w-md mx-auto">
-        Recuerda: Si el docente te concede un super-poder, aparecerá de inmediato en tu pantalla.
+      <div className="text-center text-xs text-white/40 max-w-md mx-auto pb-2">
+        ⚡ Si el docente te asigna un poder especial, se activará al instante en tu celular.
       </div>
     </div>
   );

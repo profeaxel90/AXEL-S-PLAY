@@ -2,49 +2,129 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
-import { P2PClient } from '../../lib/p2p';
+import { getOrCreateP2PClient } from '../../lib/p2p';
 import {
-  Zap, Clock, Heart, Award, CheckCircle2, XCircle,
-  HelpCircle, Shield, AlertTriangle
+  Clock, Heart, CheckCircle2, XCircle, Shield,
+  Zap, Award, AlertCircle, Sparkles
 } from 'lucide-react';
-import type { QuestionOption } from '../../types';
+import type { Question, PowerUp, ParticipantRank } from '../../types';
+
+// Colores y símbolos estilo Kahoot para los botones táctiles de respuesta
+const OPTION_STYLES = [
+  {
+    bg: 'bg-red-600 hover:bg-red-500 active:bg-red-700 border-red-400',
+    icon: '▲',
+    label: 'Rojo',
+  },
+  {
+    bg: 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 border-blue-400',
+    icon: '◆',
+    label: 'Azul',
+  },
+  {
+    bg: 'bg-amber-500 hover:bg-amber-400 active:bg-amber-600 border-amber-300 text-slate-950',
+    icon: '●',
+    label: 'Amarillo',
+  },
+  {
+    bg: 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 border-emerald-400',
+    icon: '■',
+    label: 'Verde',
+  },
+];
 
 export default function GameStudentPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const {
-    session,
     currentQuestion,
     currentParticipant,
     questionIndex,
     phase,
-    submitAnswer,
-    usePower,
   } = useSessionStore();
 
+  const [activeQuestion, setActiveQuestion] = useState<Question | null>(currentQuestion);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(20);
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
   const [pointsGained, setPointsGained] = useState<number | null>(null);
+  const [eliminatedOptions, setEliminatedOptions] = useState<string[]>([]);
+  const [revealedCorrectId, setRevealedCorrectId] = useState<string | null>(null);
+  const [explanationText, setExplanationText] = useState<string | null>(null);
+  const [activePower, setActivePower] = useState<PowerUp | null>(currentParticipant?.activePower || null);
+  const [currentScore, setCurrentScore] = useState<number>(currentParticipant?.score || 0);
+  const [questionNum, setQuestionNum] = useState<number>(questionIndex + 1);
+  const [totalQuestions, setTotalQuestions] = useState<number>(5);
 
-  // Vidas para modo supervivencia
-  const [lives, setLives] = useState(3);
-
-  // Efecto del poder activo
-  const activePower = currentParticipant?.activePower;
-
-  // Carga y temporizador de la pregunta
+  // Escuchar mensajes P2P en tiempo real del Docente
   useEffect(() => {
-    if (!currentQuestion) return;
+    if (!sessionId) return;
+    const client = getOrCreateP2PClient(sessionId);
 
-    setSelectedOption(null);
-    setIsAnswerSubmitted(false);
-    setFeedback(null);
-    setPointsGained(null);
+    client.onMessage = (msg) => {
+      console.log('[GameStudentPage] Mensaje P2P recibido:', msg.type);
 
-    const initialTime = currentQuestion.timeLimit || 20;
-    setTimeLeft(initialTime);
+      if (msg.type === 'QUESTION') {
+        setActiveQuestion(msg.question);
+        setSelectedOption(null);
+        setIsAnswerSubmitted(false);
+        setFeedback(null);
+        setPointsGained(null);
+        setEliminatedOptions([]);
+        setRevealedCorrectId(null);
+        setExplanationText(null);
+        setTimeLeft(msg.timeLimit || 20);
+        setQuestionNum(msg.index + 1);
+        setTotalQuestions(msg.total || 5);
+        audioEngine.setContext('question');
+      } else if (msg.type === 'ANSWER_ACK') {
+        if (!currentParticipant || msg.participantId === currentParticipant.id) {
+          setFeedback(msg.isCorrect ? 'correct' : 'incorrect');
+          setPointsGained(msg.pointsEarned);
+          setCurrentScore(msg.newScore);
+          if (msg.isCorrect) {
+            audioEngine.playEffect('sfx_correct');
+          } else {
+            audioEngine.playEffect('sfx_wrong');
+          }
+        }
+      } else if (msg.type === 'REVEAL_ANSWER') {
+        setRevealedCorrectId(msg.correctOptionId);
+        if (msg.explanation) setExplanationText(msg.explanation);
+      } else if (msg.type === 'POWER') {
+        if (!msg.targetId || (currentParticipant && msg.targetId === currentParticipant.id)) {
+          setActivePower(msg.power);
+          audioEngine.playEffect('sfx_power_assigned');
+
+          // Efecto eliminate_two: eliminar 2 opciones incorrectas en la pantalla del alumno
+          if (msg.power.type === 'eliminate_two' && activeQuestion) {
+            const correct = activeQuestion.correctAnswer;
+            const wrongOptions = (activeQuestion.options || [])
+              .map((o) => o.id)
+              .filter((id) => id !== correct);
+            setEliminatedOptions(wrongOptions.slice(0, 2));
+          }
+        }
+      } else if (msg.type === 'GAME_OVER') {
+        const mappedRanks: ParticipantRank[] = (msg.rankings || []).map((p, idx) => ({
+          participantId: p.id,
+          nickname: p.nickname,
+          avatar: p.avatar,
+          score: p.score,
+          rank: idx + 1,
+          change: 0,
+          correctAnswers: p.correctAnswers || 0,
+        }));
+        useSessionStore.setState({ rankings: mappedRanks });
+        navigate(`/results/${sessionId}`);
+      }
+    };
+  }, [sessionId, currentParticipant, activeQuestion, navigate]);
+
+  // Temporizador regresivo local por pregunta
+  useEffect(() => {
+    if (!activeQuestion) return;
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
@@ -54,127 +134,96 @@ export default function GameStudentPage() {
         }
         if (prev <= 5) {
           audioEngine.playEffect('sfx_countdown');
-        } else {
-          audioEngine.playEffect('sfx_tick');
         }
         return prev - 1;
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentQuestion]);
+  }, [activeQuestion]);
 
-  // Si la sesión finaliza, redirigir a resultados
+  // Si la fase pasa a finalizado por el store
   useEffect(() => {
     if (phase === 'finished' && sessionId) {
       navigate(`/results/${sessionId}`);
     }
   }, [phase, sessionId, navigate]);
 
-  // Conexión P2P para recibir poderes y fin de juego en tiempo real
-  useEffect(() => {
-    let client: P2PClient | null = null;
-    if (sessionId && currentParticipant) {
-      client = new P2PClient(sessionId);
-      client.connect(currentParticipant);
-      client.onMessage = (msg) => {
-        if (msg.type === 'POWER') {
-          if (!msg.targetId || msg.targetId === currentParticipant.id) {
-            useSessionStore.setState((state) => ({
-              currentParticipant: state.currentParticipant
-                ? { ...state.currentParticipant, activePower: msg.power }
-                : null,
-            }));
-            audioEngine.setContext('power_up');
-          }
-        } else if (msg.type === 'GAME_OVER') {
-          navigate(`/results/${sessionId}`);
-        }
-      };
-    }
-
-    return () => {
-      client?.destroy();
-    };
-  }, [sessionId, currentParticipant, navigate]);
-
   // Manejo de envío de respuesta
-  const handleSelectAnswer = async (optionId: string) => {
-    if (isAnswerSubmitted || timeLeft <= 0 || !currentQuestion) return;
+  const handleSelectAnswer = (optionId: string) => {
+    if (isAnswerSubmitted || timeLeft <= 0 || !activeQuestion) return;
 
     setSelectedOption(optionId);
     setIsAnswerSubmitted(true);
 
-    const timeTaken = (currentQuestion.timeLimit || 20) - timeLeft;
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(60);
+    }
+    audioEngine.playEffect('sfx_tick');
 
-    // Comprobar acierto local o servidor
-    const isCorrect = Array.isArray(currentQuestion.correctAnswer)
-      ? (currentQuestion.correctAnswer as unknown[]).includes(optionId)
-      : (currentQuestion.correctAnswer as unknown) === optionId;
+    const timeTaken = (activeQuestion.timeLimit || 20) - timeLeft;
 
+    // Enviar respuesta al Host docente por P2P
+    if (sessionId) {
+      const client = getOrCreateP2PClient(sessionId);
+      const participantId = currentParticipant?.id || 'p-self';
+      client.send({
+        type: 'ANSWER',
+        participantId,
+        optionId,
+        timeTaken,
+      });
+    }
+
+    // Comprobación local inmediata de respuesta
+    const isCorrect = Array.isArray(activeQuestion.correctAnswer)
+      ? (activeQuestion.correctAnswer as unknown[]).includes(optionId)
+      : activeQuestion.correctAnswer === optionId;
+
+    const basePoints = activeQuestion.points || 1000;
+    const timeBonus = Math.floor((timeLeft / (activeQuestion.timeLimit || 20)) * 500);
+    const multiplier = activePower?.type === 'double_points' ? 2 : 1;
+    const earned = isCorrect ? (basePoints + timeBonus) * multiplier : 0;
+
+    setFeedback(isCorrect ? 'correct' : 'incorrect');
+    setPointsGained(earned);
     if (isCorrect) {
-      const basePoints = currentQuestion.points || 1000;
-      // Bonus por tiempo
-      const timeBonus = Math.floor((timeLeft / (currentQuestion.timeLimit || 20)) * 500);
-      const mult = activePower?.type === 'double_points' ? 2 : 1;
-      const totalPoints = (basePoints + timeBonus) * mult;
-
-      setPointsGained(totalPoints);
-      setFeedback('correct');
+      setCurrentScore((prev) => prev + earned);
       audioEngine.playEffect('sfx_correct');
     } else {
-      // Si tiene escudo activo, no pierde vidas ni recibe penalización
-      if (activePower?.type === 'shield') {
-        setFeedback('correct');
-        setPointsGained(0);
-      } else {
-        setFeedback('incorrect');
-        setPointsGained(0);
-        audioEngine.playEffect('sfx_incorrect');
-        if (lives > 0) setLives((l) => l - 1);
-      }
-    }
-
-    // Consumir el poder si vence al terminar la pregunta
-    if (activePower?.expiresAfterQuestion) {
-      await usePower(activePower.type);
-    }
-
-    try {
-      await submitAnswer(currentQuestion.id, optionId, timeTaken);
-    } catch {
-      // Ignorar en demo
+      audioEngine.playEffect('sfx_wrong');
     }
   };
 
-  // Pregunta por defecto si estamos en modo prueba sin backend
-  const displayQuestion = currentQuestion || {
+  // Pregunta activa o muestra por defecto para pruebas
+  const displayQuestion: Question = activeQuestion || {
     id: 'mock-q1',
     content: '¿Cuál es la función principal de la señalización vial de color rojo?',
-    type: 'single_choice' as const,
+    type: 'single_choice',
     timeLimit: 20,
     points: 1000,
-    difficulty: 'medium' as const,
+    difficulty: 'medium',
     orderIndex: 0,
     teacherId: 'teacher-1',
     createdAt: new Date().toISOString(),
     correctAnswer: 'opt-1',
-    explanation: 'El color rojo en las señales de tránsito indica prohibición, parada obligatoria o peligro inmediato.',
+    explanation: 'El color rojo en las señales de tránsito indica prohibición, parada obligatoria o peligro inminente.',
     options: [
       { id: 'opt-1', text: 'Indica prohibición o parada obligatoria' },
       { id: 'opt-2', text: 'Indica una recomendación turística' },
       { id: 'opt-3', text: 'Indica información de kilometraje' },
-      { id: 'opt-4', text: 'Indica zonas de descanso' },
+      { id: 'opt-4', text: 'Indica zonas de descanso y camping' },
     ],
   };
 
+  const currentOptions = displayQuestion.options || [];
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-4 md:p-6 select-none">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-3 sm:p-5 select-none">
       {/* ── Top Bar con HUD del Jugador ── */}
-      <header className="flex items-center justify-between max-w-4xl mx-auto w-full mb-4">
-        {/* Jugador info */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-purple-600/30 border border-purple-500/40 p-1">
+      <header className="flex items-center justify-between max-w-lg mx-auto w-full pt-1 pb-2 border-b border-white/10">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 rounded-xl bg-purple-600/30 border border-purple-500/40 p-1 shadow-md">
             <img
               src={currentParticipant?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=ProfeAxel'}
               alt="Avatar"
@@ -182,132 +231,145 @@ export default function GameStudentPage() {
             />
           </div>
           <div>
-            <div className="font-bold text-sm leading-none">{currentParticipant?.nickname || 'Jugador'}</div>
-            <div className="text-[11px] text-purple-300 font-semibold mt-0.5">
-              {currentParticipant?.score || 0} pts
+            <div className="font-bold text-xs leading-none">{currentParticipant?.nickname || 'Jugador'}</div>
+            <div className="text-[11px] text-yellow-400 font-extrabold mt-0.5">
+              {currentScore.toLocaleString()} pts
             </div>
           </div>
         </div>
 
-        {/* HUD Vidas (Modo Supervivencia) */}
-        {session?.game?.gameMode === 'survival' && (
-          <div className="flex items-center gap-1 bg-red-500/20 border border-red-500/40 px-3 py-1.5 rounded-full">
-            {[...Array(3)].map((_, i) => (
-              <Heart
-                key={i}
-                className={`w-4 h-4 ${i < lives ? 'text-red-500 fill-red-500' : 'text-white/20'}`}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Timer */}
+        {/* Indicador de Pregunta y Timer */}
         <div className="flex items-center gap-2">
-          <div className={`px-4 py-1.5 rounded-full border font-black text-sm flex items-center gap-1.5 ${
+          <span className="text-xs font-bold text-purple-300 bg-purple-950/60 px-2.5 py-1 rounded-lg border border-purple-500/30">
+            {questionNum}/{totalQuestions}
+          </span>
+
+          <div className={`px-3 py-1 rounded-full border font-black text-xs flex items-center gap-1 ${
             timeLeft <= 5
               ? 'bg-red-500/20 border-red-500 text-red-400 animate-pulse'
               : 'bg-white/10 border-white/20 text-white'
           }`}>
-            <Clock className="w-4 h-4" />
+            <Clock className="w-3.5 h-3.5" />
             <span>{timeLeft}s</span>
           </div>
         </div>
       </header>
 
-      {/* ── Poder Especial del Docente (Si está activo) ── */}
+      {/* ── Banner de Super Poder Activo ── */}
       {activePower && (
-        <div className="max-w-md mx-auto w-full mb-4 animate-bounce-in">
-          <div className="p-3 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-between text-amber-300 shadow-lg shadow-amber-500/20">
+        <div className="max-w-lg mx-auto w-full my-2 animate-bounce-in">
+          <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-400/50 flex items-center justify-between text-amber-300 shadow-lg shadow-amber-500/10">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">{activePower.icon}</span>
+              <span className="text-xl">{activePower.icon}</span>
               <div>
-                <p className="font-bold text-xs uppercase tracking-wider">{activePower.label} ACTIVO</p>
-                <p className="text-[11px] text-amber-200/80">{activePower.description}</p>
+                <div className="font-black text-xs">{activePower.label}</div>
+                <div className="text-[10px] text-amber-200/80">{activePower.description}</div>
               </div>
             </div>
-            <span className="text-xs bg-amber-500 text-slate-950 font-black px-2 py-0.5 rounded-md">
-              DOCENTE
+            <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px] uppercase">
+              Activo
             </span>
           </div>
         </div>
       )}
 
-      {/* ── Pregunta Principal ── */}
-      <main className="max-w-2xl mx-auto w-full my-auto text-center py-4">
-        <div className="mb-2 text-xs font-bold text-purple-400 uppercase tracking-widest">
-          Pregunta {questionIndex + 1}
+      {/* ── Pregunta en Pantalla Móvil ── */}
+      <main className="max-w-lg mx-auto w-full my-auto py-2">
+        <div className="card p-4 md:p-5 border-purple-500/30 bg-purple-950/20 backdrop-blur-xl mb-4 text-center">
+          <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider mb-1 block">
+            Pregunta #{questionNum}
+          </span>
+          <h2 className="text-base md:text-lg font-black text-white leading-snug">
+            {displayQuestion.content}
+          </h2>
         </div>
-        <h1 className="text-xl md:text-3xl font-black mb-6 leading-tight text-white drop-shadow-md">
-          {displayQuestion.content}
-        </h1>
 
-        {displayQuestion.imageUrl && (
-          <div className="mb-6 max-w-sm mx-auto rounded-2xl overflow-hidden border border-white/20 shadow-xl">
-            <img src={displayQuestion.imageUrl} alt="Pregunta visual" className="w-full object-cover max-h-56" />
-          </div>
-        )}
-
-        {/* ── Opciones de Respuesta ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-xl mx-auto">
-          {displayQuestion.options?.map((option: QuestionOption, idx: number) => {
+        {/* ── Botones Grandes de Respuesta (Estilo Kahoot) ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {currentOptions.map((option, idx) => {
+            const style = OPTION_STYLES[idx % OPTION_STYLES.length];
             const isSelected = selectedOption === option.id;
-            const letters = ['A', 'B', 'C', 'D'];
-            const colors = [
-              'hover:border-red-400 bg-red-500/10 border-red-500/30',
-              'hover:border-blue-400 bg-blue-500/10 border-blue-500/30',
-              'hover:border-yellow-400 bg-yellow-500/10 border-yellow-500/30',
-              'hover:border-green-400 bg-green-500/10 border-green-500/30',
-            ];
+            const isEliminated = eliminatedOptions.includes(option.id);
+            const isRevealedCorrect = revealedCorrectId === option.id;
+            const isRevealedWrong = revealedCorrectId && revealedCorrectId !== option.id;
 
             return (
               <button
                 key={option.id}
-                disabled={isAnswerSubmitted || timeLeft <= 0}
+                disabled={isAnswerSubmitted || isEliminated || timeLeft <= 0}
                 onClick={() => handleSelectAnswer(option.id)}
-                className={`p-4 rounded-2xl border-2 text-left font-bold transition-all relative overflow-hidden flex items-center gap-3 ${
-                  isSelected
-                    ? 'border-purple-400 bg-purple-600/30 scale-102 shadow-lg shadow-purple-600/30'
-                    : colors[idx % colors.length]
-                } ${isAnswerSubmitted && !isSelected ? 'opacity-40' : ''}`}
+                className={`p-4 rounded-2xl border-2 transition-all flex items-center gap-3 text-left font-bold relative shadow-lg ${
+                  isEliminated
+                    ? 'opacity-20 pointer-events-none line-through bg-slate-900 border-white/10'
+                    : isRevealedCorrect
+                    ? 'bg-emerald-600 border-yellow-300 text-white scale-[1.02] shadow-emerald-500/40 ring-4 ring-yellow-400'
+                    : isRevealedWrong
+                    ? 'opacity-40 bg-slate-900 border-white/10'
+                    : isSelected
+                    ? `${style.bg} ring-4 ring-white border-white scale-[1.02] shadow-2xl`
+                    : `${style.bg} ${isAnswerSubmitted ? 'opacity-50' : 'hover:scale-[1.02]'}`
+                }`}
               >
-                <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center font-black text-sm flex-shrink-0">
-                  {letters[idx]}
-                </div>
-                <span className="text-sm md:text-base">{option.text}</span>
+                {/* Símbolo geométrico */}
+                <span className="w-9 h-9 rounded-xl bg-black/25 flex items-center justify-center font-black text-lg shrink-0">
+                  {style.icon}
+                </span>
+
+                <span className="text-xs sm:text-sm leading-tight flex-1">
+                  {option.text}
+                </span>
+
+                {/* Check si está seleccionada */}
+                {isSelected && (
+                  <CheckCircle2 className="w-5 h-5 text-white shrink-0 animate-bounce-in" />
+                )}
               </button>
             );
           })}
         </div>
 
-        {/* ── Feedback Inmediato al Responder ── */}
-        {feedback && (
-          <div className="mt-6 animate-bounce-in max-w-md mx-auto">
+        {/* ── Feedback de Respuesta Enviada ── */}
+        {isAnswerSubmitted && (
+          <div className="mt-4 text-center animate-bounce-in">
             {feedback === 'correct' ? (
-              <div className="p-4 rounded-2xl bg-green-500/20 border border-green-500/40 text-green-300 flex items-center justify-center gap-3">
-                <CheckCircle2 className="w-8 h-8 text-green-400 flex-shrink-0" />
-                <div className="text-left">
-                  <p className="font-black text-lg text-white">¡RESPUESTA CORRECTA!</p>
-                  <p className="text-xs text-green-200">+{pointsGained} puntos obtenidos</p>
+              <div className="p-3.5 rounded-2xl bg-green-500/20 border border-green-500/40 text-green-300">
+                <div className="flex items-center justify-center gap-1.5 font-black text-sm">
+                  <CheckCircle2 className="w-5 h-5 text-green-400" />
+                  <span>¡RESPUESTA CORRECTA! +{pointsGained} pts</span>
                 </div>
+                <p className="text-[11px] text-green-200 mt-0.5">
+                  ¡Excelente reflejo! Esperando siguiente pregunta...
+                </p>
+              </div>
+            ) : feedback === 'incorrect' ? (
+              <div className="p-3.5 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-300">
+                <div className="flex items-center justify-center gap-1.5 font-black text-sm">
+                  <XCircle className="w-5 h-5 text-red-400" />
+                  <span>¡Incorrecto! No te rindas</span>
+                </div>
+                <p className="text-[11px] text-red-200 mt-0.5">
+                  Esperando que el docente avance...
+                </p>
               </div>
             ) : (
-              <div className="p-4 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-300 flex items-center justify-center gap-3">
-                <XCircle className="w-8 h-8 text-red-400 flex-shrink-0" />
-                <div className="text-left">
-                  <p className="font-black text-lg text-white">¡INCORRECTO!</p>
-                  <p className="text-xs text-red-200">{displayQuestion.explanation || 'Sigue intentándolo en la próxima'}</p>
-                </div>
+              <div className="p-3 rounded-2xl bg-white/10 border border-white/20 text-white/80 text-xs">
+                Respuesta enviada. Esperando a que el tiempo finalice...
+              </div>
+            )}
+
+            {/* Explicación pedagógica si fue revelada */}
+            {explanationText && (
+              <div className="mt-2 p-2.5 rounded-xl bg-purple-900/40 border border-purple-500/30 text-[11px] text-purple-200 text-left">
+                💡 <strong>Explicación:</strong> {explanationText}
               </div>
             )}
           </div>
         )}
       </main>
 
-      {/* ── Bottom Info ── */}
-      <footer className="text-center text-xs text-white/40 py-2">
-        {isAnswerSubmitted
-          ? 'Respuesta registrada. Esperando a los demás participantes...'
-          : 'Selecciona una respuesta antes de que se agote el tiempo.'}
+      {/* ── Footer ── */}
+      <footer className="max-w-lg mx-auto w-full text-center text-[10px] text-white/40 pb-1">
+        AXEL PLAY • Mantente atento a la pantalla principal
       </footer>
     </div>
   );

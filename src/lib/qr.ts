@@ -20,22 +20,31 @@ export const DEFAULT_QR_OPTIONS: QROptions = {
 };
 
 /**
- * Genera un token aleatorio criptográficamente seguro (32 caracteres alfanuméricos)
+ * Genera un token aleatorio seguro (24 caracteres alfanuméricos)
  * para asociar unívocamente la partida a su código QR.
  */
 export function generateSessionToken(): string {
-  const bytes = new Uint8Array(24);
+  const bytes = new Uint8Array(12);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /**
  * Construye la URL completa que codifica el QR.
- * El estudiante abre la cámara nativa, escanea el QR y entra directo a la sala.
+ * Da prioridad al origen actual del navegador (window.location.origin) para que
+ * si el docente abre en http://192.168.100.4:5173 o en Vercel, el QR apunte
+ * exactamente a esa misma dirección accesible desde el celular.
  */
-export function buildQRUrl(token: string, baseUrl?: string): string {
-  const base = baseUrl || import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173');
-  return `${base}/join/${token}`;
+export function buildQRUrl(token: string, customBaseUrl?: string): string {
+  let base: string = customBaseUrl || '';
+  if (!base && typeof window !== 'undefined' && window.location && window.location.origin) {
+    base = window.location.origin;
+  }
+  if (!base) {
+    base = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+  }
+  const cleanBase = base.replace(/\/$/, '');
+  return `${cleanBase}/join/${token}`;
 }
 
 /**
@@ -59,7 +68,7 @@ export async function shareSessionLink(url: string, title = 'Únete a AXEL PLAY'
       });
       return true;
     } catch {
-      return false;
+      // Ignorar si el usuario cancela
     }
   }
 
