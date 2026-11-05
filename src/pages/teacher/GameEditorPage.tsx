@@ -1,0 +1,494 @@
+import { useState } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import {
+  Save, ArrowLeft, Plus, Trash2, Copy, Eye, Clock,
+  Award, Sparkles, CheckCircle2, Image as ImageIcon,
+  HelpCircle, Settings, Layers, ListOrdered
+} from 'lucide-react';
+import { SUBJECTS } from '../../types';
+import type { QuestionType, Difficulty, GameMode, GradeLevel } from '../../types';
+
+interface QuestionDraft {
+  id: string;
+  type: QuestionType;
+  content: string;
+  timeLimit: number;
+  points: number;
+  difficulty: Difficulty;
+  explanation: string;
+  imageUrl?: string;
+  options: { id: string; text: string; isCorrect: boolean }[];
+}
+
+export default function GameEditorPage() {
+  const navigate = useNavigate();
+  const { gameId } = useParams<{ gameId: string }>();
+  const isEditing = Boolean(gameId && gameId !== 'new');
+
+  // Metadatos del Juego
+  const [title, setTitle] = useState(isEditing ? 'Seguridad Vial y Normas de Tránsito' : '');
+  const [description, setDescription] = useState(isEditing ? 'Evaluación interactiva de normas viales' : '');
+  const [subject, setSubject] = useState<string>(SUBJECTS[11]); // Educación Vial
+  const [topic, setTopic] = useState('Señales Reglamentarias');
+  const [gradeLevel, setGradeLevel] = useState<GradeLevel>('secondary');
+  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
+  const [gameMode, setGameMode] = useState<GameMode>('battle_live');
+  const [timePerQuestion, setTimePerQuestion] = useState(20);
+  const [isPublic, setIsPublic] = useState(true);
+
+  // Preguntas
+  const [questions, setQuestions] = useState<QuestionDraft[]>([
+    {
+      id: 'q-1',
+      type: 'single_choice',
+      content: '¿Cuál es el significado de una señal de tránsito octagonal con fondo rojo?',
+      timeLimit: 20,
+      points: 1000,
+      difficulty: 'easy',
+      explanation: 'La señal octagonal roja indica siempre la obligación absoluta de DETENERSE por completo (PARE).',
+      options: [
+        { id: 'opt-1', text: 'Parada obligatoria (PARE)', isCorrect: true },
+        { id: 'opt-2', text: 'Ceda el paso voluntario', isCorrect: false },
+        { id: 'opt-3', text: 'Zona escolar adelante', isCorrect: false },
+        { id: 'opt-4', text: 'Velocidad máxima permitida', isCorrect: false },
+      ],
+    },
+    {
+      id: 'q-2',
+      type: 'true_false',
+      content: 'El uso del cinturón de seguridad es obligatorio únicamente en las sillas delanteras de un vehículo.',
+      timeLimit: 15,
+      points: 1000,
+      difficulty: 'medium',
+      explanation: 'El cinturón es de uso obligatorio para todos los ocupantes del vehículo, incluidos los asientos traseros.',
+      options: [
+        { id: 'opt-tf-1', text: 'Verdadero', isCorrect: false },
+        { id: 'opt-tf-2', text: 'Falso', isCorrect: true },
+      ],
+    },
+  ]);
+
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  const [showPreview, setShowPreview] = useState(false);
+  const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const activeQuestion = questions[activeQuestionIndex] || questions[0];
+
+  const handleAddQuestion = () => {
+    const newQ: QuestionDraft = {
+      id: `q-${Date.now()}`,
+      type: 'single_choice',
+      content: 'Nueva pregunta sin título...',
+      timeLimit: timePerQuestion,
+      points: 1000,
+      difficulty: 'medium',
+      explanation: '',
+      options: [
+        { id: `opt-${Date.now()}-1`, text: 'Opción 1', isCorrect: true },
+        { id: `opt-${Date.now()}-2`, text: 'Opción 2', isCorrect: false },
+        { id: `opt-${Date.now()}-3`, text: 'Opción 3', isCorrect: false },
+        { id: `opt-${Date.now()}-4`, text: 'Opción 4', isCorrect: false },
+      ],
+    };
+    setQuestions([...questions, newQ]);
+    setActiveQuestionIndex(questions.length);
+  };
+
+  const handleDuplicateQuestion = (idx: number) => {
+    const orig = questions[idx];
+    const duplicated: QuestionDraft = {
+      ...orig,
+      id: `q-${Date.now()}`,
+      content: `${orig.content} (Copia)`,
+      options: orig.options.map((o) => ({ ...o, id: `opt-${Date.now()}-${Math.random()}` })),
+    };
+    const updated = [...questions];
+    updated.splice(idx + 1, 0, duplicated);
+    setQuestions(updated);
+    setActiveQuestionIndex(idx + 1);
+  };
+
+  const handleDeleteQuestion = (idx: number) => {
+    if (questions.length <= 1) {
+      alert('El juego debe tener al menos una pregunta.');
+      return;
+    }
+    const updated = questions.filter((_, i) => i !== idx);
+    setQuestions(updated);
+    setActiveQuestionIndex(Math.max(0, idx - 1));
+  };
+
+  const updateActiveQuestion = (patch: Partial<QuestionDraft>) => {
+    setQuestions((prev) =>
+      prev.map((q, i) => (i === activeQuestionIndex ? { ...q, ...patch } : q))
+    );
+  };
+
+  const handleSave = () => {
+    if (!title.trim()) {
+      alert('Por favor ingresa un título para el juego.');
+      return;
+    }
+    setSavedSuccess(true);
+    setTimeout(() => {
+      setSavedSuccess(false);
+      navigate('/teacher/games');
+    }, 1500);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* ── Top Bar ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Link
+            to="/teacher/games"
+            className="p-2 rounded-xl border border-white/10 hover:bg-white/10 text-white/70 hover:text-white"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-black text-white">
+              {isEditing ? 'Editar Juego' : 'Crear Nuevo Juego'}
+            </h1>
+            <p className="text-xs text-white/50">Configuración pedagógica y editor de preguntas</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowPreview(!showPreview)}
+            className="btn-secondary py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center gap-2"
+          >
+            <Eye className="w-4 h-4" />
+            <span>{showPreview ? 'Ocultar Vista Previa' : 'Vista Previa Estudiante'}</span>
+          </button>
+
+          <button
+            onClick={handleSave}
+            className="btn-primary py-2.5 px-5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-purple-600/30"
+          >
+            <Save className="w-4 h-4" />
+            <span>{savedSuccess ? '¡Guardado!' : 'Guardar Juego'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Metadatos del Juego (Colapsible) ── */}
+      <div className="card p-6 border-white/10 bg-slate-900/40">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-semibold text-white/70 uppercase mb-1">
+              Nombre de la Actividad *
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Ej. Seguridad Vial y Señales de Tránsito"
+              className="input font-bold"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-white/70 uppercase mb-1">
+              Materia / Categoría
+            </label>
+            <select
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="input bg-slate-900 border-white/10"
+            >
+              {SUBJECTS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+          <div>
+            <label className="block text-white/60 mb-1">Modalidad de Juego</label>
+            <select
+              value={gameMode}
+              onChange={(e) => setGameMode(e.target.value as GameMode)}
+              className="input text-xs bg-slate-900 border-white/10 py-2"
+            >
+              <option value="battle_live">⚔️ Batalla en Vivo</option>
+              <option value="individual">🏋️ Individual</option>
+              <option value="team_battle">🤝 Por Equipos</option>
+              <option value="survival">❤️ Supervivencia</option>
+              <option value="escape_room">🔐 Escape Room</option>
+              <option value="wheel">🎡 Ruleta</option>
+              <option value="find_error">🔍 Detecta el Error</option>
+              <option value="ordering">📋 Ordena y Gana</option>
+              <option value="true_false_fast">✅ Verdadero o Falso</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-white/60 mb-1">Nivel Educativo</label>
+            <select
+              value={gradeLevel}
+              onChange={(e) => setGradeLevel(e.target.value as GradeLevel)}
+              className="input text-xs bg-slate-900 border-white/10 py-2"
+            >
+              <option value="primary">Primaria</option>
+              <option value="secondary">Secundaria</option>
+              <option value="highschool">Educación Media</option>
+              <option value="university">Superior</option>
+              <option value="technical">Técnica / Tecnológica</option>
+              <option value="driving">Escuela de Conducción</option>
+              <option value="corporate">Capacitación Empresarial</option>
+              <option value="autonomous">Aprendizaje Autónomo</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-white/60 mb-1">Dificultad</label>
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value as Difficulty)}
+              className="input text-xs bg-slate-900 border-white/10 py-2"
+            >
+              <option value="easy">Fácil</option>
+              <option value="medium">Intermedio</option>
+              <option value="hard">Difícil</option>
+              <option value="expert">Experto</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-white/60 mb-1">Tiempo base (seg)</label>
+            <input
+              type="number"
+              value={timePerQuestion}
+              onChange={(e) => setTimePerQuestion(Number(e.target.value))}
+              min={5}
+              max={180}
+              className="input text-xs py-2"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Editor de Preguntas y Navegación Lateral ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Columna Izquierda: Lista de Preguntas */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-white/60">
+              Preguntas ({questions.length})
+            </span>
+            <button
+              onClick={handleAddQuestion}
+              className="btn-primary py-1.5 px-3 rounded-lg text-xs font-bold flex items-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Añadir</span>
+            </button>
+          </div>
+
+          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+            {questions.map((q, idx) => (
+              <div
+                key={q.id}
+                onClick={() => setActiveQuestionIndex(idx)}
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                  activeQuestionIndex === idx
+                    ? 'border-purple-500 bg-purple-600/20 shadow-md shadow-purple-600/20'
+                    : 'border-white/10 hover:border-white/20 bg-white/5'
+                }`}
+              >
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <span className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                    {idx + 1}
+                  </span>
+                  <span className="text-xs font-medium truncate text-white/90">
+                    {q.content || 'Sin enunciado...'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDuplicateQuestion(idx);
+                    }}
+                    className="p-1 text-white/40 hover:text-white"
+                    title="Duplicar"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteQuestion(idx);
+                    }}
+                    className="p-1 text-white/40 hover:text-red-400"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Columna Derecha: Formulario de Edición de la Pregunta Activa */}
+        <div className="lg:col-span-3 space-y-4">
+          <div className="card p-6 border-white/10 space-y-5">
+            {/* Tipo de Pregunta & Parámetros */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-white/60 mb-1">
+                  Tipo de Pregunta
+                </label>
+                <select
+                  value={activeQuestion.type}
+                  onChange={(e) => updateActiveQuestion({ type: e.target.value as QuestionType })}
+                  className="input text-xs bg-slate-900 border-white/10 py-2 font-semibold"
+                >
+                  <option value="single_choice">Selección Única (4 opciones)</option>
+                  <option value="multiple_choice">Selección Múltiple</option>
+                  <option value="true_false">Verdadero o Falso</option>
+                  <option value="short_answer">Respuesta Corta</option>
+                  <option value="ordering">Ordenar Elementos (Drag & Drop)</option>
+                  <option value="matching">Relacionar Columnas</option>
+                  <option value="find_error">Identificar Errores</option>
+                  <option value="image_based">Pregunta con Imagen</option>
+                  <option value="situation">Interpretación de Casos</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-white/60 mb-1">
+                  Límite de Tiempo
+                </label>
+                <div className="relative">
+                  <Clock className="w-4 h-4 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="number"
+                    value={activeQuestion.timeLimit}
+                    onChange={(e) => updateActiveQuestion({ timeLimit: Number(e.target.value) })}
+                    min={5}
+                    max={180}
+                    className="input text-xs pl-9 py-2"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-white/60 mb-1">
+                  Puntuación Base
+                </label>
+                <div className="relative">
+                  <Award className="w-4 h-4 text-yellow-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="number"
+                    value={activeQuestion.points}
+                    onChange={(e) => updateActiveQuestion({ points: Number(e.target.value) })}
+                    step={100}
+                    min={100}
+                    max={5000}
+                    className="input text-xs pl-9 py-2"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Enunciado */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-white/70 mb-1.5">
+                Enunciado de la Pregunta {activeQuestionIndex + 1} *
+              </label>
+              <textarea
+                value={activeQuestion.content}
+                onChange={(e) => updateActiveQuestion({ content: e.target.value })}
+                rows={3}
+                placeholder="Escribe aquí la pregunta que verán los estudiantes..."
+                className="input text-base font-medium resize-none"
+              />
+            </div>
+
+            {/* Opciones de Respuesta */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-white/70 mb-2">
+                Opciones de Respuesta (Marca la casilla de la respuesta correcta)
+              </label>
+
+              <div className="space-y-2.5">
+                {activeQuestion.options.map((opt, optIdx) => (
+                  <div
+                    key={opt.id}
+                    className={`p-3 rounded-xl border flex items-center gap-3 transition-colors ${
+                      opt.isCorrect
+                        ? 'border-green-500/60 bg-green-500/10'
+                        : 'border-white/10 bg-white/5'
+                    }`}
+                  >
+                    <input
+                      type={activeQuestion.type === 'multiple_choice' ? 'checkbox' : 'radio'}
+                      name={`correct-opt-${activeQuestion.id}`}
+                      checked={opt.isCorrect}
+                      onChange={() => {
+                        const updatedOptions = activeQuestion.options.map((o, idx) => ({
+                          ...o,
+                          isCorrect: activeQuestion.type === 'multiple_choice'
+                            ? idx === optIdx ? !o.isCorrect : o.isCorrect
+                            : idx === optIdx,
+                        }));
+                        updateActiveQuestion({ options: updatedOptions });
+                      }}
+                      className="w-5 h-5 accent-green-500 cursor-pointer"
+                    />
+
+                    <span className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center font-bold text-xs text-white/60">
+                      {String.fromCharCode(65 + optIdx)}
+                    </span>
+
+                    <input
+                      type="text"
+                      value={opt.text}
+                      onChange={(e) => {
+                        const updatedOptions = activeQuestion.options.map((o, idx) =>
+                          idx === optIdx ? { ...o, text: e.target.value } : o
+                        );
+                        updateActiveQuestion({ options: updatedOptions });
+                      }}
+                      placeholder={`Texto de la opción ${optIdx + 1}...`}
+                      className="input py-2 text-sm flex-1 bg-transparent border-none focus:ring-0"
+                    />
+
+                    {opt.isCorrect && (
+                      <span className="badge-success text-[10px] flex-shrink-0">
+                        Correcta
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Explicación Pedagógica */}
+            <div>
+              <label className="block text-xs font-semibold text-white/60 mb-1 flex items-center gap-1">
+                <HelpCircle className="w-3.5 h-3.5 text-purple-400" />
+                <span>Explicación Pedagógica (Se muestra tras responder para reforzar el aprendizaje)</span>
+              </label>
+              <textarea
+                value={activeQuestion.explanation}
+                onChange={(e) => updateActiveQuestion({ explanation: e.target.value })}
+                rows={2}
+                placeholder="Explica por qué esta respuesta es la correcta..."
+                className="input text-xs resize-none"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
