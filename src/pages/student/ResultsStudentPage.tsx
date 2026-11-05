@@ -13,46 +13,16 @@ export default function ResultsStudentPage() {
     audioEngine.setContext('podium');
   }, []);
 
-  const defaultRankings: ParticipantRank[] = [
-    {
-      participantId: 'p-1',
-      nickname: 'SuperMate',
-      avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Astro',
-      score: 4850,
-      rank: 1,
-      change: 0,
-      correctAnswers: 5,
-    },
-    {
-      participantId: 'p-2',
-      nickname: 'VelocidadPro',
-      avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Ninja',
-      score: 4200,
-      rank: 2,
-      change: 0,
-      correctAnswers: 4,
-    },
-    {
-      participantId: 'p-3',
-      nickname: 'EcoGenio',
-      avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Cyber',
-      score: 3950,
-      rank: 3,
-      change: 0,
-      correctAnswers: 4,
-    },
-  ];
+  // Solo participantes REALES
+  const sorted: ParticipantRank[] = [...rankings].sort((a, b) => b.score - a.score);
+  const first = sorted[0];
+  const second = sorted[1];
+  const third = sorted[2];
 
-  // Si hay rankings reales con participantes, usarlos
-  const sorted: ParticipantRank[] = rankings.length > 0 ? [...rankings].sort((a, b) => b.score - a.score) : defaultRankings;
-  const first = sorted[0] || defaultRankings[0];
-  const second = sorted[1] || defaultRankings[1];
-  const third = sorted[2] || defaultRankings[2];
-
-  // Encontrar la posición personal del participante
+  // Encontrar la posición personal del participante real
   const myId = currentParticipant?.id;
   const myIndex = sorted.findIndex((p) => p.participantId === myId || p.nickname === currentParticipant?.nickname);
-  const myRank = myIndex >= 0 ? myIndex + 1 : 1;
+  const myRank = myIndex >= 0 ? myIndex + 1 : (currentParticipant?.rank || 1);
   const myScore = currentParticipant?.score || (myIndex >= 0 ? sorted[myIndex].score : 0);
 
   return (
@@ -70,45 +40,57 @@ export default function ResultsStudentPage() {
           </p>
         </div>
 
-        {/* ── Podio Olímpico de los 3 Primeros ── */}
-        <div className="flex items-end justify-center gap-2.5 my-6 pt-4">
-          {/* 🥈 2do Lugar (Plata) */}
-          <div className="flex-1 flex flex-col items-center">
-            <div className="w-13 h-13 rounded-2xl bg-slate-400/20 p-1 border border-slate-300/40 mb-1">
-              <img src={second.avatar} alt={second.nickname} className="w-full h-full object-contain" />
-            </div>
-            <span className="font-bold text-xs text-white truncate max-w-full">{second.nickname}</span>
-            <span className="text-[10px] text-slate-300 font-semibold mb-1">{second.score.toLocaleString()} pts</span>
-            <div className="w-full h-20 rounded-t-xl bg-slate-400/20 border-t-2 border-slate-300/40 flex items-center justify-center shadow-lg">
-              <span className="font-black text-xl text-slate-300">2°</span>
-            </div>
+        {/* ── Podio Olímpico de los Jugadores REALES ── */}
+        {sorted.length === 0 ? (
+          <div className="p-8 text-white/50 text-xs">
+            Partida finalizada. Esperando sincronización del podio...
           </div>
+        ) : (
+          <div className="flex items-end justify-center gap-2.5 my-6 pt-4">
+            {/* 🥈 2do Lugar (Plata - Solo si hay al menos 2 jugadores) */}
+            {second && (
+              <div className="flex-1 flex flex-col items-center">
+                <div className="w-13 h-13 rounded-2xl bg-slate-400/20 p-1 border border-slate-300/40 mb-1">
+                  <img src={second.avatar} alt={second.nickname} className="w-full h-full object-contain" />
+                </div>
+                <span className="font-bold text-xs text-white truncate max-w-full">{second.nickname}</span>
+                <span className="text-[10px] text-slate-300 font-semibold mb-1">{second.score.toLocaleString()} pts</span>
+                <div className="w-full h-20 rounded-t-xl bg-slate-400/20 border-t-2 border-slate-300/40 flex items-center justify-center shadow-lg">
+                  <span className="font-black text-xl text-slate-300">2°</span>
+                </div>
+              </div>
+            )}
 
-          {/* 🥇 1er Lugar (Oro - Centro) */}
-          <div className="flex-1 flex flex-col items-center -mt-4">
-            <div className="w-16 h-16 rounded-3xl bg-yellow-400/30 p-1 border-2 border-yellow-400 shadow-xl shadow-yellow-500/40 mb-1 animate-float">
-              <img src={first.avatar} alt={first.nickname} className="w-full h-full object-contain" />
-            </div>
-            <span className="font-black text-xs text-yellow-300 truncate max-w-full">{first.nickname}</span>
-            <span className="text-xs text-yellow-400 font-extrabold mb-1">{first.score.toLocaleString()} pts</span>
-            <div className="w-full h-28 rounded-t-2xl bg-gradient-to-t from-yellow-600/40 to-yellow-400/30 border-t-4 border-yellow-400 flex flex-col items-center justify-center shadow-2xl shadow-yellow-500/30">
-              <Trophy className="w-7 h-7 text-yellow-400 mb-0.5 animate-pulse" />
-              <span className="font-black text-2xl text-yellow-400">1°</span>
-            </div>
-          </div>
+            {/* 🥇 1er Lugar (Oro - Centro) */}
+            {first && (
+              <div className="flex-1 flex flex-col items-center -mt-4">
+                <div className="w-16 h-16 rounded-3xl bg-yellow-400/30 p-1 border-2 border-yellow-400 shadow-xl shadow-yellow-500/40 mb-1 animate-float">
+                  <img src={first.avatar} alt={first.nickname} className="w-full h-full object-contain" />
+                </div>
+                <span className="font-black text-xs text-yellow-300 truncate max-w-full">{first.nickname}</span>
+                <span className="text-xs text-yellow-400 font-extrabold mb-1">{first.score.toLocaleString()} pts</span>
+                <div className="w-full h-28 rounded-t-2xl bg-gradient-to-t from-yellow-600/40 to-yellow-400/30 border-t-4 border-yellow-400 flex flex-col items-center justify-center shadow-2xl shadow-yellow-500/30">
+                  <Trophy className="w-7 h-7 text-yellow-400 mb-0.5 animate-pulse" />
+                  <span className="font-black text-2xl text-yellow-400">1°</span>
+                </div>
+              </div>
+            )}
 
-          {/* 🥉 3er Lugar (Bronce) */}
-          <div className="flex-1 flex flex-col items-center">
-            <div className="w-13 h-13 rounded-2xl bg-amber-700/20 p-1 border border-amber-600/40 mb-1">
-              <img src={third.avatar} alt={third.nickname} className="w-full h-full object-contain" />
-            </div>
-            <span className="font-bold text-xs text-white truncate max-w-full">{third.nickname}</span>
-            <span className="text-[10px] text-amber-400 font-semibold mb-1">{third.score.toLocaleString()} pts</span>
-            <div className="w-full h-16 rounded-t-xl bg-amber-700/20 border-t-2 border-amber-600/40 flex items-center justify-center shadow-md">
-              <span className="font-black text-lg text-amber-400">3°</span>
-            </div>
+            {/* 🥉 3er Lugar (Bronce - Solo si hay al menos 3 jugadores) */}
+            {third && (
+              <div className="flex-1 flex flex-col items-center">
+                <div className="w-13 h-13 rounded-2xl bg-amber-700/20 p-1 border border-amber-600/40 mb-1">
+                  <img src={third.avatar} alt={third.nickname} className="w-full h-full object-contain" />
+                </div>
+                <span className="font-bold text-xs text-white truncate max-w-full">{third.nickname}</span>
+                <span className="text-[10px] text-amber-400 font-semibold mb-1">{third.score.toLocaleString()} pts</span>
+                <div className="w-full h-16 rounded-t-xl bg-amber-700/20 border-t-2 border-amber-600/40 flex items-center justify-center shadow-md">
+                  <span className="font-black text-lg text-amber-400">3°</span>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         {/* ── Tu Resultado Personal ── */}
         <div className="p-4 rounded-2xl bg-purple-600/20 border border-purple-500/40 text-center mb-6">

@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
-import { getOrCreateP2PClient } from '../../lib/p2p';
+import { getOrCreateGameClientSync, type GameEventMessage } from '../../lib/gameSync';
 import {
-  Clock, Heart, CheckCircle2, XCircle, Shield,
-  Zap, Award, AlertCircle, Sparkles
+  Clock, CheckCircle2, XCircle, Zap
 } from 'lucide-react';
 import type { Question, PowerUp, ParticipantRank } from '../../types';
 
@@ -57,15 +56,15 @@ export default function GameStudentPage() {
   const [questionNum, setQuestionNum] = useState<number>(questionIndex + 1);
   const [totalQuestions, setTotalQuestions] = useState<number>(5);
 
-  // Escuchar mensajes P2P en tiempo real del Docente
+  // Escuchar mensajes en tiempo real vía GameClientSync (SSE + P2P)
   useEffect(() => {
     if (!sessionId) return;
-    const client = getOrCreateP2PClient(sessionId);
+    const sync = getOrCreateGameClientSync(sessionId);
 
-    client.onMessage = (msg) => {
-      console.log('[GameStudentPage] Mensaje P2P recibido:', msg.type);
+    sync.onEvent = (msg: GameEventMessage) => {
+      console.log('[GameStudentPage] Evento recibido:', msg.type);
 
-      if (msg.type === 'QUESTION') {
+      if (msg.type === 'QUESTION' && msg.question) {
         setActiveQuestion(msg.question);
         setSelectedOption(null);
         setIsAnswerSubmitted(false);
@@ -75,14 +74,16 @@ export default function GameStudentPage() {
         setRevealedCorrectId(null);
         setExplanationText(null);
         setTimeLeft(msg.timeLimit || 20);
-        setQuestionNum(msg.index + 1);
+        setQuestionNum((msg.index || 0) + 1);
         setTotalQuestions(msg.total || 5);
         audioEngine.setContext('question');
       } else if (msg.type === 'ANSWER_ACK') {
         if (!currentParticipant || msg.participantId === currentParticipant.id) {
           setFeedback(msg.isCorrect ? 'correct' : 'incorrect');
-          setPointsGained(msg.pointsEarned);
-          setCurrentScore(msg.newScore);
+          setPointsGained(msg.pointsEarned || 0);
+          if (msg.newScore !== undefined) {
+            setCurrentScore(msg.newScore);
+          }
           if (msg.isCorrect) {
             audioEngine.playEffect('sfx_correct');
           } else {
@@ -90,20 +91,24 @@ export default function GameStudentPage() {
           }
         }
       } else if (msg.type === 'REVEAL_ANSWER') {
-        setRevealedCorrectId(msg.correctOptionId);
+        if (msg.correctOptionId) {
+          setRevealedCorrectId(msg.correctOptionId);
+        }
         if (msg.explanation) setExplanationText(msg.explanation);
       } else if (msg.type === 'POWER') {
         if (!msg.targetId || (currentParticipant && msg.targetId === currentParticipant.id)) {
-          setActivePower(msg.power);
-          audioEngine.playEffect('sfx_power_assigned');
+          if (msg.power) {
+            setActivePower(msg.power);
+            audioEngine.playEffect('sfx_power_assigned');
 
-          // Efecto eliminate_two: eliminar 2 opciones incorrectas en la pantalla del alumno
-          if (msg.power.type === 'eliminate_two' && activeQuestion) {
-            const correct = activeQuestion.correctAnswer;
-            const wrongOptions = (activeQuestion.options || [])
-              .map((o) => o.id)
-              .filter((id) => id !== correct);
-            setEliminatedOptions(wrongOptions.slice(0, 2));
+            // Efecto eliminate_two: eliminar 2 opciones incorrectas
+            if (msg.power.type === 'eliminate_two' && activeQuestion) {
+              const correct = activeQuestion.correctAnswer;
+              const wrongOptions = (activeQuestion.options || [])
+                .map((o) => o.id)
+                .filter((id) => id !== correct);
+              setEliminatedOptions(wrongOptions.slice(0, 2));
+            }
           }
         }
       } else if (msg.type === 'GAME_OVER') {
@@ -120,6 +125,8 @@ export default function GameStudentPage() {
         navigate(`/results/${sessionId}`);
       }
     };
+
+    sync.connectSSE();
   }, [sessionId, currentParticipant, activeQuestion, navigate]);
 
   // Temporizador regresivo local por pregunta
@@ -150,7 +157,7 @@ export default function GameStudentPage() {
   }, [phase, sessionId, navigate]);
 
   // Manejo de envío de respuesta
-  const handleSelectAnswer = (optionId: string) => {
+  const handleSelectAnswer = async (optionId: string) => {
     if (isAnswerSubmitted || timeLeft <= 0 || !activeQuestion) return;
 
     setSelectedOption(optionId);
@@ -163,19 +170,7 @@ export default function GameStudentPage() {
 
     const timeTaken = (activeQuestion.timeLimit || 20) - timeLeft;
 
-    // Enviar respuesta al Host docente por P2P
-    if (sessionId) {
-      const client = getOrCreateP2PClient(sessionId);
-      const participantId = currentParticipant?.id || 'p-self';
-      client.send({
-        type: 'ANSWER',
-        participantId,
-        optionId,
-        timeTaken,
-      });
-    }
-
-    // Comprobación local inmediata de respuesta
+    // Comprobación de respuesta
     const isCorrect = Array.isArray(activeQuestion.correctAnswer)
       ? (activeQuestion.correctAnswer as unknown[]).includes(optionId)
       : activeQuestion.correctAnswer === optionId;
@@ -184,6 +179,19 @@ export default function GameStudentPage() {
     const timeBonus = Math.floor((timeLeft / (activeQuestion.timeLimit || 20)) * 500);
     const multiplier = activePower?.type === 'double_points' ? 2 : 1;
     const earned = isCorrect ? (basePoints + timeBonus) * multiplier : 0;
+
+    // Enviar al servidor local y P2P
+    if (sessionId) {
+      const sync = getOrCreateGameClientSync(sessionId);
+      const participantId = currentParticipant?.id || 'p-self';
+      sync.submitAnswer({
+        participantId,
+        optionId,
+        timeTaken,
+        isCorrect,
+        pointsEarned: earned,
+      });
+    }
 
     setFeedback(isCorrect ? 'correct' : 'incorrect');
     setPointsGained(earned);

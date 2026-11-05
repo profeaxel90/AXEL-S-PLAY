@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
-import { getOrCreateP2PClient } from '../../lib/p2p';
+import { getOrCreateGameClientSync } from '../../lib/gameSync';
 import { Gamepad2, Sparkles, QrCode, AlertCircle, Shuffle, ArrowRight, ShieldCheck } from 'lucide-react';
 
 // Colección de Avatares divertidos
@@ -21,7 +21,7 @@ const RANDOM_NICKNAMES = [
 export default function JoinPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const { joinSession, setCurrentParticipant, clearError } = useSessionStore();
+  const { setCurrentParticipant, clearError } = useSessionStore();
 
   const [nickname, setNickname] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_SEEDS[0]);
@@ -82,19 +82,12 @@ export default function JoinPage() {
         joinedAt: new Date().toISOString(),
       };
 
-      // Guardar en el store local de Zustand
+      // Guardar en el store local
       setCurrentParticipant(newParticipant);
 
-      // Conectar de inmediato al Host P2P
-      const client = getOrCreateP2PClient(token);
-      client.connect(newParticipant);
-
-      // Intentar sincronizar con backend Supabase si existe, si no continuar en modo local
-      try {
-        await joinSession(token, nickname.trim(), avatarUrl);
-      } catch {
-        // Modo local P2P activo
-      }
+      // Conectar con el sincronizador híbrido (Servidor Local + P2P)
+      const sync = getOrCreateGameClientSync(token);
+      await sync.join(newParticipant);
 
       audioEngine.playEffect('sfx_join');
       navigate(`/waiting/${token}`);
@@ -257,7 +250,7 @@ export default function JoinPage() {
 
       {/* Footer Info */}
       <div className="text-center text-xs text-white/40 max-w-md mx-auto pb-2">
-        Conexión directa P2P protegida • Sin registro ni contraseñas
+        Conexión directa protegida • Sin registro ni contraseñas
       </div>
     </div>
   );

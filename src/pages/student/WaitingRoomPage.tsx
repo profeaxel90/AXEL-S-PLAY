@@ -2,16 +2,16 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
-import { getOrCreateP2PClient } from '../../lib/p2p';
+import { getOrCreateGameClientSync, type GameEventMessage } from '../../lib/gameSync';
 import { Gamepad2, Users, Sparkles, Smile, ShieldCheck, Wifi } from 'lucide-react';
 
 export default function WaitingRoomPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { currentParticipant, participants, phase } = useSessionStore();
+  const { currentParticipant, phase } = useSessionStore();
 
-  const [connectedPeers, setConnectedPeers] = useState<number>(participants.length || 1);
-  const [isP2PConnected, setIsP2PConnected] = useState(false);
+  const [connectedPeers, setConnectedPeers] = useState<number>(1);
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
   const [readyEmote, setReadyEmote] = useState(false);
 
   useEffect(() => {
@@ -19,38 +19,29 @@ export default function WaitingRoomPage() {
 
     if (!sessionId) return;
 
-    // Conexión P2P persistente con el Host del Docente
-    const participantData = currentParticipant || {
-      id: `p-${Date.now()}`,
-      sessionId,
-      nickname: 'Estudiante',
-      avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Astro',
-      score: 0,
-      rank: 1,
-      isConnected: true,
-      joinedAt: new Date().toISOString(),
-    };
+    const sync = getOrCreateGameClientSync(sessionId);
+    setIsLiveConnected(sync.isConnected);
 
-    const client = getOrCreateP2PClient(sessionId);
+    sync.onEvent = (msg: GameEventMessage) => {
+      console.log('[WaitingRoom] Evento recibido:', msg.type);
 
-    client.onConnected = () => {
-      console.log('[WaitingRoom] P2P Conectado con el docente');
-      setIsP2PConnected(true);
-    };
-
-    client.onMessage = (msg) => {
-      console.log('[WaitingRoom] Mensaje recibido:', msg.type);
-
-      if (msg.type === 'ROOM_UPDATE') {
-        setConnectedPeers(msg.participants.length);
-        useSessionStore.setState({ participants: msg.participants });
+      if (msg.type === 'JOIN' || msg.type === 'ROOM_UPDATE') {
+        if (msg.participants) {
+          setConnectedPeers(msg.participants.length);
+        } else {
+          setConnectedPeers((prev) => prev + 1);
+        }
+      } else if (msg.type === 'INIT' && msg.session) {
+        if (msg.session.participants) {
+          setConnectedPeers(msg.session.participants.length || 1);
+        }
       } else if (msg.type === 'START_GAME' || msg.type === 'QUESTION') {
         audioEngine.setContext('game_start');
-        if (msg.type === 'QUESTION') {
+        if (msg.type === 'QUESTION' && msg.question) {
           useSessionStore.setState({
             currentQuestion: msg.question,
-            questionIndex: msg.index,
-            timeRemaining: msg.timeLimit,
+            questionIndex: msg.index || 0,
+            timeRemaining: msg.timeLimit || 20,
             phase: 'question',
           });
         }
@@ -58,19 +49,12 @@ export default function WaitingRoomPage() {
       }
     };
 
-    client.connect(participantData).then((success) => {
-      if (success || client.isConnected) {
-        setIsP2PConnected(true);
-      }
-    });
+    // Asegurar suscripción a SSE
+    sync.connectSSE();
+    setIsLiveConnected(true);
+  }, [sessionId, navigate]);
 
-    // Timeout de verificación de conexión: si ya está conectado
-    if (client.isConnected) {
-      setIsP2PConnected(true);
-    }
-  }, [sessionId, currentParticipant, navigate]);
-
-  // Si la fase cambia a pregunta por store, avanzar
+  // Si la fase cambia por el store global
   useEffect(() => {
     if (phase === 'question' && sessionId) {
       navigate(`/game/${sessionId}`);
@@ -96,12 +80,12 @@ export default function WaitingRoomPage() {
 
         <div className="flex items-center gap-2">
           <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
-            isP2PConnected
+            isLiveConnected
               ? 'bg-green-500/10 border-green-500/30 text-green-400'
               : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400 animate-pulse'
           }`}>
             <Wifi className="w-3.5 h-3.5" />
-            <span>{isP2PConnected ? 'En línea' : 'Conectando...'}</span>
+            <span>{isLiveConnected ? 'En línea' : 'Conectando...'}</span>
           </div>
 
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-semibold">
