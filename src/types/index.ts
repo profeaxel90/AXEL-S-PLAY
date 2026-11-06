@@ -217,6 +217,7 @@ export interface Participant {
   wrongAnswers?: number;
   avgTimePerAnswer?: number;
   activePower?: PowerUp;
+  stealCount?: number;
 }
 
 // ============================================================

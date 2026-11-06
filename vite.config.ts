@@ -18,6 +18,7 @@ interface LiveParticipant {
   joinedAt: string;
   correctAnswers?: number;
   activePower?: any;
+  stealCount: number;
 }
 
 import fs from 'fs';
@@ -27,7 +28,7 @@ interface LiveSession {
   phase: 'intro' | 'waiting' | 'question' | 'finished';
   currentQuestionIndex: number;
   participants: LiveParticipant[];
-  answers: Array<{ participantId: string; optionId: string; timeTaken: number }>;
+  answers: Array<{ participantId: string; optionId: string; timeTaken: number; isCorrect?: boolean; answerTimestamp: number }>;
   isAnswerRevealed: boolean;
   power?: any;
   stealActive?: boolean;
@@ -217,6 +218,7 @@ function gameServerPlugin(): Plugin {
                 score: 0,
                 isConnected: true,
                 joinedAt: new Date().toISOString(),
+                stealCount: 0,
               };
               session.participants.push(participant);
             }
@@ -275,6 +277,23 @@ function gameServerPlugin(): Plugin {
               session,
             });
 
+            // After REVEAL_ANSWER, broadcast leaderboard top-7
+            if (eventType === 'REVEAL_ANSWER') {
+              const top7 = [...session.participants]
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 7)
+                .map((p, idx) => ({
+                  id: p.id,
+                  nickname: p.nickname,
+                  avatar: p.avatar,
+                  score: p.score,
+                  rank: idx + 1,
+                  correctAnswers: p.correctAnswers || 0,
+                  stealCount: p.stealCount || 0,
+                }));
+              broadcastToSession(token, { type: 'LEADERBOARD', rankings: top7, session });
+            }
+
             sendJson(res, 200, { success: true, session });
           });
           return;
@@ -283,17 +302,33 @@ function gameServerPlugin(): Plugin {
         // 5. Answer
         if (action === 'answer' && req.method === 'POST') {
           parseJsonBody(req).then((body) => {
-            const { participantId, optionId, timeTaken, isCorrect, pointsEarned } = body;
+            const { participantId, optionId, timeTaken, isCorrect, timeLimit } = body;
+            const answerTimestamp = Date.now();
 
             const participant = session.participants.find((p) => p.id === participantId);
+
+            // Calculate server-side points
+            let serverPointsEarned = 0;
+            if (isCorrect) {
+              // Count how many have already answered correctly before this one
+              const correctBefore = session.answers.filter((a) => a.isCorrect).length;
+              // Base points: 1000, 900, 800... min 200
+              const basePoints = Math.max(200, 1000 - correctBefore * 100);
+              // Time bonus: up to 200 extra based on time remaining
+              const effectiveTimeLimit = timeLimit || 20;
+              const timeRemaining = Math.max(0, effectiveTimeLimit - (timeTaken / 1000));
+              const timeBonus = Math.round((timeRemaining / effectiveTimeLimit) * 200);
+              serverPointsEarned = Math.min(1200, basePoints + timeBonus);
+            }
+
             if (participant) {
-              participant.score += pointsEarned || 0;
+              participant.score += serverPointsEarned;
               if (isCorrect) {
                 participant.correctAnswers = (participant.correctAnswers || 0) + 1;
               }
             }
 
-            session.answers.push({ participantId, optionId, timeTaken });
+            session.answers.push({ participantId, optionId, timeTaken, isCorrect, answerTimestamp });
 
             broadcastToSession(token, {
               type: 'ANSWER',
@@ -301,7 +336,7 @@ function gameServerPlugin(): Plugin {
               optionId,
               timeTaken,
               isCorrect,
-              pointsEarned,
+              pointsEarned: serverPointsEarned,
               newScore: participant?.score || 0,
               answeredCount: session.answers.length,
               participants: session.participants,
@@ -310,51 +345,136 @@ function gameServerPlugin(): Plugin {
             sendJson(res, 200, {
               success: true,
               isCorrect,
-              pointsEarned,
+              serverPointsEarned,
+              pointsEarned: serverPointsEarned,
               newScore: participant?.score || 0,
             });
           });
           return;
         }
 
-        // 6. Steal points (Robo de puntos)
+        // 6. Steal points (Robo de puntos directo entre participantes)
         if (action === 'steal' && req.method === 'POST') {
           parseJsonBody(req).then((body) => {
-            const { participantId } = body;
-            if (!session.stealActive || session.stealClaimedBy) {
+            const { fromId, toId, participantId } = body;
+
+            // Legacy support: if only participantId provided, use old logic
+            if (!fromId && participantId) {
+              if (!session.stealActive || session.stealClaimedBy) {
+                sendJson(res, 200, {
+                  success: false,
+                  alreadyClaimed: true,
+                  winnerNickname: session.stealWinnerNickname || 'Otro participante',
+                });
+                return;
+              }
+
+              session.stealActive = false;
+              session.stealClaimedBy = participantId;
+              const participant = session.participants.find((p) => p.id === participantId);
+              const amount = session.stealAmount || 500;
+              if (participant) {
+                participant.score += amount;
+                session.stealWinnerNickname = participant.nickname;
+              }
+
+              broadcastToSession(token, {
+                type: 'STEAL_POINTS_CLAIMED',
+                winnerId: participantId,
+                winnerNickname: participant?.nickname || 'Estudiante',
+                amount,
+                participants: session.participants,
+              });
+
               sendJson(res, 200, {
-                success: false,
-                alreadyClaimed: true,
-                winnerNickname: session.stealWinnerNickname || 'Otro participante',
+                success: true,
+                winnerId: participantId,
+                winnerNickname: participant?.nickname || 'Estudiante',
+                amount,
+                newScore: participant?.score || 0,
               });
               return;
             }
 
-            session.stealActive = false;
-            session.stealClaimedBy = participantId;
-            const participant = session.participants.find((p) => p.id === participantId);
-            const amount = session.stealAmount || 500;
-            if (participant) {
-              participant.score += amount;
-              session.stealWinnerNickname = participant.nickname;
+            // New directional steal: fromId steals from toId
+            const STEAL_AMOUNT = 50;
+
+            if (!fromId || !toId) {
+              sendJson(res, 400, { success: false, error: 'fromId y toId son requeridos' });
+              return;
             }
 
+            if (fromId === toId) {
+              sendJson(res, 400, { success: false, error: 'No puedes robarte puntos a ti mismo' });
+              return;
+            }
+
+            const fromParticipant = session.participants.find((p) => p.id === fromId);
+            const toParticipant = session.participants.find((p) => p.id === toId);
+
+            if (!fromParticipant) {
+              sendJson(res, 400, { success: false, error: 'Participante origen no encontrado' });
+              return;
+            }
+
+            if ((fromParticipant.stealCount || 0) >= 2) {
+              sendJson(res, 400, { success: false, error: 'Ya usaste tus 2 robos disponibles' });
+              return;
+            }
+
+            if (!toParticipant) {
+              sendJson(res, 400, { success: false, error: 'Participante destino no encontrado' });
+              return;
+            }
+
+            if (toParticipant.score < STEAL_AMOUNT) {
+              sendJson(res, 400, { success: false, error: `${toParticipant.nickname} no tiene suficientes puntos (mínimo ${STEAL_AMOUNT})` });
+              return;
+            }
+
+            // Atomic operation
+            toParticipant.score -= STEAL_AMOUNT;
+            fromParticipant.score += STEAL_AMOUNT;
+            fromParticipant.stealCount = (fromParticipant.stealCount || 0) + 1;
+
+            console.log(`[STEAL] ${fromParticipant.nickname} robó a ${toParticipant.nickname}: ${STEAL_AMOUNT} pts`);
+
             broadcastToSession(token, {
-              type: 'STEAL_POINTS_CLAIMED',
-              winnerId: participantId,
-              winnerNickname: participant?.nickname || 'Estudiante',
-              amount,
+              type: 'STEAL_RESULT',
+              success: true,
+              fromId,
+              fromNickname: fromParticipant.nickname,
+              toId,
+              toNickname: toParticipant.nickname,
+              amount: STEAL_AMOUNT,
               participants: session.participants,
             });
 
             sendJson(res, 200, {
               success: true,
-              winnerId: participantId,
-              winnerNickname: participant?.nickname || 'Estudiante',
-              amount,
-              newScore: participant?.score || 0,
+              fromNickname: fromParticipant.nickname,
+              toNickname: toParticipant.nickname,
+              amount: STEAL_AMOUNT,
             });
           });
+          return;
+        }
+
+        // 7a. Leaderboard
+        if (action === 'leaderboard' && req.method === 'GET') {
+          const top7 = [...session.participants]
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 7)
+            .map((p, idx) => ({
+              id: p.id,
+              nickname: p.nickname,
+              avatar: p.avatar,
+              score: p.score,
+              rank: idx + 1,
+              correctAnswers: p.correctAnswers || 0,
+              stealCount: p.stealCount || 0,
+            }));
+          sendJson(res, 200, { rankings: top7 });
           return;
         }
 

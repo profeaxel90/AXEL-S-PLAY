@@ -106,6 +106,18 @@ export default function SessionPage() {
   const [selectedTrack, setSelectedTrack] = useState<'lobby' | 'question' | 'suspense' | 'podium'>('lobby');
   const [audioPanelOpen, setAudioPanelOpen] = useState(false);
 
+  // Audio personalizado (archivo subido por el docente)
+  const [customFileName, setCustomFileName] = useState<string | null>(null);
+  const [customIsPlaying, setCustomIsPlaying] = useState(false);
+
+  // Leaderboard después de revelar respuesta (Top 7)
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+
+  // Secuencia animada del Podio (1=3er, 2=2do, 3=1er con confeti, 4=finalizado)
+  const [podiumStep, setPodiumStep] = useState(0);
+  const [podiumConfetti, setPodiumConfetti] = useState(false);
+
   // Robo de Puntos
   const [stealBanner, setStealBanner] = useState<string | null>(null);
   const [stealWinnerBanner, setStealWinnerBanner] = useState<string | null>(null);
@@ -159,13 +171,27 @@ export default function SessionPage() {
         }
 
         audioEngine.playEffect('sfx_tick');
+      } else if (msg.type === 'STEAL_RESULT') {
+        if (msg.success) {
+          setStealWinnerBanner(`🗡️ ¡${msg.fromNickname} robó 50 puntos a ${msg.toNickname}!`);
+          audioEngine.playEffect('sfx_steal_alert');
+          setTimeout(() => setStealWinnerBanner(null), 5000);
+          if (msg.participants) {
+            setLiveParticipants(msg.participants);
+          }
+        }
+      } else if (msg.type === 'LEADERBOARD') {
+        if (msg.rankings) {
+          setLeaderboardData(msg.rankings);
+          setShowLeaderboard(true);
+        }
       } else if (msg.type === 'STEAL_POINTS_CLAIMED') {
-        // Alguien robó los puntos
+        // Soporte retrocompatible
         if (msg.winnerNickname) {
           setStealBanner(null);
-          setStealWinnerBanner(`¡⚡ ${msg.winnerNickname} fue el más rápido y robó +${msg.amount || 500} puntos!`);
+          setStealWinnerBanner(`¡⚡ ${msg.winnerNickname} robó +${msg.amount || 50} puntos!`);
           audioEngine.playEffect('sfx_steal_win');
-          setTimeout(() => setStealWinnerBanner(null), 6000);
+          setTimeout(() => setStealWinnerBanner(null), 5000);
         }
         if (msg.participants) {
           setLiveParticipants(msg.participants);
@@ -221,21 +247,53 @@ export default function SessionPage() {
     return () => clearInterval(interval);
   }, [gamePhase, isPaused, isAnswerRevealed]);
 
-  // ── Audio según la fase ──
+  // ── Secuencia animada del Podio cuando termina la partida ──
   useEffect(() => {
-    if (gamePhase === 'finished') {
-      audioEngine.setContext('podium');
-      setSelectedTrack('podium');
-    } else if (gamePhase === 'intro') {
-      audioEngine.setContext('intro');
-      setSelectedTrack('lobby');
-    } else if (gamePhase === 'question') {
-      audioEngine.setContext('question');
-      setSelectedTrack('question');
-    } else {
-      audioEngine.setContext('lobby');
-      setSelectedTrack('lobby');
+    if (gamePhase !== 'finished') {
+      setPodiumStep(0);
+      setPodiumConfetti(false);
+      return;
     }
+
+    // 1. Mostrar 3er puesto
+    const t1 = setTimeout(() => {
+      setPodiumStep(1);
+      audioEngine.playEffect('sfx_tick');
+    }, 1200);
+
+    // 2. Mostrar 2do puesto
+    const t2 = setTimeout(() => {
+      setPodiumStep(2);
+      audioEngine.playEffect('sfx_tick');
+    }, 3500);
+
+    // 3. Mostrar 1er puesto con confeti y celebración
+    const t3 = setTimeout(() => {
+      setPodiumStep(3);
+      setPodiumConfetti(true);
+      audioEngine.playEffect('sfx_victory');
+    }, 6000);
+
+    // 4. Detener automáticamente la música al finalizar la animación
+    const t4 = setTimeout(() => {
+      setPodiumStep(4);
+      audioEngine.stopMusic();
+      audioEngine.stopCustomAudio();
+      setCustomIsPlaying(false);
+    }, 11000);
+
+    // Apagar confeti suavemente
+    const t5 = setTimeout(() => {
+      setPodiumConfetti(false);
+    }, 14000);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
+      clearTimeout(t5);
+    };
   }, [gamePhase]);
 
   // Participantes ordenados estrictamente por puntaje real
@@ -279,6 +337,7 @@ export default function SessionPage() {
   };
 
   const handleNextQuestion = () => {
+    setShowLeaderboard(false);
     const nextIdx = currentQIndex + 1;
     if (nextIdx >= questions.length) {
       handleEndGame();
@@ -304,6 +363,21 @@ export default function SessionPage() {
   const handleRevealAnswer = () => {
     setIsAnswerRevealed(true);
     audioEngine.playEffect('sfx_correct');
+
+    const top7 = [...liveParticipants]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 7)
+      .map((p, idx) => ({
+        id: p.id,
+        nickname: p.nickname,
+        avatar: p.avatar,
+        score: p.score,
+        rank: idx + 1,
+        correctAnswers: p.correctAnswers || 0,
+        stealCount: p.stealCount || 0,
+      }));
+    setLeaderboardData(top7);
+    setShowLeaderboard(true);
 
     hostSyncRef.current?.broadcast('REVEAL_ANSWER', {
       correctOptionId: currentQ.correctAnswer as string,
@@ -526,42 +600,85 @@ export default function SessionPage() {
                   />
                 </div>
 
-                {/* Selector de Pista de Música */}
-                <div className="space-y-1.5 pt-1 border-t border-white/10">
-                  <label className="text-[11px] text-white/70 font-bold block">
-                    Pista de Música Activa:
+                {/* Cargar Música Manualmente desde el Computador */}
+                <div className="space-y-2 pt-2 border-t border-white/10">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-purple-300 font-black block flex items-center gap-1">
+                      📁 Subir Música de Fondo
+                    </label>
+                    <span className="text-[9px] text-yellow-400 font-bold bg-yellow-400/10 px-1.5 py-0.5 rounded border border-yellow-400/20">
+                      Solo Admin
+                    </span>
+                  </div>
+
+                  {/* Sugerencia recomendada aprobada por el usuario */}
+                  <div className="text-[10px] text-purple-200/80 bg-purple-950/40 p-2 rounded-lg border border-purple-500/20">
+                    💡 <strong>Sugerencia aprobada:</strong> "Stranger Things" (Kyle Dixon & Michael Stein)
+                  </div>
+
+                  <label className="flex flex-col items-center justify-center w-full h-16 border-2 border-dashed border-purple-500/40 rounded-xl bg-purple-900/10 hover:bg-purple-900/20 cursor-pointer transition-all">
+                    <input
+                      type="file"
+                      accept="audio/*,.mp3,.ogg,.wav,.m4a,.flac"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          audioEngine.playCustomAudio(file);
+                          setCustomFileName(file.name);
+                          setCustomIsPlaying(true);
+                          setIsMusicActive(true);
+                        }
+                      }}
+                    />
+                    {customFileName ? (
+                      <span className="text-[11px] text-green-400 font-bold text-center px-2 truncate w-full">
+                        🎵 {customFileName}
+                      </span>
+                    ) : (
+                      <>
+                        <span className="text-[11px] text-white/70 font-semibold">Haz clic para subir música</span>
+                        <span className="text-[9px] text-white/40 mt-0.5">MP3 · OGG · WAV · M4A</span>
+                      </>
+                    )}
                   </label>
-                  <select
-                    value={selectedTrack}
-                    onChange={(e) => {
-                      const track = e.target.value as 'lobby' | 'question' | 'suspense' | 'podium';
-                      setSelectedTrack(track);
-                      audioEngine.unlock();
-                      audioEngine.playMusic(track);
-                    }}
-                    className="input py-1.5 text-xs bg-slate-950 border-white/10"
-                  >
-                    <option value="lobby">🎮 Lobby Alegre (124 BPM)</option>
-                    <option value="question">⏱️ Pregunta Enérgica (136 BPM)</option>
-                    <option value="suspense">😱 Suspenso y Tensión (96 BPM)</option>
-                    <option value="podium">🏆 Podio Triunfal (128 BPM)</option>
-                  </select>
+
+                  {customFileName && (
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const isNowPlaying = audioEngine.toggleCustomAudio();
+                          setCustomIsPlaying(isNowPlaying);
+                        }}
+                        className="flex-1 py-1.5 rounded-lg text-[11px] font-black bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-300"
+                      >
+                        {customIsPlaying ? '⏸ Pausar' : '▶ Reanudar'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          audioEngine.stopCustomAudio();
+                          setCustomFileName(null);
+                          setCustomIsPlaying(false);
+                        }}
+                        className="py-1.5 px-3 rounded-lg text-[11px] font-black bg-red-600/20 hover:bg-red-600/40 border border-red-500/40 text-red-400"
+                        title="Detener y quitar música"
+                      >
+                        ⏹ Detener
+                      </button>
+                    </div>
+                  )}
+
+                  {!customFileName && (
+                    <p className="text-[9px] text-white/40 text-center">
+                      Sin música cargada (silencio de fondo total).
+                    </p>
+                  )}
                 </div>
               </div>
             )}
           </div>
-
-          {/* BOTÓN ROBO DE PUNTOS (Activable por docente en cualquier momento) */}
-          {(gamePhase === 'question' || gamePhase === 'intro') && (
-            <button
-              onClick={handleTriggerStealPoints}
-              className="py-2 px-3.5 rounded-xl text-xs font-black flex items-center gap-1.5 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 border border-red-400/50 text-white shadow-lg shadow-red-600/30 hover:scale-105 transition-all animate-pulse"
-              title="Habilitar Robo de Puntos en todos los celulares"
-            >
-              <Zap className="w-4 h-4 fill-yellow-300 text-yellow-300" />
-              <span>ROBAR PUNTOS (500 pts)</span>
-            </button>
-          )}
 
           {/* BOTÓN PODER PARA TODOS */}
           {gamePhase !== 'finished' && liveParticipants.length > 0 && (
@@ -1117,58 +1234,79 @@ export default function SessionPage() {
               </p>
             </div>
 
-            {/* Estructura del Podio de Jugadores REALES */}
+            {/* Estructura del Podio de Jugadores REALES con revelación secuencial */}
             {liveParticipants.length === 0 ? (
               <div className="p-8 text-white/50 text-sm">
                 No hubo participantes registrados en esta partida.
               </div>
             ) : (
-              <div className="flex items-end justify-center gap-4 max-w-2xl mx-auto my-8 pt-8">
-                {/* 🥈 2do Lugar (Izquierda) */}
-                {secondPlace && (
-                  <div className="flex-1 flex flex-col items-center">
-                    <div className="w-20 h-20 rounded-3xl bg-slate-400/20 p-1.5 border-2 border-slate-300/40 mb-2 shadow-lg">
-                      <img src={secondPlace.avatar} alt={secondPlace.nickname} className="w-full h-full object-contain" />
-                    </div>
-                    <span className="font-bold text-sm text-white truncate max-w-full">{secondPlace.nickname}</span>
-                    <span className="text-xs text-slate-300 font-extrabold mb-2">{secondPlace.score.toLocaleString()} pts</span>
-                    <div className="w-full h-32 rounded-t-2xl bg-gradient-to-t from-slate-600/40 to-slate-400/30 border-t-4 border-slate-300 flex flex-col items-center justify-center shadow-xl">
-                      <Medal className="w-8 h-8 text-slate-300 mb-1" />
-                      <span className="font-black text-3xl text-slate-300">2°</span>
-                    </div>
+              <div className="flex items-end justify-center gap-4 max-w-2xl mx-auto my-8 pt-8 min-h-60 relative">
+                {/* Partículas de Confeti animadas cuando se revela el 1er lugar */}
+                {podiumConfetti && (
+                  <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden flex justify-center items-center">
+                    <span className="text-4xl animate-bounce">🎉</span>
+                    <span className="text-5xl animate-spin mx-6">⭐</span>
+                    <span className="text-4xl animate-bounce">🎊</span>
                   </div>
                 )}
 
-                {/* 🥇 1er Lugar (Centro) */}
-                {firstPlace && (
-                  <div className="flex-1 flex flex-col items-center -mt-8">
-                    <div className="w-24 h-24 rounded-3xl bg-yellow-400/30 p-2 border-4 border-yellow-400 shadow-2xl shadow-yellow-500/50 mb-2 animate-float">
-                      <img src={firstPlace.avatar} alt={firstPlace.nickname} className="w-full h-full object-contain" />
-                    </div>
-                    <span className="font-black text-base text-yellow-300 truncate max-w-full">{firstPlace.nickname}</span>
-                    <span className="text-sm text-yellow-400 font-black mb-2">{firstPlace.score.toLocaleString()} pts</span>
-                    <div className="w-full h-44 rounded-t-3xl bg-gradient-to-t from-yellow-600/50 to-yellow-400/40 border-t-4 border-yellow-400 flex flex-col items-center justify-center shadow-2xl shadow-yellow-500/40">
-                      <Trophy className="w-12 h-12 text-yellow-400 mb-1 animate-pulse" />
-                      <span className="font-black text-4xl text-yellow-400">1°</span>
-                      <span className="text-[10px] font-black text-yellow-300 uppercase tracking-wider">CAMPEÓN</span>
-                    </div>
-                  </div>
-                )}
+                {/* 🥈 2do Lugar (Aparece en paso 2) */}
+                <div className={`flex-1 flex flex-col items-center transition-all duration-700 ${
+                  podiumStep >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
+                }`}>
+                  {secondPlace && (
+                    <>
+                      <div className="w-20 h-20 rounded-3xl bg-slate-400/20 p-1.5 border-2 border-slate-300/40 mb-2 shadow-lg">
+                        <img src={secondPlace.avatar} alt={secondPlace.nickname} className="w-full h-full object-contain" />
+                      </div>
+                      <span className="font-bold text-sm text-white truncate max-w-full">{secondPlace.nickname}</span>
+                      <span className="text-xs text-slate-300 font-extrabold mb-2">{secondPlace.score.toLocaleString()} pts</span>
+                      <div className="w-full h-32 rounded-t-2xl bg-gradient-to-t from-slate-600/40 to-slate-400/30 border-t-4 border-slate-300 flex flex-col items-center justify-center shadow-xl">
+                        <Medal className="w-8 h-8 text-slate-300 mb-1" />
+                        <span className="font-black text-3xl text-slate-300">2°</span>
+                      </div>
+                    </>
+                  )}
+                </div>
 
-                {/* 🥉 3er Lugar (Derecha) */}
-                {thirdPlace && (
-                  <div className="flex-1 flex flex-col items-center">
-                    <div className="w-20 h-20 rounded-3xl bg-amber-700/20 p-1.5 border-2 border-amber-600/40 mb-2 shadow-md">
-                      <img src={thirdPlace.avatar} alt={thirdPlace.nickname} className="w-full h-full object-contain" />
-                    </div>
-                    <span className="font-bold text-sm text-white truncate max-w-full">{thirdPlace.nickname}</span>
-                    <span className="text-xs text-amber-400 font-extrabold mb-2">{thirdPlace.score.toLocaleString()} pts</span>
-                    <div className="w-full h-24 rounded-t-2xl bg-gradient-to-t from-amber-800/40 to-amber-700/30 border-t-4 border-amber-600 flex flex-col items-center justify-center shadow-lg">
-                      <Medal className="w-7 h-7 text-amber-400 mb-1" />
-                      <span className="font-black text-2xl text-amber-400">3°</span>
-                    </div>
-                  </div>
-                )}
+                {/* 🥇 1er Lugar (Aparece al final en paso 3 con celebración especial) */}
+                <div className={`flex-1 flex flex-col items-center -mt-8 transition-all duration-700 ${
+                  podiumStep >= 3 ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-12 scale-90'
+                }`}>
+                  {firstPlace && (
+                    <>
+                      <div className="w-24 h-24 rounded-3xl bg-yellow-400/30 p-2 border-4 border-yellow-400 shadow-2xl shadow-yellow-500/50 mb-2 animate-float">
+                        <img src={firstPlace.avatar} alt={firstPlace.nickname} className="w-full h-full object-contain" />
+                      </div>
+                      <span className="font-black text-base text-yellow-300 truncate max-w-full">{firstPlace.nickname}</span>
+                      <span className="text-sm text-yellow-400 font-black mb-2">{firstPlace.score.toLocaleString()} pts</span>
+                      <div className="w-full h-44 rounded-t-3xl bg-gradient-to-t from-yellow-600/50 to-yellow-400/40 border-t-4 border-yellow-400 flex flex-col items-center justify-center shadow-2xl shadow-yellow-500/40">
+                        <Trophy className="w-12 h-12 text-yellow-400 mb-1 animate-pulse" />
+                        <span className="font-black text-4xl text-yellow-400">1°</span>
+                        <span className="text-[10px] font-black text-yellow-300 uppercase tracking-wider">¡GRAN CAMPEÓN!</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* 🥉 3er Lugar (Aparece primero en paso 1) */}
+                <div className={`flex-1 flex flex-col items-center transition-all duration-700 ${
+                  podiumStep >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
+                }`}>
+                  {thirdPlace && (
+                    <>
+                      <div className="w-20 h-20 rounded-3xl bg-amber-700/20 p-1.5 border-2 border-amber-600/40 mb-2 shadow-md">
+                        <img src={thirdPlace.avatar} alt={thirdPlace.nickname} className="w-full h-full object-contain" />
+                      </div>
+                      <span className="font-bold text-sm text-white truncate max-w-full">{thirdPlace.nickname}</span>
+                      <span className="text-xs text-amber-400 font-extrabold mb-2">{thirdPlace.score.toLocaleString()} pts</span>
+                      <div className="w-full h-24 rounded-t-2xl bg-gradient-to-t from-amber-800/40 to-amber-700/30 border-t-4 border-amber-600 flex flex-col items-center justify-center shadow-lg">
+                        <Medal className="w-7 h-7 text-amber-400 mb-1" />
+                        <span className="font-black text-2xl text-amber-400">3°</span>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
@@ -1283,6 +1421,118 @@ export default function SessionPage() {
             >
               Cerrar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── BANNER VISUAL DE ROBO DE PUNTOS EN PANTALLA PRINCIPAL ── */}
+      {stealWinnerBanner && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 animate-bounce-in max-w-lg w-full px-4">
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white shadow-2xl border-2 border-yellow-300 flex items-center justify-between gap-3">
+            <span className="text-2xl animate-spin">🗡️</span>
+            <span className="font-black text-sm text-center flex-1">{stealWinnerBanner}</span>
+            <button
+              onClick={() => setStealWinnerBanner(null)}
+              className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-white/80"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── TABLA DE CLASIFICACIÓN TOP 7 POST-PREGUNTA EN PROYECTOR ── */}
+      {showLeaderboard && leaderboardData.length > 0 && gamePhase === 'question' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-bounce-in">
+          <div className="card max-w-xl w-full p-6 md:p-8 border-purple-500/50 bg-slate-900/95 shadow-2xl text-center space-y-5">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-6 h-6 text-yellow-400" />
+                <h3 className="text-xl md:text-2xl font-black text-white">
+                  Clasificación Actual · TOP 7
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowLeaderboard(false)}
+                className="text-xs px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white/70"
+              >
+                Cerrar ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-purple-200">
+              Puntajes actualizados en tiempo real según rapidez de respuesta y robos de puntos
+            </p>
+
+            <div className="space-y-2">
+              {leaderboardData.slice(0, 7).map((p, idx) => {
+                const isTop1 = idx === 0;
+                const isTop2 = idx === 1;
+                const isTop3 = idx === 2;
+
+                return (
+                  <div
+                    key={p.id || idx}
+                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                      isTop1
+                        ? 'bg-yellow-400/20 border-yellow-400/50 shadow-lg shadow-yellow-500/10'
+                        : isTop2
+                        ? 'bg-slate-400/15 border-slate-300/30'
+                        : isTop3
+                        ? 'bg-amber-600/15 border-amber-500/30'
+                        : 'bg-white/5 border-white/10'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${
+                          isTop1
+                            ? 'bg-yellow-400 text-slate-950 shadow-md shadow-yellow-400/40'
+                            : isTop2
+                            ? 'bg-slate-300 text-slate-950'
+                            : isTop3
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-white/10 text-white/70'
+                        }`}
+                      >
+                        #{idx + 1}
+                      </span>
+                      <img
+                        src={p.avatar}
+                        alt={p.nickname}
+                        className="w-9 h-9 rounded-xl object-contain bg-slate-800 p-0.5 border border-white/15"
+                      />
+                      <div className="text-left">
+                        <div className="font-extrabold text-sm text-white">{p.nickname}</div>
+                        <div className="text-[10px] text-white/50">
+                          {p.correctAnswers !== undefined ? `${p.correctAnswers} correctas` : 'Participante'}
+                          {p.stealCount ? ` · ${p.stealCount} robos` : ''}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-base font-black text-yellow-400">
+                        {p.score.toLocaleString()} pts
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowLeaderboard(false);
+                  handleNextQuestion();
+                }}
+                className="btn-primary py-2.5 px-6 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg shadow-purple-600/30"
+              >
+                <span>Avanzar a Siguiente Pregunta</span>
+                <SkipForward className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}

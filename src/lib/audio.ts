@@ -402,6 +402,11 @@ class AudioEngine {
     effectsVolume: 0.85,
   };
 
+  // Audio personalizado (archivo subido por el docente)
+  private customAudio: HTMLAudioElement | null = null;
+  private customFileName: string | null = null;
+  private customPlaying = false;
+
   constructor() {
     this.loadSettings();
   }
@@ -431,11 +436,72 @@ class AudioEngine {
 
   public playMusic(track: 'lobby' | 'question' | 'suspense' | 'podium') {
     if (!this.settings.musicEnabled) return;
+    // Si hay audio personalizado activo, no iniciar la síntesis
+    if (this.customPlaying) return;
     this.synth.startMusic(track);
   }
 
   public stopMusic() {
     this.synth.stopMusic();
+    this.stopCustomAudio();
+  }
+
+  // ── Audio Personalizado (archivo subido por el docente) ──
+  public playCustomAudio(file: File): void {
+    // Detener cualquier música en curso (síntesis o anterior archivo)
+    this.synth.stopMusic();
+    this.stopCustomAudio();
+
+    const url = URL.createObjectURL(file);
+    const audio = new Audio(url);
+    audio.loop = true;
+    audio.volume = this.settings.musicEnabled ? this.settings.musicVolume : 0;
+    audio.play().catch(() => {});
+
+    this.customAudio = audio;
+    this.customFileName = file.name;
+    this.customPlaying = true;
+  }
+
+  public stopCustomAudio(): void {
+    if (this.customAudio) {
+      this.customAudio.pause();
+      this.customAudio.src = '';
+      this.customAudio = null;
+      this.customFileName = null;
+    }
+    this.customPlaying = false;
+  }
+
+  public pauseCustomAudio(): void {
+    if (this.customAudio && !this.customAudio.paused) {
+      this.customAudio.pause();
+    }
+  }
+
+  public resumeCustomAudio(): void {
+    if (this.customAudio && this.customAudio.paused) {
+      this.customAudio.play().catch(() => {});
+    }
+  }
+
+  public toggleCustomAudio(): boolean {
+    if (!this.customAudio) return false;
+    if (this.customAudio.paused) {
+      this.customAudio.play().catch(() => {});
+      return true;
+    } else {
+      this.customAudio.pause();
+      return false;
+    }
+  }
+
+  public getCustomFileName(): string | null {
+    return this.customFileName;
+  }
+
+  public isCustomAudioPlaying(): boolean {
+    return this.customPlaying && this.customAudio !== null && !this.customAudio.paused;
   }
 
   public getCurrentTrack(): 'lobby' | 'question' | 'suspense' | 'podium' | null {
@@ -489,23 +555,14 @@ class AudioEngine {
   }
 
   public setContext(context: AudioSceneContext | 'intro' | 'suspense') {
+    // La música predeterminada YA NO se reproduce automáticamente.
+    // Solo se ejecutan los efectos de sonido puntuales (SFX).
     switch (context) {
       case 'intro':
         this.playEffect('sfx_intro');
-        setTimeout(() => this.playMusic('lobby'), 400);
-        break;
-      case 'suspense':
-        this.playMusic('suspense');
-        break;
-      case 'lobby':
-        this.playMusic('lobby');
         break;
       case 'game_start':
         this.synth.playEffectTone(392, 'square', 0.2, 0.25);
-        setTimeout(() => this.playMusic('question'), 400);
-        break;
-      case 'question':
-        this.playMusic('question');
         break;
       case 'countdown':
         this.playEffect('sfx_countdown');
@@ -516,11 +573,11 @@ class AudioEngine {
       case 'incorrect':
         this.playEffect('sfx_incorrect');
         break;
-      case 'podium':
-        this.playMusic('podium');
-        break;
       case 'power_up':
         this.playEffect('sfx_power_up');
+        break;
+      case 'podium':
+        // Podio: No inicia música sintética automática.
         break;
     }
   }
@@ -542,6 +599,9 @@ class AudioEngine {
     this.synth.setMusicVolume(enabled ? this.settings.musicVolume : 0);
     if (!enabled) {
       this.synth.stopMusic();
+      if (this.customAudio) this.customAudio.volume = 0;
+    } else {
+      if (this.customAudio) this.customAudio.volume = this.settings.musicVolume;
     }
     this.saveSettings();
   }
@@ -552,10 +612,19 @@ class AudioEngine {
     this.saveSettings();
   }
 
+  public setSfxVolume(vol: number) {
+    this.settings.effectsVolume = vol;
+    if (this.settings.effectsEnabled) {
+      this.synth.setSfxVolume(vol);
+    }
+    this.saveSettings();
+  }
+
   public setMusicVolume(vol: number) {
     this.settings.musicVolume = vol;
     if (this.settings.musicEnabled) {
       this.synth.setMusicVolume(vol);
+      if (this.customAudio) this.customAudio.volume = vol;
     }
     this.saveSettings();
   }

@@ -4,7 +4,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
 import { getOrCreateGameClientSync, type GameEventMessage } from '../../lib/gameSync';
 import {
-  Clock, CheckCircle2, XCircle, Zap, Volume2, VolumeX, Sparkles, Award
+  Clock, CheckCircle2, XCircle, Zap, Sparkles, Award, Volume2, VolumeX
 } from 'lucide-react';
 import type { Question, PowerUp, ParticipantRank } from '../../types';
 
@@ -56,15 +56,21 @@ export default function GameStudentPage() {
   const [questionNum, setQuestionNum] = useState<number>(questionIndex + 1);
   const [totalQuestions, setTotalQuestions] = useState<number>(5);
 
-  // Audio en Móvil
-  const [isMusicActive, setIsMusicActive] = useState(() => audioEngine.getSettings().musicEnabled);
-  const [musicVol, setMusicVol] = useState(() => audioEngine.getSettings().musicVolume ?? 0.75);
+  // Audio en Móvil — solo control de beeps/efectos, sin música de fondo
+  const [isSfxActive, setIsSfxActive] = useState(() => audioEngine.getSettings().effectsEnabled);
+  const [sfxVol, setSfxVol] = useState(() => audioEngine.getSettings().effectsVolume ?? 0.85);
   const [showVolSlider, setShowVolSlider] = useState(false);
 
-  // Modo Robo de Puntos en Móvil
-  const [stealModalActive, setStealModalActive] = useState(false);
-  const [isClaimingSteal, setIsClaimingSteal] = useState(false);
-  const [stealResult, setStealResult] = useState<{ didWin: boolean; winnerNickname: string; amount: number } | null>(null);
+  // Nuevo sistema de Robo de Puntos
+  const [stealCount, setStealCount] = useState(0); // robos usados (máx 2)
+  const [showStealModal, setShowStealModal] = useState(false);
+  const [showStealConfirm, setShowStealConfirm] = useState(false);
+  const [stealTarget, setStealTarget] = useState<{id: string, nickname: string, score: number} | null>(null);
+  const [stealResult, setStealResult] = useState<{success: boolean, fromNickname?: string, toNickname?: string, amount?: number, error?: string} | null>(null);
+  const [isDoingSteal, setIsDoingSteal] = useState(false);
+  const [availablePlayers, setAvailablePlayers] = useState<{id: string, nickname: string, score: number}[]>([]);
+  const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   // Escuchar mensajes en tiempo real vía GameClientSync (SSE + P2P)
   useEffect(() => {
@@ -83,12 +89,23 @@ export default function GameStudentPage() {
         setEliminatedOptions([]);
         setRevealedCorrectId(null);
         setExplanationText(null);
-        setStealModalActive(false);
+        setShowStealModal(false);
+        setShowStealConfirm(false);
         setStealResult(null);
+        setShowLeaderboard(false);
         setTimeLeft(msg.timeLimit || 20);
         setQuestionNum((msg.index || 0) + 1);
         setTotalQuestions(msg.total || 5);
-        audioEngine.setContext('question');
+        // Sin música en dispositivos de alumnos — solo beep de inicio
+        audioEngine.playEffect('sfx_tick');
+
+        // Actualizar lista de jugadores disponibles para robar
+        if (msg.participants) {
+          const others = msg.participants
+            .filter((p: any) => p.id !== currentParticipant?.id && p.score >= 50)
+            .map((p: any) => ({ id: p.id, nickname: p.nickname, score: p.score }));
+          setAvailablePlayers(others);
+        }
       } else if (msg.type === 'ANSWER_ACK') {
         if (!currentParticipant || msg.participantId === currentParticipant.id) {
           setFeedback(msg.isCorrect ? 'correct' : 'incorrect');
@@ -102,41 +119,52 @@ export default function GameStudentPage() {
             audioEngine.playEffect('sfx_wrong');
           }
         }
+
+        // Actualizar lista de jugadores disponibles para robar
+        if (msg.participants) {
+          const others = msg.participants
+            .filter((p: any) => p.id !== currentParticipant?.id && p.score >= 50)
+            .map((p: any) => ({ id: p.id, nickname: p.nickname, score: p.score }));
+          setAvailablePlayers(others);
+        }
       } else if (msg.type === 'REVEAL_ANSWER') {
         if (msg.correctOptionId) {
           setRevealedCorrectId(msg.correctOptionId);
         }
         if (msg.explanation) setExplanationText(msg.explanation);
-      } else if (msg.type === 'STEAL_POINTS_START') {
-        // Docente activó el Robo de Puntos
-        setStealModalActive(true);
-        setIsClaimingSteal(false);
-        setStealResult(null);
-        audioEngine.playEffect('sfx_steal_alert');
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate([120, 80, 120]);
-        }
-      } else if (msg.type === 'STEAL_POINTS_CLAIMED') {
-        const didWin = Boolean(currentParticipant && msg.winnerId === currentParticipant.id);
-        const amount = msg.amount || 500;
-        setStealResult({
-          didWin,
-          winnerNickname: msg.winnerNickname || (didWin ? 'Tú' : 'Otro participante'),
-          amount,
-        });
-
-        if (didWin) {
-          audioEngine.playEffect('sfx_steal_win');
-          setCurrentScore((prev) => prev + amount);
-        } else {
+      } else if (msg.type === 'STEAL_RESULT') {
+        if (msg.fromId === currentParticipant?.id) {
+          // Fui yo quien robó
+          if (msg.success) {
+            setStealCount(prev => prev + 1);
+            setCurrentScore(prev => prev + (msg.amount || 50));
+            audioEngine.playEffect('sfx_steal_win');
+          }
+          setStealResult({ success: msg.success || false, fromNickname: msg.fromNickname, toNickname: msg.toNickname, amount: msg.amount, error: msg.error });
+          setIsDoingSteal(false);
+          setShowStealConfirm(false);
+          setShowStealModal(false);
+          setTimeout(() => setStealResult(null), 4000);
+        } else if (msg.toId === currentParticipant?.id) {
+          // Me robaron
+          setCurrentScore(prev => Math.max(0, prev - (msg.amount || 50)));
           audioEngine.playEffect('sfx_steal_lost');
+          setStealResult({ success: false, fromNickname: msg.fromNickname, toNickname: msg.toNickname, amount: msg.amount });
+          setTimeout(() => setStealResult(null), 4000);
+        } else {
+          // Alguien más robó a otro
+          audioEngine.playEffect('sfx_tick');
         }
-
-        // Cerrar modal automáticamente después de mostrar el resultado
-        setTimeout(() => {
-          setStealModalActive(false);
-          setStealResult(null);
-        }, 3500);
+        if (msg.participants) {
+          const others = msg.participants
+            .filter((p: any) => p.id !== currentParticipant?.id && p.score >= 50)
+            .map((p: any) => ({ id: p.id, nickname: p.nickname, score: p.score }));
+          setAvailablePlayers(others);
+        }
+      } else if (msg.type === 'LEADERBOARD') {
+        setLeaderboardData(msg.rankings || []);
+        setShowLeaderboard(true);
+        setTimeout(() => setShowLeaderboard(false), 7000);
       } else if (msg.type === 'POWER') {
         if (!msg.targetId || (currentParticipant && msg.targetId === currentParticipant.id)) {
           if (msg.power) {
@@ -250,19 +278,48 @@ export default function GameStudentPage() {
     }
   };
 
-  // Manejo del botón Robar Puntos
-  const handleClaimSteal = async () => {
-    if (isClaimingSteal || stealResult || !sessionId) return;
-    setIsClaimingSteal(true);
+  // Manejo del nuevo sistema de Robo de Puntos (máx 2 robos, 50 pts por robo)
+  const handleOpenStealModal = () => {
+    if (stealCount >= 2) return;
+    audioEngine.playEffect('sfx_tick');
+    setShowStealModal(true);
+  };
+
+  const handleSelectVictim = (player: { id: string; nickname: string; score: number }) => {
+    audioEngine.playEffect('sfx_tick');
+    setStealTarget(player);
+    setShowStealModal(false);
+    setShowStealConfirm(true);
+  };
+
+  const handleExecuteSteal = async () => {
+    if (!stealTarget || isDoingSteal || !sessionId || !currentParticipant) return;
+    if (stealCount >= 2) return;
+
+    setIsDoingSteal(true);
     audioEngine.playEffect('sfx_tick');
 
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(100);
+      navigator.vibrate(80);
     }
 
     const sync = getOrCreateGameClientSync(sessionId);
-    const participantId = currentParticipant?.id || 'p-self';
-    await sync.claimStealPoints(participantId);
+    const result = await sync.requestSteal({
+      fromId: currentParticipant.id,
+      toId: stealTarget.id,
+    });
+
+    setIsDoingSteal(false);
+    setShowStealConfirm(false);
+
+    if (!result.success) {
+      audioEngine.playEffect('sfx_wrong');
+      setStealResult({
+        success: false,
+        error: result.error || 'No se pudo completar el robo de puntos',
+      });
+      setTimeout(() => setStealResult(null), 3500);
+    }
   };
 
   // Pregunta activa o muestra por defecto para pruebas
@@ -311,7 +368,7 @@ export default function GameStudentPage() {
 
         {/* Control de Audio y Temporizador */}
         <div className="flex items-center gap-2">
-          {/* Audio Slider Móvil */}
+          {/* Audio Slider Móvil — solo beeps */}
           <div className="relative">
             <button
               type="button"
@@ -320,23 +377,23 @@ export default function GameStudentPage() {
                 setShowVolSlider(!showVolSlider);
               }}
               className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white/70"
-              title="Volumen del teléfono"
+              title="Volumen de sonidos"
             >
-              {isMusicActive ? <Volume2 className="w-3.5 h-3.5 text-green-400" /> : <VolumeX className="w-3.5 h-3.5 text-red-400" />}
+              {isSfxActive ? <Volume2 className="w-3.5 h-3.5 text-green-400" /> : <VolumeX className="w-3.5 h-3.5 text-red-400" />}
             </button>
 
             {showVolSlider && (
               <div className="absolute right-0 top-9 z-50 p-2.5 rounded-xl bg-slate-900 border border-purple-500/40 shadow-2xl w-40 space-y-2">
                 <div className="flex items-center justify-between text-[10px]">
-                  <span>Volumen:</span>
+                  <span>Sonido:</span>
                   <button
                     onClick={() => {
-                      const next = audioEngine.toggleMusic();
-                      setIsMusicActive(next);
+                      const next = audioEngine.toggleEffects();
+                      setIsSfxActive(next);
                     }}
                     className="text-purple-300 font-bold"
                   >
-                    {isMusicActive ? 'Mute' : 'Activar'}
+                    {isSfxActive ? 'Mute' : 'Activar'}
                   </button>
                 </div>
                 <input
@@ -344,14 +401,15 @@ export default function GameStudentPage() {
                   min={0}
                   max={1}
                   step={0.05}
-                  value={musicVol}
+                  value={sfxVol}
                   onChange={(e) => {
                     const v = parseFloat(e.target.value);
-                    setMusicVol(v);
-                    audioEngine.setMusicVolume(v);
+                    setSfxVol(v);
+                    audioEngine.setSfxVolume(v);
                   }}
                   className="w-full accent-purple-500"
                 />
+                <p className="text-[9px] text-white/40 text-center">Beeps al presionar</p>
               </div>
             )}
           </div>
@@ -503,61 +561,186 @@ export default function GameStudentPage() {
             )}
           </div>
         )}
+
+        {/* ── BOTÓN ROBO DE PUNTOS CON CONTADOR (Máx 2 robos, 50 pts) ── */}
+        <div className="mt-3">
+          {stealCount < 2 ? (
+            <button
+              type="button"
+              onClick={handleOpenStealModal}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-600/30 border border-yellow-300 flex items-center justify-between transition-transform active:scale-95"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">🗡️</span>
+                <span>ROBAR PUNTOS (50 pts)</span>
+              </div>
+              <span className="bg-black/30 px-2 py-0.5 rounded-full text-[10px] text-yellow-300 font-bold">
+                {2 - stealCount} {2 - stealCount === 1 ? 'disponible' : 'disponibles'}
+              </span>
+            </button>
+          ) : (
+            <div className="w-full py-2.5 px-4 rounded-2xl bg-white/5 border border-white/10 text-white/40 text-xs font-bold text-center flex items-center justify-center gap-2">
+              <span>🗡️ Robos de puntos agotados (2/2 usados)</span>
+            </div>
+          )}
+        </div>
       </main>
 
-      {/* ── OVERLAY GIGANTE: ROBO DE PUNTOS EN MÓVIL ── */}
-      {stealModalActive && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-bounce-in">
-          <div className="card max-w-sm w-full p-6 border-red-500/80 bg-gradient-to-b from-red-950/90 via-slate-900 to-slate-950 text-center shadow-2xl shadow-red-600/50 space-y-5 ring-4 ring-red-500/50">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/20 border border-red-400 text-red-300 text-xs font-black animate-pulse">
-              <Zap className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-              <span>¡ALERTA DE ROBO DE PUNTOS!</span>
+      {/* ── MODAL 1: SELECCIÓN DE VÍCTIMA PARA ROBAR PUNTOS ── */}
+      {showStealModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-bounce-in">
+          <div className="card max-w-sm w-full p-5 border-red-500/50 bg-slate-900 shadow-2xl space-y-4 text-center">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <h3 className="font-black text-white text-base flex items-center gap-2">
+                <span>🗡️</span>
+                <span>Elige a quién robarle</span>
+              </h3>
+              <button
+                onClick={() => setShowStealModal(false)}
+                className="text-white/40 hover:text-white text-sm"
+              >
+                ✕
+              </button>
             </div>
 
-            <h3 className="text-xl font-black text-white">
-              ¡Sé el primero en pulsar!
-            </h3>
+            <p className="text-[11px] text-yellow-300 text-left">
+              Regla: Solo puedes robar a compañeros con 50 puntos o más. Se transferirán 50 pts a tu marcador.
+            </p>
 
-            {stealResult ? (
-              <div className="p-4 rounded-2xl bg-white/10 border border-white/20 space-y-2 animate-bounce-in">
-                {stealResult.didWin ? (
-                  <>
-                    <div className="text-4xl">🎉</div>
-                    <div className="text-lg font-black text-yellow-300">
-                      ¡ROBASTE LOS PUNTOS!
-                    </div>
-                    <div className="text-sm font-bold text-green-400">
-                      +{stealResult.amount} pts sumados a tu marcador
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-4xl">⚡</div>
-                    <div className="text-base font-black text-white">
-                      ¡{stealResult.winnerNickname} fue más rápido!
-                    </div>
-                    <div className="text-xs text-white/60">
-                      Se quedó con los {stealResult.amount} puntos. ¡Más suerte en la próxima!
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : (
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {availablePlayers.length === 0 ? (
+                <div className="py-6 text-center text-white/50 text-xs">
+                  No hay compañeros con 50 puntos o más en este momento.
+                </div>
+              ) : (
+                availablePlayers.map((player) => (
+                  <button
+                    key={player.id}
+                    onClick={() => handleSelectVictim(player)}
+                    className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-400 text-left transition-all group"
+                  >
+                    <span className="font-bold text-sm text-white group-hover:text-yellow-300">
+                      {player.nickname}
+                    </span>
+                    <span className="text-yellow-400 font-extrabold text-sm">
+                      {player.score.toLocaleString()} pts
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowStealModal(false)}
+              className="btn-secondary w-full py-2.5 rounded-xl text-xs font-bold"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL 2: CONFIRMACIÓN DEL ROBO DE 50 PUNTOS ── */}
+      {showStealConfirm && stealTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-bounce-in">
+          <div className="card max-w-sm w-full p-6 border-2 border-red-500 bg-gradient-to-b from-red-950/80 via-slate-900 to-slate-950 shadow-2xl text-center space-y-4">
+            <div className="text-4xl animate-bounce">🗡️</div>
+            <h3 className="font-black text-xl text-white">¿Confirmar Robo?</h3>
+            <p className="text-sm text-white/80 leading-relaxed">
+              Vas a robar <span className="text-yellow-400 font-black">50 puntos</span> a{' '}
+              <span className="text-red-300 font-black">{stealTarget.nickname}</span>.
+            </p>
+            <p className="text-[10px] text-white/40">
+              Esta operación es definitiva y descontará 1 oportunidad de tus 2 robos permitidos.
+            </p>
+
+            <div className="flex gap-2.5 pt-2">
               <button
                 type="button"
-                disabled={isClaimingSteal}
-                onClick={handleClaimSteal}
-                className="w-full py-8 rounded-3xl bg-gradient-to-tr from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 active:scale-95 text-white font-black text-2xl uppercase tracking-wider shadow-2xl shadow-red-600/60 border-4 border-yellow-300 animate-pulse flex flex-col items-center justify-center gap-2 cursor-pointer transition-transform"
+                disabled={isDoingSteal}
+                onClick={() => {
+                  setShowStealConfirm(false);
+                  setStealTarget(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs"
               >
-                <Zap className="w-10 h-10 fill-yellow-300 text-yellow-300 animate-bounce" />
-                <span>ROBAR PUNTOS</span>
-                <span className="text-xs font-bold text-yellow-200 tracking-normal">+500 PTS</span>
+                Cancelar
               </button>
-            )}
+              <button
+                type="button"
+                disabled={isDoingSteal}
+                onClick={handleExecuteSteal}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs shadow-lg shadow-red-600/40 border border-yellow-300 flex items-center justify-center gap-1.5"
+              >
+                {isDoingSteal ? 'Robando...' : '¡Confirmar Robo!'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-            <p className="text-[10px] text-white/50">
-              Solo el estudiante con el reflejo más veloz de la sala se queda con los puntos.
-            </p>
+      {/* ── NOTIFICACIÓN TOAST VISUAL DE ROBO DE PUNTOS ── */}
+      {stealResult && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-sm w-full px-4 animate-bounce-in">
+          <div
+            className={`p-3.5 rounded-2xl shadow-2xl border text-center text-xs font-black ${
+              stealResult.success
+                ? 'bg-emerald-600 text-white border-yellow-300 shadow-emerald-600/40'
+                : stealResult.toNickname
+                ? 'bg-rose-700 text-white border-rose-400 shadow-rose-700/40'
+                : 'bg-red-900 text-red-200 border-red-500'
+            }`}
+          >
+            {stealResult.success
+              ? `🎉 ¡Robaste ${stealResult.amount || 50} pts a ${stealResult.toNickname}!`
+              : stealResult.fromNickname && stealResult.toNickname
+              ? `⚡ ${stealResult.fromNickname} te robó ${stealResult.amount || 50} pts`
+              : `⚠️ ${stealResult.error || 'No se pudo realizar el robo'}`}
+          </div>
+        </div>
+      )}
+
+      {/* ── TABLA DE CLASIFICACIÓN TOP 7 POST-PREGUNTA EN MÓVIL ── */}
+      {showLeaderboard && leaderboardData.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-3 bg-slate-950/70 backdrop-blur-sm animate-bounce-in">
+          <div className="w-full max-w-md p-4 rounded-3xl bg-slate-900/95 border border-purple-500/50 shadow-2xl space-y-3">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <span className="font-black text-xs text-yellow-400 flex items-center gap-1.5">
+                🏆 CLASIFICACIÓN · TOP 7
+              </span>
+              <button
+                onClick={() => setShowLeaderboard(false)}
+                className="text-[11px] text-white/50 hover:text-white px-2 py-0.5 rounded bg-white/5"
+              >
+                Cerrar ✕
+              </button>
+            </div>
+
+            <div className="space-y-1.5 max-h-60 overflow-y-auto">
+              {leaderboardData.slice(0, 7).map((p, idx) => {
+                const isMe = currentParticipant && p.id === currentParticipant.id;
+                return (
+                  <div
+                    key={p.id || idx}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold ${
+                      isMe
+                        ? 'bg-purple-600/40 border border-purple-400 text-yellow-300 shadow-md'
+                        : 'bg-white/5 border border-white/5 text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] shrink-0 font-black">
+                        #{idx + 1}
+                      </span>
+                      <span className="truncate">{p.nickname} {isMe ? '(Tú)' : ''}</span>
+                    </div>
+                    <span className="text-yellow-400 font-extrabold shrink-0">
+                      {p.score.toLocaleString()} pts
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

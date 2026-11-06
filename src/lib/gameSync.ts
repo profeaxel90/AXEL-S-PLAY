@@ -20,6 +20,10 @@ export interface GameEventMessage {
     | 'POWER'
     | 'STEAL_POINTS_START'
     | 'STEAL_POINTS_CLAIMED'
+    | 'STEAL_REQUEST'
+    | 'STEAL_RESULT'
+    | 'LEADERBOARD'
+    | 'SCORE_UPDATE'
     | 'PAUSE'
     | 'RESUME'
     | 'GAME_OVER'
@@ -47,6 +51,13 @@ export interface GameEventMessage {
   amount?: number;
   winnerId?: string;
   winnerNickname?: string;
+  fromId?: string;
+  fromNickname?: string;
+  toId?: string;
+  toNickname?: string;
+  stealCount?: number;
+  success?: boolean;
+  error?: string;
   introTitle?: string;
   introDescription?: string;
 }
@@ -293,6 +304,22 @@ export class GameClientSync {
     }
 
     return { success: false };
+  }
+
+  public async requestSteal(data: { fromId: string; toId: string }): Promise<{ success: boolean; error?: string; fromNickname?: string; toNickname?: string; amount?: number }> {
+    const base = getApiBaseUrl();
+    try {
+      const res = await fetch(`${base}/api/session/${this.token}/steal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+
+    return { success: false, error: 'No se pudo conectar al servidor' };
   }
 
   public destroy() {

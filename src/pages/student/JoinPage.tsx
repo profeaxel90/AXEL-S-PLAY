@@ -30,7 +30,7 @@ export default function JoinPage() {
 
   useEffect(() => {
     clearError();
-    audioEngine.setContext('lobby');
+    // No iniciar música en dispositivos de alumnos
   }, [clearError]);
 
   const handleRandomizeNickname = () => {

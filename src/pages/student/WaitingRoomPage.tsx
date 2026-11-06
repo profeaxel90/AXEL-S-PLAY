@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
 import { getOrCreateGameClientSync, type GameEventMessage } from '../../lib/gameSync';
-import { Gamepad2, Users, Sparkles, Smile, ShieldCheck, Wifi, Volume2, VolumeX, Sliders } from 'lucide-react';
+import { Gamepad2, Users, Sparkles, Smile, ShieldCheck, Wifi, Volume2, VolumeX } from 'lucide-react';
 
 export default function WaitingRoomPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -13,8 +13,8 @@ export default function WaitingRoomPage() {
   const [connectedPeers, setConnectedPeers] = useState<number>(1);
   const [isLiveConnected, setIsLiveConnected] = useState(false);
   const [readyEmote, setReadyEmote] = useState(false);
-  const [isMusicActive, setIsMusicActive] = useState(() => audioEngine.getSettings().musicEnabled);
-  const [musicVol, setMusicVol] = useState(() => audioEngine.getSettings().musicVolume ?? 0.75);
+  const [isSfxActive, setIsSfxActive] = useState(() => audioEngine.getSettings().effectsEnabled);
+  const [sfxVol, setSfxVol] = useState(() => audioEngine.getSettings().effectsVolume ?? 0.85);
   const [showVolSlider, setShowVolSlider] = useState(false);
 
   // Estado de Intro en móvil
@@ -23,7 +23,8 @@ export default function WaitingRoomPage() {
   const [introDescription, setIntroDescription] = useState('Evaluación interactiva y gamificada.');
 
   useEffect(() => {
-    audioEngine.setContext('lobby');
+    // NO iniciar música en dispositivos de alumnos
+    // Solo se reproducen beeps (sfx) al presionar botones
 
     if (!sessionId) return;
 
@@ -47,9 +48,10 @@ export default function WaitingRoomPage() {
         setIsIntroPhase(true);
         if (msg.introTitle) setIntroTitle(msg.introTitle);
         if (msg.introDescription) setIntroDescription(msg.introDescription);
-        audioEngine.setContext('intro');
+        // Solo beep en móvil, sin música de fondo
+        audioEngine.playEffect('sfx_tick');
       } else if (msg.type === 'START_GAME' || msg.type === 'QUESTION') {
-        audioEngine.setContext('game_start');
+        // Sin música en dispositivos de alumnos
         if (msg.type === 'QUESTION' && msg.question) {
           useSessionStore.setState({
             currentQuestion: msg.question,
@@ -92,7 +94,7 @@ export default function WaitingRoomPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Control de Volumen para el Celular */}
+          {/* Control de Volumen para Efectos de Sonido (beeps) */}
           <div className="relative">
             <button
               type="button"
@@ -101,23 +103,23 @@ export default function WaitingRoomPage() {
                 setShowVolSlider(!showVolSlider);
               }}
               className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-white/70 hover:text-white"
-              title="Volumen"
+              title="Volumen de beeps"
             >
-              {isMusicActive ? <Volume2 className="w-4 h-4 text-green-400" /> : <VolumeX className="w-4 h-4 text-red-400" />}
+              {isSfxActive ? <Volume2 className="w-4 h-4 text-green-400" /> : <VolumeX className="w-4 h-4 text-red-400" />}
             </button>
 
             {showVolSlider && (
               <div className="absolute right-0 top-10 z-50 p-3 rounded-xl bg-slate-900 border border-purple-500/40 shadow-xl w-44 space-y-2">
                 <div className="flex items-center justify-between text-[11px]">
-                  <span>Volumen:</span>
+                  <span>Sonido botones:</span>
                   <button
                     onClick={() => {
-                      const next = audioEngine.toggleMusic();
-                      setIsMusicActive(next);
+                      const next = audioEngine.toggleEffects();
+                      setIsSfxActive(next);
                     }}
                     className="text-[10px] text-purple-300 font-bold"
                   >
-                    {isMusicActive ? 'Mute' : 'Activar'}
+                    {isSfxActive ? 'Mute' : 'Activar'}
                   </button>
                 </div>
                 <input
@@ -125,14 +127,15 @@ export default function WaitingRoomPage() {
                   min={0}
                   max={1}
                   step={0.05}
-                  value={musicVol}
+                  value={sfxVol}
                   onChange={(e) => {
                     const v = parseFloat(e.target.value);
-                    setMusicVol(v);
-                    audioEngine.setMusicVolume(v);
+                    setSfxVol(v);
+                    audioEngine.setSfxVolume(v);
                   }}
                   className="w-full accent-purple-500"
                 />
+                <p className="text-[9px] text-white/40 text-center">Solo beeps al presionar botones</p>
               </div>
             )}
           </div>
