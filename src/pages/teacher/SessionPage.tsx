@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { audioEngine } from '../../lib/audio';
+import { audioEngine, OFFICIAL_TRACK_NAME, OFFICIAL_TRACK_URL } from '../../lib/audio';
 import { generateSessionToken, buildQRUrl, shareSessionLink } from '../../lib/qr';
 import { GameHostSync, type GameEventMessage } from '../../lib/gameSync';
 import { POWER_UPS } from '../../types';
@@ -99,15 +99,22 @@ export default function SessionPage() {
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [globalPowerSuccess, setGlobalPowerSuccess] = useState<string | null>(null);
 
-  // Audio & Sonido
-  const [isMusicActive, setIsMusicActive] = useState(() => audioEngine.getSettings().musicEnabled);
-  const [musicVolume, setMusicVolume] = useState(() => audioEngine.getSettings().musicVolume ?? 0.75);
-  const [effectsVolume, setEffectsVolume] = useState(() => audioEngine.getSettings().effectsVolume ?? 0.85);
+  // Audio & Sonido Oficial
+  const audioSettings = audioEngine.getSettings();
+  const defaultTrackName = audioSettings.defaultTrackName || OFFICIAL_TRACK_NAME;
+  const defaultTrackUrl = audioSettings.defaultTrackUrl || OFFICIAL_TRACK_URL;
+  const applyMusicToAll = audioSettings.applyToAllGames ?? true;
+
+  const [isMusicActive, setIsMusicActive] = useState(() => audioSettings.musicEnabled);
+  const [musicVolume, setMusicVolume] = useState(() => audioSettings.musicVolume ?? 0.75);
+  const [effectsVolume, setEffectsVolume] = useState(() => audioSettings.effectsVolume ?? 0.85);
   const [selectedTrack, setSelectedTrack] = useState<'lobby' | 'question' | 'suspense' | 'podium'>('lobby');
   const [audioPanelOpen, setAudioPanelOpen] = useState(false);
 
-  // Audio personalizado (archivo subido por el docente)
-  const [customFileName, setCustomFileName] = useState<string | null>(null);
+  // Audio oficial predeterminado ("Stranger Things") o personalizado
+  const [customFileName, setCustomFileName] = useState<string | null>(
+    () => (applyMusicToAll ? defaultTrackName : null)
+  );
   const [customIsPlaying, setCustomIsPlaying] = useState(false);
 
   // Leaderboard después de revelar respuesta (Top 7)
@@ -600,81 +607,114 @@ export default function SessionPage() {
                   />
                 </div>
 
-                {/* Cargar Música Manualmente desde el Computador */}
-                <div className="space-y-2 pt-2 border-t border-white/10">
+                {/* Música Oficial Configurada para Todos los Juegos */}
+                <div className="space-y-2.5 pt-2 border-t border-white/10">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] text-purple-300 font-black block flex items-center gap-1">
-                      📁 Subir Música de Fondo
+                    <label className="text-[11px] text-purple-300 font-black flex items-center gap-1">
+                      🎵 Música Oficial de la Partida
                     </label>
                     <span className="text-[9px] text-yellow-400 font-bold bg-yellow-400/10 px-1.5 py-0.5 rounded border border-yellow-400/20">
-                      Solo Admin
+                      Solo en tu PC
                     </span>
                   </div>
 
-                  {/* Sugerencia recomendada aprobada por el usuario */}
-                  <div className="text-[10px] text-purple-200/80 bg-purple-950/40 p-2 rounded-lg border border-purple-500/20">
-                    💡 <strong>Sugerencia aprobada:</strong> "Stranger Things" (Kyle Dixon & Michael Stein)
-                  </div>
+                  {/* Tarjeta de la Canción Asignada */}
+                  <div className="p-2.5 rounded-xl bg-purple-950/60 border border-purple-500/30 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-[9px] uppercase tracking-wider text-purple-300 font-bold block">
+                          Pista Asignada para Todas las Partidas:
+                        </span>
+                        <p className="text-xs font-black text-white truncate">
+                          {customFileName || defaultTrackName}
+                        </p>
+                      </div>
+                      {customIsPlaying && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-500/20 text-green-300 border border-green-500/30 animate-pulse">
+                          Sonando en PC
+                        </span>
+                      )}
+                    </div>
 
-                  <label className="flex flex-col items-center justify-center w-full h-16 border-2 border-dashed border-purple-500/40 rounded-xl bg-purple-900/10 hover:bg-purple-900/20 cursor-pointer transition-all">
-                    <input
-                      type="file"
-                      accept="audio/*,.mp3,.ogg,.wav,.m4a,.flac"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          audioEngine.playCustomAudio(file);
-                          setCustomFileName(file.name);
-                          setCustomIsPlaying(true);
-                          setIsMusicActive(true);
-                        }
-                      }}
-                    />
-                    {customFileName ? (
-                      <span className="text-[11px] text-green-400 font-bold text-center px-2 truncate w-full">
-                        🎵 {customFileName}
-                      </span>
-                    ) : (
-                      <>
-                        <span className="text-[11px] text-white/70 font-semibold">Haz clic para subir música</span>
-                        <span className="text-[9px] text-white/40 mt-0.5">MP3 · OGG · WAV · M4A</span>
-                      </>
-                    )}
-                  </label>
-
-                  {customFileName && (
-                    <div className="flex items-center gap-1.5 pt-1">
+                    {/* Controles Directos de Música */}
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => {
-                          const isNowPlaying = audioEngine.toggleCustomAudio();
-                          setCustomIsPlaying(isNowPlaying);
+                          if (customIsPlaying) {
+                            const isNowPlaying = audioEngine.toggleCustomAudio();
+                            setCustomIsPlaying(isNowPlaying);
+                          } else {
+                            audioEngine.playTrackByUrl(defaultTrackUrl, customFileName || defaultTrackName);
+                            setCustomIsPlaying(true);
+                            setIsMusicActive(true);
+                          }
                         }}
-                        className="flex-1 py-1.5 rounded-lg text-[11px] font-black bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-300"
+                        className="flex-1 py-2 px-3 rounded-lg text-xs font-black bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/30 transition-all"
                       >
-                        {customIsPlaying ? '⏸ Pausar' : '▶ Reanudar'}
+                        {customIsPlaying ? (
+                          <>
+                            <Pause className="w-3.5 h-3.5" />
+                            <span>Pausar Música</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5" />
+                            <span>Reproducir Música</span>
+                          </>
+                        )}
                       </button>
+
                       <button
                         type="button"
                         onClick={() => {
-                          audioEngine.stopCustomAudio();
-                          setCustomFileName(null);
+                          audioEngine.stopMusic();
                           setCustomIsPlaying(false);
                         }}
-                        className="py-1.5 px-3 rounded-lg text-[11px] font-black bg-red-600/20 hover:bg-red-600/40 border border-red-500/40 text-red-400"
-                        title="Detener y quitar música"
+                        disabled={!customIsPlaying}
+                        className={`py-2 px-3 rounded-lg text-xs font-black border transition-all ${
+                          customIsPlaying
+                            ? 'bg-red-600/20 hover:bg-red-600/40 border-red-500/40 text-red-400'
+                            : 'bg-white/5 border-white/10 text-white/30 cursor-not-allowed'
+                        }`}
+                        title="Detener música"
                       >
-                        ⏹ Detener
+                        <Square className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  )}
 
-                  {!customFileName && (
-                    <p className="text-[9px] text-white/40 text-center">
-                      Sin música cargada (silencio de fondo total).
-                    </p>
-                  )}
+                    <div className="text-[9px] text-white/50 leading-tight">
+                      🛡️ Los celulares de los estudiantes nunca reproducen música. La música se apaga automáticamente al terminar el podio.
+                    </div>
+                  </div>
+
+                  {/* Opción secundaria: Subir otra canción para esta ronda específica */}
+                  <div className="pt-1 flex items-center justify-between text-[10px]">
+                    <label className="text-purple-300 hover:text-purple-200 cursor-pointer flex items-center gap-1">
+                      <span>📁 Cambiar por otro archivo local</span>
+                      <input
+                        type="file"
+                        accept="audio/*,.mp3,.ogg,.wav,.m4a"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            audioEngine.playCustomAudio(file);
+                            setCustomFileName(file.name);
+                            setCustomIsPlaying(true);
+                            setIsMusicActive(true);
+                          }
+                        }}
+                      />
+                    </label>
+                    <Link
+                      to="/teacher/settings"
+                      className="text-white/50 hover:text-purple-300 underline"
+                      target="_blank"
+                    >
+                      Ajustes generales
+                    </Link>
+                  </div>
                 </div>
               </div>
             )}

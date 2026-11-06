@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   Gamepad2, LayoutDashboard, FolderKanban, Database,
   BarChart3, History, User, LogOut, PlusCircle,
-  Volume2, VolumeX, Menu, X
+  Volume2, VolumeX, Menu, X, Settings
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { audioEngine } from '../../lib/audio';
@@ -32,6 +32,7 @@ export default function TeacherLayout() {
     { to: '/teacher/questions', label: 'Banco de Preguntas', icon: <Database className="w-5 h-5" /> },
     { to: '/teacher/analytics', label: 'Analítica y Reportes', icon: <BarChart3 className="w-5 h-5" /> },
     { to: '/teacher/history', label: 'Historial', icon: <History className="w-5 h-5" /> },
+    { to: '/teacher/settings', label: 'Configuración', icon: <Settings className="w-5 h-5" /> },
     { to: '/teacher/profile', label: 'Mi Perfil', icon: <User className="w-5 h-5" /> },
   ];
 

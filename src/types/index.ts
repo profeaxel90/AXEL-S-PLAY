@@ -457,4 +457,7 @@ export interface AudioSettings {
   effectsEnabled: boolean;
   musicVolume: number;
   effectsVolume: number;
+  defaultTrackUrl?: string;
+  defaultTrackName?: string;
+  applyToAllGames?: boolean;
 }

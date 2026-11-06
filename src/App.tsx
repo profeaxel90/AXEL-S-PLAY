@@ -27,6 +27,7 @@ import SessionPage from './pages/teacher/SessionPage';
 import AnalyticsPage from './pages/teacher/AnalyticsPage';
 import SessionHistoryPage from './pages/teacher/SessionHistoryPage';
 import ProfilePage from './pages/teacher/ProfilePage';
+import SettingsPage from './pages/teacher/SettingsPage';
 
 // ── Guard de autenticación ──
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -86,6 +87,7 @@ function App() {
           <Route path="/teacher/questions" element={<QuestionBankPage />} />
           <Route path="/teacher/analytics" element={<AnalyticsPage />} />
           <Route path="/teacher/history" element={<SessionHistoryPage />} />
+          <Route path="/teacher/settings" element={<SettingsPage />} />
           <Route path="/teacher/profile" element={<ProfilePage />} />
         </Route>
 

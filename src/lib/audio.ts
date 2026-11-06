@@ -392,6 +392,10 @@ class MusicSynthesizer {
   }
 }
 
+// ── Constantes de Música Oficial ──
+export const OFFICIAL_TRACK_NAME = '"Stranger Things" (Kyle Dixon & Michael Stein)';
+export const OFFICIAL_TRACK_URL = '/audio/stranger_things_theme.wav';
+
 // ── Motor de Audio Global de AXEL'S PLAY ──
 class AudioEngine {
   private synth = new MusicSynthesizer();
@@ -400,9 +404,12 @@ class AudioEngine {
     effectsEnabled: true,
     musicVolume: 0.75,
     effectsVolume: 0.85,
+    defaultTrackUrl: OFFICIAL_TRACK_URL,
+    defaultTrackName: OFFICIAL_TRACK_NAME,
+    applyToAllGames: true,
   };
 
-  // Audio personalizado (archivo subido por el docente)
+  // Audio personalizado o música oficial cargada
   private customAudio: HTMLAudioElement | null = null;
   private customFileName: string | null = null;
   private customPlaying = false;
@@ -421,6 +428,17 @@ class AudioEngine {
     } catch {
       // defaults
     }
+    // Asegurar valores por defecto de la pista oficial si no estuvieran definidos
+    if (!this.settings.defaultTrackUrl) {
+      this.settings.defaultTrackUrl = OFFICIAL_TRACK_URL;
+    }
+    if (!this.settings.defaultTrackName) {
+      this.settings.defaultTrackName = OFFICIAL_TRACK_NAME;
+    }
+    if (this.settings.applyToAllGames === undefined) {
+      this.settings.applyToAllGames = true;
+    }
+
     this.synth.setMusicVolume(this.settings.musicEnabled ? this.settings.musicVolume : 0);
     this.synth.setSfxVolume(this.settings.effectsEnabled ? this.settings.effectsVolume : 0);
   }
@@ -430,13 +448,23 @@ class AudioEngine {
     localStorage.setItem('axelplay_audio', JSON.stringify(this.settings));
   }
 
+  public updateAudioSettings(newSettings: Partial<AudioSettings>) {
+    this.settings = { ...this.settings, ...newSettings };
+    this.synth.setMusicVolume(this.settings.musicEnabled ? this.settings.musicVolume : 0);
+    this.synth.setSfxVolume(this.settings.effectsEnabled ? this.settings.effectsVolume : 0);
+    if (this.customAudio) {
+      this.customAudio.volume = this.settings.musicEnabled ? this.settings.musicVolume : 0;
+    }
+    this.saveSettings();
+  }
+
   public unlock() {
     this.synth.unlockContext();
   }
 
   public playMusic(track: 'lobby' | 'question' | 'suspense' | 'podium') {
     if (!this.settings.musicEnabled) return;
-    // Si hay audio personalizado activo, no iniciar la síntesis
+    // Si hay audio oficial/personalizado activo, no iniciar la síntesis
     if (this.customPlaying) return;
     this.synth.startMusic(track);
   }
@@ -446,20 +474,51 @@ class AudioEngine {
     this.stopCustomAudio();
   }
 
-  // ── Audio Personalizado (archivo subido por el docente) ──
-  public playCustomAudio(file: File): void {
-    // Detener cualquier música en curso (síntesis o anterior archivo)
+  // ── Reproducción de Pista Oficial o Personalizada ──
+  public playOfficialTrack(): void {
+    const trackUrl = this.settings.defaultTrackUrl || OFFICIAL_TRACK_URL;
+    const trackName = this.settings.defaultTrackName || OFFICIAL_TRACK_NAME;
+    this.playTrackByUrl(trackUrl, trackName);
+  }
+
+  public playTrackByUrl(url: string, name?: string): void {
     this.synth.stopMusic();
     this.stopCustomAudio();
 
-    const url = URL.createObjectURL(file);
+    const audio = new Audio(url);
+    audio.loop = true;
+    audio.volume = this.settings.musicEnabled ? this.settings.musicVolume : 0;
+    audio.play().catch((err) => {
+      console.warn('Audio autoplay blocked, requires user click:', err);
+    });
+
+    this.customAudio = audio;
+    this.customFileName = name || 'Música de Fondo';
+    this.customPlaying = true;
+  }
+
+  public playCustomAudio(fileOrUrl: File | string, customName?: string): void {
+    this.synth.stopMusic();
+    this.stopCustomAudio();
+
+    let url: string;
+    let name: string;
+
+    if (typeof fileOrUrl === 'string') {
+      url = fileOrUrl;
+      name = customName || 'Música Oficial';
+    } else {
+      url = URL.createObjectURL(fileOrUrl);
+      name = fileOrUrl.name;
+    }
+
     const audio = new Audio(url);
     audio.loop = true;
     audio.volume = this.settings.musicEnabled ? this.settings.musicVolume : 0;
     audio.play().catch(() => {});
 
     this.customAudio = audio;
-    this.customFileName = file.name;
+    this.customFileName = name;
     this.customPlaying = true;
   }
 
