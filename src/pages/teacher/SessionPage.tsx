@@ -48,9 +48,10 @@ export default function SessionPage() {
   // Token único para la partida
   const [token, setToken] = useState(() => generateSessionToken());
 
-  // Modos de Red: Túnel Público (4G/5G / Cualquier Red), Wi-Fi Local, o Localhost
-  const [connectionMode, setConnectionMode] = useState<'tunnel' | 'wifi' | 'local'>('tunnel');
-  const [tunnelUrl, setTunnelUrl] = useState('https://d3cc1c726db066.lhr.life');
+  // Modos de Red: Vercel en la Nube, Túnel Público (4G/5G), Wi-Fi Local, o Localhost
+  const [connectionMode, setConnectionMode] = useState<'vercel' | 'tunnel' | 'wifi' | 'local'>('vercel');
+  const [vercelUrl, setVercelUrl] = useState('https://axel-s-play.vercel.app');
+  const [tunnelUrl, setTunnelUrl] = useState('https://38d66d79308353.lhr.life');
   const [wifiHost, setWifiHost] = useState('192.168.100.4:5173');
   const [isEditingUrl, setIsEditingUrl] = useState(false);
 
@@ -65,7 +66,9 @@ export default function SessionPage() {
   }, []);
 
   const qrBaseUrl =
-    connectionMode === 'tunnel'
+    connectionMode === 'vercel'
+      ? vercelUrl
+      : connectionMode === 'tunnel'
       ? tunnelUrl
       : connectionMode === 'wifi'
       ? `http://${wifiHost}`
@@ -715,18 +718,30 @@ export default function SessionPage() {
                     <Globe className="w-3.5 h-3.5 text-purple-400" />
                     <span>Red de Conexión:</span>
                   </span>
-                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-white/10">
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-white/10 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setConnectionMode('vercel')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                        connectionMode === 'vercel'
+                          ? 'bg-purple-600 text-white shadow'
+                          : 'text-white/50 hover:text-white'
+                      }`}
+                      title="Nube Vercel en vivo: https://axel-s-play.vercel.app"
+                    >
+                      🚀 Vercel Nube
+                    </button>
                     <button
                       type="button"
                       onClick={() => setConnectionMode('tunnel')}
                       className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                         connectionMode === 'tunnel'
-                          ? 'bg-purple-600 text-white shadow'
+                          ? 'bg-indigo-600 text-white shadow'
                           : 'text-white/50 hover:text-white'
                       }`}
-                      title="Cualquier red celular 4G/5G o Internet"
+                      title="Túnel HTTPS para datos móviles 4G/5G"
                     >
-                      🌐 4G/5G Internet
+                      🌐 4G/5G Túnel
                     </button>
                     <button
                       type="button"
