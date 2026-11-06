@@ -1,5 +1,5 @@
 // ============================================================
-// AXEL PLAY - Motor Multijugador Peer-to-Peer en la Nube (WebRTC)
+// AXEL'S PLAY - Motor Multijugador Peer-to-Peer en la Nube (WebRTC)
 // Conexión directa y gratuita entre celulares y computador sin backend
 // ============================================================
 import { Peer, DataConnection } from 'peerjs';

@@ -118,7 +118,7 @@ export default function LandingPage() {
             className="mb-6"
           >
             <h1 className="text-7xl md:text-9xl font-black tracking-tight mb-2">
-              <span className="text-gradient">AXEL</span>
+              <span className="text-gradient">AXEL'S</span>
               <span className="text-white"> PLAY</span>
             </h1>
             <div className="flex items-center justify-center gap-2 text-xl md:text-2xl text-white/60 font-medium">

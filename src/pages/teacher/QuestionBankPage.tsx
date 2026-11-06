@@ -105,7 +105,7 @@ export default function QuestionBankPage() {
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'BancoPreguntas');
-    XLSX.writeFile(wb, 'AXEL_PLAY_Banco_Preguntas.xlsx');
+    XLSX.writeFile(wb, 'AXELS_PLAY_Banco_Preguntas.xlsx');
   };
 
   // Descargar plantilla Excel para importar preguntas
@@ -129,7 +129,7 @@ export default function QuestionBankPage() {
     const ws = XLSX.utils.json_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Plantilla_Importacion');
-    XLSX.writeFile(wb, 'Plantilla_Preguntas_AXEL_PLAY.xlsx');
+    XLSX.writeFile(wb, 'Plantilla_Preguntas_AXELS_PLAY.xlsx');
   };
 
   // Manejador de importación de archivo

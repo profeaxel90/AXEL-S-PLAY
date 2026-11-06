@@ -47,7 +47,7 @@ export default function TeacherLayout() {
             </div>
             <div>
               <div className="font-black text-lg tracking-tight leading-none">
-                <span className="text-gradient">AXEL</span> PLAY
+                <span className="text-gradient">AXEL'S</span> PLAY
               </div>
               <div className="text-[10px] text-purple-300 font-semibold tracking-wide">
                 DOCENTE

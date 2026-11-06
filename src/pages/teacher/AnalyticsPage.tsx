@@ -43,7 +43,7 @@ export default function AnalyticsPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, wsAccuracy, 'Preguntas');
     XLSX.utils.book_append_sheet(wb, wsRankings, 'Estudiantes');
-    XLSX.writeFile(wb, 'Reporte_AXEL_PLAY_Sesion.xlsx');
+    XLSX.writeFile(wb, 'Reporte_AXELS_PLAY_Sesion.xlsx');
   };
 
   // Exportar reporte a PDF
@@ -73,7 +73,7 @@ export default function AnalyticsPage() {
       theme: 'striped',
     });
 
-    doc.save('Reporte_Pedagogico_AXEL_PLAY.pdf');
+    doc.save('Reporte_Pedagogico_AXELS_PLAY.pdf');
   };
 
   return (

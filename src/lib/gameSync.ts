@@ -1,5 +1,5 @@
 // ============================================================
-// AXEL PLAY - Sincronizador en Tiempo Real Híbrido
+// AXEL'S PLAY - Sincronizador en Tiempo Real Híbrido
 // 1. Primario: Servidor Local de Alta Velocidad (0ms, 100% Wi-Fi local sin depender de nube)
 // 2. Respaldo: WebRTC P2P (PeerJS) para conexiones remotas cruzadas
 // ============================================================

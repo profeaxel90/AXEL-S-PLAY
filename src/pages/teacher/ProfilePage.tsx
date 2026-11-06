@@ -68,7 +68,7 @@ export default function ProfilePage() {
               <Mail className="w-5 h-5 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="email"
-                value={user?.email || 'profe@axelplay.edu'}
+                value={user?.email || 'profe@axelsplay.edu'}
                 disabled
                 className="input pl-11 opacity-60 cursor-not-allowed"
               />

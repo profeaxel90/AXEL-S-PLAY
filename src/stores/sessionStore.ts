@@ -1,5 +1,5 @@
 // ============================================================
-// AXEL PLAY - Store de Sesión de Juego (Zustand)
+// AXEL'S PLAY - Store de Sesión de Juego (Zustand)
 // Motor de estado del juego en tiempo real
 // ============================================================
 import { create } from 'zustand';

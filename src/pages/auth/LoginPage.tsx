@@ -36,7 +36,7 @@ export default function LoginPage() {
       user: {
         id: 'demo-teacher-01',
         userId: 'demo-user-01',
-        email: 'profe@axelplay.edu',
+        email: 'profe@axelsplay.edu',
         fullName: 'Profesor Axel',
         school: 'Colegio Experimental AXEL',
         role: 'teacher',
@@ -142,10 +142,10 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <div className="mt-6 text-center text-sm text-white/60">
-            ¿Aún no tienes cuenta?{' '}
-            <Link to="/register" className="text-purple-400 hover:text-purple-300 font-bold underline underline-offset-4">
-              Regístrate gratis
+          <div className="mt-6 text-center text-xs text-white/50">
+            ¿Eres estudiante?{' '}
+            <Link to="/" className="text-purple-400 hover:text-purple-300 font-bold underline underline-offset-4">
+              Escanea el código QR de tu docente
             </Link>
           </div>
         </div>

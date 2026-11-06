@@ -1,5 +1,5 @@
 /**
- * AXEL PLAY - Utilidades de Código QR y Tokens Seguros de Sesión
+ * AXEL'S PLAY - Utilidades de Código QR y Tokens Seguros de Sesión
  * Acceso EXCLUSIVO mediante escaneo de Código QR.
  */
 
@@ -15,7 +15,7 @@ export const DEFAULT_QR_OPTIONS: QROptions = {
   size: 280,
   includeMargin: true,
   bgColor: '#ffffff',
-  fgColor: '#1e1b4b', // Índigo profundo de AXEL PLAY
+  fgColor: '#1e1b4b', // Índigo profundo de AXEL'S PLAY
   level: 'H',
 };
 
@@ -58,7 +58,7 @@ export function isTokenValid(expiresAt: Date | string): boolean {
 /**
  * Comparte el enlace de la sala mediante la API nativa de Web Share o copia al portapapeles.
  */
-export async function shareSessionLink(url: string, title = 'Únete a AXEL PLAY'): Promise<boolean> {
+export async function shareSessionLink(url: string, title = "Únete a AXEL'S PLAY"): Promise<boolean> {
   if (typeof navigator !== 'undefined' && navigator.share) {
     try {
       await navigator.share({

@@ -1,5 +1,5 @@
 // ============================================================
-// AXEL PLAY - Motor de Audio Profesional Completo
+// AXEL'S PLAY - Motor de Audio Profesional Completo
 // Música de fondo procedural en tiempo real (Web Audio API)
 // Efectos de sonido instantáneos y control de volumen
 // ============================================================

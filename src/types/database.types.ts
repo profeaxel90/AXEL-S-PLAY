@@ -1,4 +1,4 @@
-// AXEL PLAY - Database Type Stubs
+// AXEL'S PLAY - Database Type Stubs
 // Replace this file with the output of: npx supabase gen types typescript
 
 export type Json =

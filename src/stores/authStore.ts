@@ -1,5 +1,5 @@
 // ============================================================
-// AXEL PLAY - Store de Autenticación Híbrido (Supabase + Local Offline)
+// AXEL'S PLAY - Store de Autenticación Híbrido (Supabase + Local Offline)
 // ============================================================
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
