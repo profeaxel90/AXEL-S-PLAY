@@ -4,7 +4,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
 import { getOrCreateGameClientSync, type GameEventMessage } from '../../lib/gameSync';
 import {
-  Clock, CheckCircle2, XCircle, Zap
+  Clock, CheckCircle2, XCircle, Zap, Volume2, VolumeX, Sparkles, Award
 } from 'lucide-react';
 import type { Question, PowerUp, ParticipantRank } from '../../types';
 
@@ -56,6 +56,16 @@ export default function GameStudentPage() {
   const [questionNum, setQuestionNum] = useState<number>(questionIndex + 1);
   const [totalQuestions, setTotalQuestions] = useState<number>(5);
 
+  // Audio en Móvil
+  const [isMusicActive, setIsMusicActive] = useState(() => audioEngine.getSettings().musicEnabled);
+  const [musicVol, setMusicVol] = useState(() => audioEngine.getSettings().musicVolume ?? 0.75);
+  const [showVolSlider, setShowVolSlider] = useState(false);
+
+  // Modo Robo de Puntos en Móvil
+  const [stealModalActive, setStealModalActive] = useState(false);
+  const [isClaimingSteal, setIsClaimingSteal] = useState(false);
+  const [stealResult, setStealResult] = useState<{ didWin: boolean; winnerNickname: string; amount: number } | null>(null);
+
   // Escuchar mensajes en tiempo real vía GameClientSync (SSE + P2P)
   useEffect(() => {
     if (!sessionId) return;
@@ -73,6 +83,8 @@ export default function GameStudentPage() {
         setEliminatedOptions([]);
         setRevealedCorrectId(null);
         setExplanationText(null);
+        setStealModalActive(false);
+        setStealResult(null);
         setTimeLeft(msg.timeLimit || 20);
         setQuestionNum((msg.index || 0) + 1);
         setTotalQuestions(msg.total || 5);
@@ -95,6 +107,36 @@ export default function GameStudentPage() {
           setRevealedCorrectId(msg.correctOptionId);
         }
         if (msg.explanation) setExplanationText(msg.explanation);
+      } else if (msg.type === 'STEAL_POINTS_START') {
+        // Docente activó el Robo de Puntos
+        setStealModalActive(true);
+        setIsClaimingSteal(false);
+        setStealResult(null);
+        audioEngine.playEffect('sfx_steal_alert');
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate([120, 80, 120]);
+        }
+      } else if (msg.type === 'STEAL_POINTS_CLAIMED') {
+        const didWin = Boolean(currentParticipant && msg.winnerId === currentParticipant.id);
+        const amount = msg.amount || 500;
+        setStealResult({
+          didWin,
+          winnerNickname: msg.winnerNickname || (didWin ? 'Tú' : 'Otro participante'),
+          amount,
+        });
+
+        if (didWin) {
+          audioEngine.playEffect('sfx_steal_win');
+          setCurrentScore((prev) => prev + amount);
+        } else {
+          audioEngine.playEffect('sfx_steal_lost');
+        }
+
+        // Cerrar modal automáticamente después de mostrar el resultado
+        setTimeout(() => {
+          setStealModalActive(false);
+          setStealResult(null);
+        }, 3500);
       } else if (msg.type === 'POWER') {
         if (!msg.targetId || (currentParticipant && msg.targetId === currentParticipant.id)) {
           if (msg.power) {
@@ -177,8 +219,13 @@ export default function GameStudentPage() {
 
     const basePoints = activeQuestion.points || 1000;
     const timeBonus = Math.floor((timeLeft / (activeQuestion.timeLimit || 20)) * 500);
-    const multiplier = activePower?.type === 'double_points' ? 2 : 1;
-    const earned = isCorrect ? (basePoints + timeBonus) * multiplier : 0;
+
+    // Multiplicador de Super Poder + Multiplicador de Pregunta (Doble / Triple)
+    const questionMultiplier = activeQuestion.pointsMultiplier || 1;
+    const powerMultiplier = activePower?.type === 'double_points' ? 2 : 1;
+    const totalMultiplier = questionMultiplier * powerMultiplier;
+
+    const earned = isCorrect ? (basePoints + timeBonus) * totalMultiplier : 0;
 
     // Enviar al servidor local y P2P
     if (sessionId) {
@@ -203,6 +250,21 @@ export default function GameStudentPage() {
     }
   };
 
+  // Manejo del botón Robar Puntos
+  const handleClaimSteal = async () => {
+    if (isClaimingSteal || stealResult || !sessionId) return;
+    setIsClaimingSteal(true);
+    audioEngine.playEffect('sfx_tick');
+
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(100);
+    }
+
+    const sync = getOrCreateGameClientSync(sessionId);
+    const participantId = currentParticipant?.id || 'p-self';
+    await sync.claimStealPoints(participantId);
+  };
+
   // Pregunta activa o muestra por defecto para pruebas
   const displayQuestion: Question = activeQuestion || {
     id: 'mock-q1',
@@ -210,6 +272,7 @@ export default function GameStudentPage() {
     type: 'single_choice',
     timeLimit: 20,
     points: 1000,
+    pointsMultiplier: 1,
     difficulty: 'medium',
     orderIndex: 0,
     teacherId: 'teacher-1',
@@ -227,7 +290,7 @@ export default function GameStudentPage() {
   const currentOptions = displayQuestion.options || [];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-3 sm:p-5 select-none">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-3 sm:p-5 select-none relative overflow-x-hidden">
       {/* ── Top Bar con HUD del Jugador ── */}
       <header className="flex items-center justify-between max-w-lg mx-auto w-full pt-1 pb-2 border-b border-white/10">
         <div className="flex items-center gap-2">
@@ -246,8 +309,53 @@ export default function GameStudentPage() {
           </div>
         </div>
 
-        {/* Indicador de Pregunta y Timer */}
+        {/* Control de Audio y Temporizador */}
         <div className="flex items-center gap-2">
+          {/* Audio Slider Móvil */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                audioEngine.unlock();
+                setShowVolSlider(!showVolSlider);
+              }}
+              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white/70"
+              title="Volumen del teléfono"
+            >
+              {isMusicActive ? <Volume2 className="w-3.5 h-3.5 text-green-400" /> : <VolumeX className="w-3.5 h-3.5 text-red-400" />}
+            </button>
+
+            {showVolSlider && (
+              <div className="absolute right-0 top-9 z-50 p-2.5 rounded-xl bg-slate-900 border border-purple-500/40 shadow-2xl w-40 space-y-2">
+                <div className="flex items-center justify-between text-[10px]">
+                  <span>Volumen:</span>
+                  <button
+                    onClick={() => {
+                      const next = audioEngine.toggleMusic();
+                      setIsMusicActive(next);
+                    }}
+                    className="text-purple-300 font-bold"
+                  >
+                    {isMusicActive ? 'Mute' : 'Activar'}
+                  </button>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={musicVol}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    setMusicVol(v);
+                    audioEngine.setMusicVolume(v);
+                  }}
+                  className="w-full accent-purple-500"
+                />
+              </div>
+            )}
+          </div>
+
           <span className="text-xs font-bold text-purple-300 bg-purple-950/60 px-2.5 py-1 rounded-lg border border-purple-500/30">
             {questionNum}/{totalQuestions}
           </span>
@@ -265,7 +373,7 @@ export default function GameStudentPage() {
 
       {/* ── Banner de Super Poder Activo ── */}
       {activePower && (
-        <div className="max-w-lg mx-auto w-full my-2 animate-bounce-in">
+        <div className="max-w-lg mx-auto w-full my-1.5 animate-bounce-in">
           <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-400/50 flex items-center justify-between text-amber-300 shadow-lg shadow-amber-500/10">
             <div className="flex items-center gap-2">
               <span className="text-xl">{activePower.icon}</span>
@@ -281,13 +389,35 @@ export default function GameStudentPage() {
         </div>
       )}
 
-      {/* ── Pregunta en Pantalla Móvil ── */}
+      {/* ── Pregunta e Imagen en Pantalla Móvil ── */}
       <main className="max-w-lg mx-auto w-full my-auto py-2">
-        <div className="card p-4 md:p-5 border-purple-500/30 bg-purple-950/20 backdrop-blur-xl mb-4 text-center">
-          <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider mb-1 block">
-            Pregunta #{questionNum}
-          </span>
-          <h2 className="text-base md:text-lg font-black text-white leading-snug">
+        <div className="card p-3.5 md:p-4 border-purple-500/30 bg-purple-950/20 backdrop-blur-xl mb-3 text-center">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider block">
+              Pregunta #{questionNum}
+            </span>
+
+            {/* Badge de Multiplicador si es x2 o x3 */}
+            {displayQuestion.pointsMultiplier && displayQuestion.pointsMultiplier > 1 && (
+              <span className="px-2 py-0.5 rounded-full bg-yellow-400 text-slate-950 font-black text-[10px] flex items-center gap-1 animate-pulse">
+                <Zap className="w-3 h-3 fill-slate-950" />
+                <span>PUNTOS {displayQuestion.pointsMultiplier === 2 ? 'DOBLES (2×)' : 'TRIPLES (3×)'}</span>
+              </span>
+            )}
+          </div>
+
+          {/* Imagen de la Pregunta en el celular */}
+          {displayQuestion.imageUrl && (
+            <div className="mb-2.5 rounded-xl overflow-hidden border border-white/20 max-h-40 bg-slate-950 flex items-center justify-center">
+              <img
+                src={displayQuestion.imageUrl}
+                alt="Imagen de la pregunta"
+                className="max-h-36 object-contain rounded"
+              />
+            </div>
+          )}
+
+          <h2 className="text-sm md:text-base font-black text-white leading-snug">
             {displayQuestion.content}
           </h2>
         </div>
@@ -338,9 +468,9 @@ export default function GameStudentPage() {
 
         {/* ── Feedback de Respuesta Enviada ── */}
         {isAnswerSubmitted && (
-          <div className="mt-4 text-center animate-bounce-in">
+          <div className="mt-3 text-center animate-bounce-in">
             {feedback === 'correct' ? (
-              <div className="p-3.5 rounded-2xl bg-green-500/20 border border-green-500/40 text-green-300">
+              <div className="p-3 rounded-2xl bg-green-500/20 border border-green-500/40 text-green-300">
                 <div className="flex items-center justify-center gap-1.5 font-black text-sm">
                   <CheckCircle2 className="w-5 h-5 text-green-400" />
                   <span>¡RESPUESTA CORRECTA! +{pointsGained} pts</span>
@@ -350,7 +480,7 @@ export default function GameStudentPage() {
                 </p>
               </div>
             ) : feedback === 'incorrect' ? (
-              <div className="p-3.5 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-300">
+              <div className="p-3 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-300">
                 <div className="flex items-center justify-center gap-1.5 font-black text-sm">
                   <XCircle className="w-5 h-5 text-red-400" />
                   <span>¡Incorrecto! No te rindas</span>
@@ -361,7 +491,7 @@ export default function GameStudentPage() {
               </div>
             ) : (
               <div className="p-3 rounded-2xl bg-white/10 border border-white/20 text-white/80 text-xs">
-                Respuesta enviada. Esperando a que el tiempo finalice...
+                Respuesta enviada. Esperando que todos respondan...
               </div>
             )}
 
@@ -375,9 +505,66 @@ export default function GameStudentPage() {
         )}
       </main>
 
+      {/* ── OVERLAY GIGANTE: ROBO DE PUNTOS EN MÓVIL ── */}
+      {stealModalActive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-bounce-in">
+          <div className="card max-w-sm w-full p-6 border-red-500/80 bg-gradient-to-b from-red-950/90 via-slate-900 to-slate-950 text-center shadow-2xl shadow-red-600/50 space-y-5 ring-4 ring-red-500/50">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/20 border border-red-400 text-red-300 text-xs font-black animate-pulse">
+              <Zap className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+              <span>¡ALERTA DE ROBO DE PUNTOS!</span>
+            </div>
+
+            <h3 className="text-xl font-black text-white">
+              ¡Sé el primero en pulsar!
+            </h3>
+
+            {stealResult ? (
+              <div className="p-4 rounded-2xl bg-white/10 border border-white/20 space-y-2 animate-bounce-in">
+                {stealResult.didWin ? (
+                  <>
+                    <div className="text-4xl">🎉</div>
+                    <div className="text-lg font-black text-yellow-300">
+                      ¡ROBASTE LOS PUNTOS!
+                    </div>
+                    <div className="text-sm font-bold text-green-400">
+                      +{stealResult.amount} pts sumados a tu marcador
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-4xl">⚡</div>
+                    <div className="text-base font-black text-white">
+                      ¡{stealResult.winnerNickname} fue más rápido!
+                    </div>
+                    <div className="text-xs text-white/60">
+                      Se quedó con los {stealResult.amount} puntos. ¡Más suerte en la próxima!
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={isClaimingSteal}
+                onClick={handleClaimSteal}
+                className="w-full py-8 rounded-3xl bg-gradient-to-tr from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 active:scale-95 text-white font-black text-2xl uppercase tracking-wider shadow-2xl shadow-red-600/60 border-4 border-yellow-300 animate-pulse flex flex-col items-center justify-center gap-2 cursor-pointer transition-transform"
+              >
+                <Zap className="w-10 h-10 fill-yellow-300 text-yellow-300 animate-bounce" />
+                <span>ROBAR PUNTOS</span>
+                <span className="text-xs font-bold text-yellow-200 tracking-normal">+500 PTS</span>
+              </button>
+            )}
+
+            <p className="text-[10px] text-white/50">
+              Solo el estudiante con el reflejo más veloz de la sala se queda con los puntos.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Footer ── */}
       <footer className="max-w-lg mx-auto w-full text-center text-[10px] text-white/40 pb-1">
-        AXEL PLAY • Mantente atento a la pantalla principal
+        AXEL'S PLAY • Mantente atento a la pantalla principal
       </footer>
     </div>
   );

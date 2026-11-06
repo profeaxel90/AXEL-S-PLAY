@@ -37,7 +37,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-purple-950 via-indigo-950 to-slate-950">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-purple-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-white text-xl font-bold">Cargando AXEL PLAY...</p>
+          <p className="text-white text-xl font-bold">Cargando AXEL'S PLAY...</p>
           <p className="text-purple-300 text-sm mt-1">Aprender jugando. Competir. Superar retos.</p>
         </div>
       </div>

@@ -11,12 +11,15 @@ export interface GameEventMessage {
     | 'INIT'
     | 'JOIN'
     | 'ROOM_UPDATE'
+    | 'START_INTRO'
     | 'START_GAME'
     | 'QUESTION'
     | 'ANSWER'
     | 'ANSWER_ACK'
     | 'REVEAL_ANSWER'
     | 'POWER'
+    | 'STEAL_POINTS_START'
+    | 'STEAL_POINTS_CLAIMED'
     | 'PAUSE'
     | 'RESUME'
     | 'GAME_OVER'
@@ -40,6 +43,12 @@ export interface GameEventMessage {
   targetId?: string;
   rankings?: Participant[];
   session?: any;
+  stealAmount?: number;
+  amount?: number;
+  winnerId?: string;
+  winnerNickname?: string;
+  introTitle?: string;
+  introDescription?: string;
 }
 
 /**
@@ -261,6 +270,29 @@ export class GameClientSync {
       pointsEarned: data.pointsEarned,
       newScore: data.pointsEarned,
     };
+  }
+
+  public async claimStealPoints(participantId: string): Promise<{ success: boolean; amount?: number; winnerNickname?: string }> {
+    const base = getApiBaseUrl();
+    try {
+      const res = await fetch(`${base}/api/session/${this.token}/steal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+
+    if (this.p2pClient && this.p2pClient.isConnected) {
+      this.p2pClient.send({
+        type: 'STEAL_POINTS_CLAIMED' as any,
+        participantId,
+      });
+    }
+
+    return { success: false };
   }
 
   public destroy() {

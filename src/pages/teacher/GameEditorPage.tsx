@@ -14,6 +14,7 @@ interface QuestionDraft {
   content: string;
   timeLimit: number;
   points: number;
+  pointsMultiplier?: 1 | 2 | 3;
   difficulty: Difficulty;
   explanation: string;
   imageUrl?: string;
@@ -341,7 +342,7 @@ export default function GameEditorPage() {
         <div className="lg:col-span-3 space-y-4">
           <div className="card p-6 border-white/10 space-y-5">
             {/* Tipo de Pregunta & Parámetros */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-white/60 mb-1">
                   Tipo de Pregunta
@@ -397,6 +398,77 @@ export default function GameEditorPage() {
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-white/60 mb-1">
+                  Multiplicador de Puntos
+                </label>
+                <select
+                  value={activeQuestion.pointsMultiplier || 1}
+                  onChange={(e) => updateActiveQuestion({ pointsMultiplier: Number(e.target.value) as 1 | 2 | 3 })}
+                  className="input text-xs bg-slate-900 border-white/10 py-2 font-bold text-yellow-300"
+                >
+                  <option value={1}>1× Estándar (100%)</option>
+                  <option value={2}>2× ¡Puntos Dobles! ⚡</option>
+                  <option value={3}>3× ¡Puntos Triples! 🔥</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Imagen Opcional de la Pregunta */}
+            <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-white/80 flex items-center gap-1.5">
+                  <ImageIcon className="w-4 h-4 text-purple-400" />
+                  <span>Imagen de la Pregunta (Opcional - Se proyecta y se ve en el móvil)</span>
+                </label>
+                {activeQuestion.imageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => updateActiveQuestion({ imageUrl: undefined })}
+                    className="text-[10px] text-red-400 hover:text-red-300 font-bold"
+                  >
+                    Eliminar imagen
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="url"
+                  placeholder="Pega la URL de una imagen o sube un archivo..."
+                  value={activeQuestion.imageUrl || ''}
+                  onChange={(e) => updateActiveQuestion({ imageUrl: e.target.value })}
+                  className="input text-xs py-1.5 flex-1"
+                />
+                <label className="btn-secondary py-1.5 px-3 rounded-lg text-xs font-semibold cursor-pointer shrink-0">
+                  <span>Subir Foto</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        updateActiveQuestion({ imageUrl: event.target?.result as string });
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
+              </div>
+
+              {activeQuestion.imageUrl && (
+                <div className="relative rounded-lg overflow-hidden border border-white/15 max-h-48 bg-slate-950 flex items-center justify-center p-1">
+                  <img
+                    src={activeQuestion.imageUrl}
+                    alt="Vista previa de la pregunta"
+                    className="max-h-44 object-contain rounded"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Enunciado */}

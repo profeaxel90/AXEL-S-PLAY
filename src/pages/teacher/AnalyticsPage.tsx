@@ -50,7 +50,7 @@ export default function AnalyticsPage() {
   const handleExportPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
-    doc.text('AXEL PLAY - Reporte Pedagógico de Resultados', 14, 20);
+    doc.text("AXEL'S PLAY - Reporte Pedagógico de Resultados", 14, 20);
     doc.setFontSize(11);
     doc.text(`Fecha: ${new Date().toLocaleDateString()} | Actividad: Seguridad Vial`, 14, 28);
     doc.text('Tasa General de Aciertos: 63.1% | Total Participantes: 32', 14, 34);

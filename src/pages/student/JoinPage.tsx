@@ -105,7 +105,7 @@ export default function JoinPage() {
           <QrCode className="w-16 h-16 text-purple-400 mx-auto mb-4 animate-pulse" />
           <h2 className="text-2xl font-black text-white mb-2">Escaneo Requerido</h2>
           <p className="text-white/60 text-sm mb-6">
-            Para unirte a una partida en AXEL PLAY debes escanear con la cámara de tu celular el código QR proyectado por tu docente.
+            Para unirte a una partida en AXEL'S PLAY debes escanear con la cámara de tu celular el código QR proyectado por tu docente.
           </p>
           <div className="p-3 bg-purple-950/40 rounded-xl border border-purple-500/30 text-xs text-purple-300">
             Apunta la cámara de tu teléfono al código en pantalla gigante.
@@ -124,7 +124,7 @@ export default function JoinPage() {
             <Gamepad2 className="w-5 h-5 text-white" />
           </div>
           <div>
-            <span className="font-black text-lg tracking-tight">AXEL PLAY</span>
+            <span className="font-black text-lg tracking-tight">AXEL'S PLAY</span>
             <span className="text-[10px] text-purple-300 block -mt-1 font-semibold">Acceso Estudiante</span>
           </div>
         </div>

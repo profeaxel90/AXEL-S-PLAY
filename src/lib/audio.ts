@@ -10,10 +10,10 @@ class MusicSynthesizer {
   private masterMusicGain: GainNode | null = null;
   private masterSfxGain: GainNode | null = null;
   private isPlaying = false;
-  private currentTrack: 'lobby' | 'question' | 'podium' | null = null;
+  private currentTrack: 'lobby' | 'question' | 'suspense' | 'podium' | null = null;
   private timerId: any = null;
   private step = 0;
-  private volume = 0.5;
+  private volume = 0.75;
   private sfxVolume = 0.8;
   private userUnlocked = false;
 
@@ -235,8 +235,39 @@ class MusicSynthesizer {
     }
   }
 
+  // 4. Suspense: 96 BPM, oscuro, tensión psicológica, acordes menores y latidos
+  private tickSuspense(time: number, step: number) {
+    const beat16 = step % 16;
+    const chordIndex = Math.floor((step % 32) / 16);
+
+    // Latido cardiaco (doble golpe bajo suave)
+    if (beat16 === 0) {
+      this.playKick(time, 0.38);
+    } else if (beat16 === 2) {
+      this.playKick(time, 0.25);
+    }
+
+    // HiHat sutil y misterioso
+    if (beat16 === 8 || beat16 === 12) {
+      this.playHiHat(time, 0.04);
+    }
+
+    // Bajo oscuro en F# o E
+    const suspenseBass = chordIndex === 0 ? 92.5 : 82.41;
+    if (beat16 === 0 || beat16 === 6) {
+      this.playBass(suspenseBass, time, 0.35, 0.32);
+    }
+
+    // Notas de suspenso disonantes
+    if (beat16 === 4) {
+      this.playSynthNote(369.99, time, 0.3, 'sawtooth', 0.1);
+    } else if (beat16 === 10) {
+      this.playSynthNote(392.0, time, 0.35, 'triangle', 0.12);
+    }
+  }
+
   // ── Control de Reproducción de Música ──
-  public startMusic(track: 'lobby' | 'question' | 'podium') {
+  public startMusic(track: 'lobby' | 'question' | 'suspense' | 'podium') {
     this.unlockContext();
     if (this.currentTrack === track && this.isPlaying) return;
 
@@ -245,7 +276,7 @@ class MusicSynthesizer {
     this.isPlaying = true;
     this.step = 0;
 
-    const bpm = track === 'question' ? 136 : track === 'lobby' ? 124 : 128;
+    const bpm = track === 'question' ? 136 : track === 'lobby' ? 124 : track === 'suspense' ? 96 : 128;
     const stepDurationMs = (60 / bpm / 4) * 1000; // semicorchea
 
     this.timerId = setInterval(() => {
@@ -256,6 +287,8 @@ class MusicSynthesizer {
         this.tickLobby(now, this.step);
       } else if (this.currentTrack === 'question') {
         this.tickQuestion(now, this.step);
+      } else if (this.currentTrack === 'suspense') {
+        this.tickSuspense(now, this.step);
       } else if (this.currentTrack === 'podium') {
         this.tickPodium(now, this.step);
       }
@@ -334,16 +367,39 @@ class MusicSynthesizer {
       setTimeout(() => this.playEffectTone(freq, 'triangle', 0.25, 0.3), idx * 110);
     });
   }
+
+  public playStealAlert() {
+    const notes = [440, 880, 554.37, 1108.7, 659.25, 1318.5];
+    notes.forEach((freq, idx) => {
+      setTimeout(() => this.playEffectTone(freq, 'sawtooth', 0.12, 0.35), idx * 45);
+    });
+  }
+
+  public playStealWin() {
+    const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+    notes.forEach((freq, idx) => {
+      setTimeout(() => this.playEffectTone(freq, 'triangle', 0.18, 0.35), idx * 50);
+    });
+  }
+
+  public playStealLost() {
+    this.playEffectTone(200, 'sine', 0.25, 0.25);
+  }
+
+  public playIntroFanfare() {
+    const chord = [392, 523.25, 659.25, 783.99];
+    chord.forEach((f) => this.playEffectTone(f, 'triangle', 0.6, 0.3));
+  }
 }
 
-// ── Motor de Audio Global de AXEL PLAY ──
+// ── Motor de Audio Global de AXEL'S PLAY ──
 class AudioEngine {
   private synth = new MusicSynthesizer();
   private settings: AudioSettings = {
     musicEnabled: true,
     effectsEnabled: true,
-    musicVolume: 0.5,
-    effectsVolume: 0.8,
+    musicVolume: 0.75,
+    effectsVolume: 0.85,
   };
 
   constructor() {
@@ -373,13 +429,17 @@ class AudioEngine {
     this.synth.unlockContext();
   }
 
-  public playMusic(track: 'lobby' | 'question' | 'podium') {
+  public playMusic(track: 'lobby' | 'question' | 'suspense' | 'podium') {
     if (!this.settings.musicEnabled) return;
     this.synth.startMusic(track);
   }
 
   public stopMusic() {
     this.synth.stopMusic();
+  }
+
+  public getCurrentTrack(): 'lobby' | 'question' | 'suspense' | 'podium' | null {
+    return this.synth.getTrack() as any;
   }
 
   public playEffect(key: string) {
@@ -410,14 +470,33 @@ class AudioEngine {
       case 'sfx_join':
         this.synth.playJoin();
         break;
+      case 'sfx_steal_alert':
+        this.synth.playStealAlert();
+        break;
+      case 'sfx_steal_win':
+        this.synth.playStealWin();
+        break;
+      case 'sfx_steal_lost':
+        this.synth.playStealLost();
+        break;
+      case 'sfx_intro':
+        this.synth.playIntroFanfare();
+        break;
       default:
         this.synth.playTick();
         break;
     }
   }
 
-  public setContext(context: AudioSceneContext) {
+  public setContext(context: AudioSceneContext | 'intro' | 'suspense') {
     switch (context) {
+      case 'intro':
+        this.playEffect('sfx_intro');
+        setTimeout(() => this.playMusic('lobby'), 400);
+        break;
+      case 'suspense':
+        this.playMusic('suspense');
+        break;
       case 'lobby':
         this.playMusic('lobby');
         break;

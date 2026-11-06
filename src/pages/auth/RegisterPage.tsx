@@ -60,7 +60,7 @@ export default function RegisterPage() {
             </div>
             <h1 className="text-2xl font-black">Crear Cuenta Docente</h1>
             <p className="text-white/60 text-sm mt-1">
-              Únete a AXEL PLAY y empieza a crear juegos interactivos
+              Únete a AXEL'S PLAY y empieza a crear juegos interactivos
             </p>
           </div>
 

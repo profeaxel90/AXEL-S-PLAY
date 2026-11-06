@@ -20,14 +20,20 @@ interface LiveParticipant {
   activePower?: any;
 }
 
+import fs from 'fs';
+
 interface LiveSession {
   token: string;
-  phase: 'waiting' | 'question' | 'finished';
+  phase: 'intro' | 'waiting' | 'question' | 'finished';
   currentQuestionIndex: number;
   participants: LiveParticipant[];
   answers: Array<{ participantId: string; optionId: string; timeTaken: number }>;
   isAnswerRevealed: boolean;
   power?: any;
+  stealActive?: boolean;
+  stealAmount?: number;
+  stealClaimedBy?: string | null;
+  stealWinnerNickname?: string | null;
 }
 
 const sessions = new Map<string, LiveSession>();
@@ -88,6 +94,32 @@ function gameServerPlugin(): Plugin {
           });
           res.end();
           return;
+        }
+
+        // API Tunnel Endpoint (Pública para cualquier red 4G/5G)
+        if (url.pathname === '/api/tunnel') {
+          const tunnelFilePath = path.resolve(__dirname, 'public_tunnel_url.txt');
+          if (req.method === 'GET') {
+            let tunnelUrl = 'https://d3cc1c726db066.lhr.life';
+            try {
+              if (fs.existsSync(tunnelFilePath)) {
+                tunnelUrl = fs.readFileSync(tunnelFilePath, 'utf8').trim() || tunnelUrl;
+              }
+            } catch {}
+            sendJson(res, 200, { tunnelUrl });
+            return;
+          }
+          if (req.method === 'POST') {
+            parseJsonBody(req).then((body) => {
+              if (body.tunnelUrl) {
+                try {
+                  fs.writeFileSync(tunnelFilePath, body.tunnelUrl.trim(), 'utf8');
+                } catch {}
+              }
+              sendJson(res, 200, { success: true, tunnelUrl: body.tunnelUrl });
+            });
+            return;
+          }
         }
 
         if (!url.pathname.startsWith('/api/session/')) {
@@ -205,11 +237,18 @@ function gameServerPlugin(): Plugin {
           parseJsonBody(req).then((body) => {
             const { eventType, payload } = body;
 
-            if (eventType === 'START_GAME') {
+            if (eventType === 'START_INTRO') {
+              session.phase = 'intro';
+            } else if (eventType === 'START_GAME') {
               session.phase = 'question';
               session.currentQuestionIndex = 0;
               session.answers = [];
               session.isAnswerRevealed = false;
+            } else if (eventType === 'STEAL_POINTS_START') {
+              session.stealActive = true;
+              session.stealAmount = payload?.amount || 500;
+              session.stealClaimedBy = null;
+              session.stealWinnerNickname = null;
             } else if (eventType === 'QUESTION') {
               session.phase = 'question';
               session.currentQuestionIndex = payload?.index || 0;
@@ -278,7 +317,48 @@ function gameServerPlugin(): Plugin {
           return;
         }
 
-        // 6. Reset
+        // 6. Steal points (Robo de puntos)
+        if (action === 'steal' && req.method === 'POST') {
+          parseJsonBody(req).then((body) => {
+            const { participantId } = body;
+            if (!session.stealActive || session.stealClaimedBy) {
+              sendJson(res, 200, {
+                success: false,
+                alreadyClaimed: true,
+                winnerNickname: session.stealWinnerNickname || 'Otro participante',
+              });
+              return;
+            }
+
+            session.stealActive = false;
+            session.stealClaimedBy = participantId;
+            const participant = session.participants.find((p) => p.id === participantId);
+            const amount = session.stealAmount || 500;
+            if (participant) {
+              participant.score += amount;
+              session.stealWinnerNickname = participant.nickname;
+            }
+
+            broadcastToSession(token, {
+              type: 'STEAL_POINTS_CLAIMED',
+              winnerId: participantId,
+              winnerNickname: participant?.nickname || 'Estudiante',
+              amount,
+              participants: session.participants,
+            });
+
+            sendJson(res, 200, {
+              success: true,
+              winnerId: participantId,
+              winnerNickname: participant?.nickname || 'Estudiante',
+              amount,
+              newScore: participant?.score || 0,
+            });
+          });
+          return;
+        }
+
+        // 7. Reset
         if (action === 'reset' && req.method === 'POST') {
           session.phase = 'waiting';
           session.currentQuestionIndex = 0;
@@ -312,5 +392,6 @@ export default defineConfig({
     port: 5173,
     host: true,
     open: false,
+    allowedHosts: true,
   },
 });

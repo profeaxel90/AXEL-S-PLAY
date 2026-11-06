@@ -127,7 +127,7 @@ export default function TeacherLayout() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center">
               <Gamepad2 className="w-5 h-5 text-white" />
             </div>
-            <span className="font-black text-lg">AXEL PLAY</span>
+            <span className="font-black text-lg">AXEL'S PLAY</span>
           </div>
 
           <div className="flex items-center gap-2">

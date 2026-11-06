@@ -119,6 +119,7 @@ export interface Question {
   explanation?: string;
   timeLimit: number;        // segundos
   points: number;
+  pointsMultiplier?: 1 | 2 | 3;
   difficulty: Difficulty;
   orderIndex: number;
   imageUrl?: string;

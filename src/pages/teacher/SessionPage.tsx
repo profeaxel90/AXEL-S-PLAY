@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
 import { generateSessionToken, buildQRUrl, shareSessionLink } from '../../lib/qr';
 import { GameHostSync, type GameEventMessage } from '../../lib/gameSync';
@@ -12,7 +11,8 @@ import {
   Play, Pause, SkipForward, Square, Users, QrCode,
   Zap, Share2, RefreshCw, Trophy, Medal, Crown,
   ArrowLeft, CheckCircle2, Sparkles, BarChart3,
-  Clock, Eye, Wifi, AlertCircle, Volume2, VolumeX
+  Clock, Eye, Wifi, Globe, Sliders, Music, Radio,
+  Volume2, VolumeX, ShieldAlert, Award, Image as ImageIcon
 } from 'lucide-react';
 
 const OPTION_STYLES = [
@@ -48,17 +48,30 @@ export default function SessionPage() {
   // Token único para la partida
   const [token, setToken] = useState(() => generateSessionToken());
 
-  // Detectar si el usuario está en localhost para permitirle usar su IP de red Wi-Fi
-  const [useNetworkIp, setUseNetworkIp] = useState(() => {
-    return typeof window !== 'undefined' && window.location.hostname === 'localhost';
-  });
+  // Modos de Red: Túnel Público (4G/5G / Cualquier Red), Wi-Fi Local, o Localhost
+  const [connectionMode, setConnectionMode] = useState<'tunnel' | 'wifi' | 'local'>('tunnel');
+  const [tunnelUrl, setTunnelUrl] = useState('https://d3cc1c726db066.lhr.life');
+  const [wifiHost, setWifiHost] = useState('192.168.100.4:5173');
+  const [isEditingUrl, setIsEditingUrl] = useState(false);
 
-  const networkHost = '192.168.100.4:5173';
-  const qrBaseUrl = useNetworkIp
-    ? `http://${networkHost}`
-    : typeof window !== 'undefined'
-    ? window.location.origin
-    : 'http://localhost:5173';
+  // Consultar túnel activo del servidor local
+  useEffect(() => {
+    fetch('/api/tunnel')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.tunnelUrl) setTunnelUrl(data.tunnelUrl);
+      })
+      .catch(() => {});
+  }, []);
+
+  const qrBaseUrl =
+    connectionMode === 'tunnel'
+      ? tunnelUrl
+      : connectionMode === 'wifi'
+      ? `http://${wifiHost}`
+      : typeof window !== 'undefined'
+      ? window.location.origin
+      : 'http://localhost:5173';
 
   const qrUrl = buildQRUrl(token, qrBaseUrl);
 
@@ -67,21 +80,32 @@ export default function SessionPage() {
   const questions: Question[] = gameData?.questions || SAMPLE_QUESTIONS_ROAD_SAFETY;
 
   // Estado del juego
-  const [gamePhase, setGamePhase] = useState<'waiting' | 'question' | 'finished'>('waiting');
+  const [gamePhase, setGamePhase] = useState<'waiting' | 'intro' | 'question' | 'finished'>('waiting');
+  const [introCountdown, setIntroCountdown] = useState(6);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [timerLeft, setTimerLeft] = useState(20);
   const [isPaused, setIsPaused] = useState(false);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
 
-  // Participantes REALES conectados (100% reales, sin simulaciones ni suposiciones)
+  // Participantes REALES conectados (100% reales)
   const [liveParticipants, setLiveParticipants] = useState<Participant[]>([]);
   const [selectedStudentForPower, setSelectedStudentForPower] = useState<Participant | null>(null);
   const [powerModalOpen, setPowerModalOpen] = useState(false);
   const [globalPowerModalOpen, setGlobalPowerModalOpen] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [globalPowerSuccess, setGlobalPowerSuccess] = useState<string | null>(null);
+
+  // Audio & Sonido
   const [isMusicActive, setIsMusicActive] = useState(() => audioEngine.getSettings().musicEnabled);
+  const [musicVolume, setMusicVolume] = useState(() => audioEngine.getSettings().musicVolume ?? 0.75);
+  const [effectsVolume, setEffectsVolume] = useState(() => audioEngine.getSettings().effectsVolume ?? 0.85);
+  const [selectedTrack, setSelectedTrack] = useState<'lobby' | 'question' | 'suspense' | 'podium'>('lobby');
+  const [audioPanelOpen, setAudioPanelOpen] = useState(false);
+
+  // Robo de Puntos
+  const [stealBanner, setStealBanner] = useState<string | null>(null);
+  const [stealWinnerBanner, setStealWinnerBanner] = useState<string | null>(null);
 
   const hostSyncRef = useRef<GameHostSync | null>(null);
   const currentQ = questions[currentQIndex] || questions[0];
@@ -108,7 +132,21 @@ export default function SessionPage() {
         });
         audioEngine.playEffect('sfx_join');
       } else if (msg.type === 'ANSWER') {
-        setAnsweredCount((prev) => prev + 1);
+        setAnsweredCount((prev) => {
+          const nextCount = prev + 1;
+
+          // REVELACIÓN AUTOMÁTICA CUANDO TODOS RESPONDEN
+          setLiveParticipants((currParticipants) => {
+            if (currParticipants.length > 0 && nextCount >= currParticipants.length) {
+              setTimeout(() => {
+                handleRevealAnswer();
+              }, 300);
+            }
+            return currParticipants;
+          });
+
+          return nextCount;
+        });
 
         // Actualizar puntaje del estudiante real
         if (msg.participantId) {
@@ -118,6 +156,17 @@ export default function SessionPage() {
         }
 
         audioEngine.playEffect('sfx_tick');
+      } else if (msg.type === 'STEAL_POINTS_CLAIMED') {
+        // Alguien robó los puntos
+        if (msg.winnerNickname) {
+          setStealBanner(null);
+          setStealWinnerBanner(`¡⚡ ${msg.winnerNickname} fue el más rápido y robó +${msg.amount || 500} puntos!`);
+          audioEngine.playEffect('sfx_steal_win');
+          setTimeout(() => setStealWinnerBanner(null), 6000);
+        }
+        if (msg.participants) {
+          setLiveParticipants(msg.participants);
+        }
       }
     };
 
@@ -127,6 +176,26 @@ export default function SessionPage() {
       hostSync.destroy();
     };
   }, [token]);
+
+  // ── Temporizador de la fase Intro ──
+  useEffect(() => {
+    if (gamePhase !== 'intro') return;
+
+    setIntroCountdown(6);
+    const introTimer = setInterval(() => {
+      setIntroCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(introTimer);
+          handleStartQuestions();
+          return 0;
+        }
+        audioEngine.playEffect('sfx_tick');
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(introTimer);
+  }, [gamePhase]);
 
   // ── Temporizador de la pregunta ──
   useEffect(() => {
@@ -153,10 +222,16 @@ export default function SessionPage() {
   useEffect(() => {
     if (gamePhase === 'finished') {
       audioEngine.setContext('podium');
+      setSelectedTrack('podium');
+    } else if (gamePhase === 'intro') {
+      audioEngine.setContext('intro');
+      setSelectedTrack('lobby');
     } else if (gamePhase === 'question') {
       audioEngine.setContext('question');
+      setSelectedTrack('question');
     } else {
       audioEngine.setContext('lobby');
+      setSelectedTrack('lobby');
     }
   }, [gamePhase]);
 
@@ -167,9 +242,20 @@ export default function SessionPage() {
   const thirdPlace = sortedParticipants[2];
 
   // ── Acciones del Docente ──
-  const handleStartGame = () => {
+  const handleStartIntro = () => {
     if (liveParticipants.length === 0) return;
 
+    setGamePhase('intro');
+    audioEngine.setContext('intro');
+
+    // Transmitir a todos los celulares la pantalla de bienvenida
+    hostSyncRef.current?.broadcast('START_INTRO', {
+      introTitle: gameData?.title || 'Seguridad Vial y Normas de Tránsito',
+      introDescription: gameData?.description || 'Evaluación interactiva y gamificada con retos en tiempo real.',
+    });
+  };
+
+  const handleStartQuestions = () => {
     setGamePhase('question');
     setCurrentQIndex(0);
     setIsAnswerRevealed(false);
@@ -179,7 +265,7 @@ export default function SessionPage() {
 
     audioEngine.setContext('game_start');
 
-    // Transmitir a todos los celulares
+    // Transmitir primera pregunta a todos los celulares
     hostSyncRef.current?.broadcast('START_GAME');
     hostSyncRef.current?.broadcast('QUESTION', {
       question: firstQ,
@@ -222,6 +308,15 @@ export default function SessionPage() {
     });
   };
 
+  const handleTriggerStealPoints = () => {
+    audioEngine.playEffect('sfx_steal_alert');
+    setStealBanner('¡⚡ ROBO DE PUNTOS ACTIVADO! El primer estudiante que presione el botón rojo gana 500 pts.');
+
+    hostSyncRef.current?.broadcast('STEAL_POINTS_START', {
+      amount: 500,
+    });
+  };
+
   const handlePauseResume = () => {
     if (isPaused) {
       setIsPaused(false);
@@ -249,7 +344,7 @@ export default function SessionPage() {
   };
 
   const handleShareLink = async () => {
-    const shared = await shareSessionLink(qrUrl, 'Únete a AXEL PLAY');
+    const shared = await shareSessionLink(qrUrl, "Únete a AXEL'S PLAY");
     if (shared) {
       setCopyFeedback(true);
       setTimeout(() => setCopyFeedback(false), 2000);
@@ -289,6 +384,16 @@ export default function SessionPage() {
     );
   };
 
+  const handleSaveTunnelUrl = (newUrl: string) => {
+    setTunnelUrl(newUrl);
+    setIsEditingUrl(false);
+    fetch('/api/tunnel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tunnelUrl: newUrl }),
+    }).catch(() => {});
+  };
+
   return (
     <div className="space-y-6 select-none">
       {/* ── Top Bar de Control Docente ── */}
@@ -303,56 +408,172 @@ export default function SessionPage() {
           <div>
             <div className="flex items-center gap-2">
               <span className={`badge ${
-                gamePhase === 'finished' ? 'badge-warning' : gamePhase === 'question' ? 'badge-success' : 'badge-primary'
+                gamePhase === 'finished'
+                  ? 'badge-warning'
+                  : gamePhase === 'question'
+                  ? 'badge-success'
+                  : gamePhase === 'intro'
+                  ? 'badge-primary'
+                  : 'badge-primary'
               } text-[10px]`}>
-                {gamePhase === 'finished' ? 'PARTIDA FINALIZADA' : gamePhase === 'question' ? 'EN VIVO' : 'SALA DE ESPERA'}
+                {gamePhase === 'finished'
+                  ? 'PARTIDA FINALIZADA'
+                  : gamePhase === 'question'
+                  ? 'EN VIVO'
+                  : gamePhase === 'intro'
+                  ? 'PRESENTACIÓN'
+                  : 'SALA DE ESPERA'}
               </span>
               <span className="text-white/40 text-xs">Juego: {gameData?.title || 'Seguridad Vial'}</span>
             </div>
             <h1 className="text-2xl font-black text-white">
-              {gamePhase === 'finished' ? '🏆 Gran Podio de Ganadores' : gamePhase === 'question' ? `Pregunta ${currentQIndex + 1} de ${questions.length}` : 'Partida en Tiempo Real'}
+              {gamePhase === 'finished'
+                ? '🏆 Gran Podio de Ganadores'
+                : gamePhase === 'intro'
+                ? "AXEL'S PLAY — Presentación de la Actividad"
+                : gamePhase === 'question'
+                ? `Pregunta ${currentQIndex + 1} de ${questions.length}`
+                : "AXEL'S PLAY — Partida en Tiempo Real"}
             </h1>
           </div>
         </div>
 
         {/* Botones de Control de la Sesión */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* BOTÓN MÚSICA ON / OFF */}
-          <button
-            type="button"
-            onClick={() => {
-              audioEngine.unlock();
-              const active = audioEngine.toggleMusic();
-              setIsMusicActive(active);
-              if (active) {
-                audioEngine.setContext(gamePhase === 'finished' ? 'podium' : gamePhase === 'question' ? 'question' : 'lobby');
-              }
-            }}
-            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
-              isMusicActive
-                ? 'bg-purple-600/20 border-purple-500/40 text-purple-300 hover:bg-purple-600/30 shadow-md shadow-purple-600/20'
-                : 'bg-white/5 border-white/10 text-white/40 hover:text-white'
-            }`}
-            title="Activar o Silenciar Música de Fondo"
-          >
-            {isMusicActive ? <Volume2 className="w-4 h-4 text-green-400 animate-pulse" /> : <VolumeX className="w-4 h-4 text-red-400" />}
-            <span>{isMusicActive ? 'Música: ON' : 'Música: Mute'}</span>
-          </button>
+          {/* BOTÓN DESPLEGABLE DE AUDIO Y VOLUMEN */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                audioEngine.unlock();
+                setAudioPanelOpen(!audioPanelOpen);
+              }}
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
+                isMusicActive
+                  ? 'bg-purple-600/20 border-purple-500/40 text-purple-300 hover:bg-purple-600/30 shadow-md shadow-purple-600/20'
+                  : 'bg-white/5 border-white/10 text-white/40 hover:text-white'
+              }`}
+              title="Ajustar Música, Efectos y Selector de Pistas"
+            >
+              {isMusicActive ? <Volume2 className="w-4 h-4 text-green-400 animate-pulse" /> : <VolumeX className="w-4 h-4 text-red-400" />}
+              <span>🎵 Audio ({Math.round(musicVolume * 100)}%)</span>
+              <Sliders className="w-3.5 h-3.5 text-purple-400 ml-0.5" />
+            </button>
 
-          {/* BOTÓN PODER PARA TODOS (Solo si hay alumnos conectados) */}
+            {/* PANEL FLOTANTE DE CONTROL DE AUDIO */}
+            {audioPanelOpen && (
+              <div className="absolute right-0 top-12 z-50 w-72 p-4 rounded-2xl bg-slate-900 border border-purple-500/40 shadow-2xl space-y-4 animate-bounce-in">
+                <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                  <span className="text-xs font-black text-white flex items-center gap-1.5">
+                    <Music className="w-4 h-4 text-purple-400" />
+                    <span>Control de Música y Sonidos</span>
+                  </span>
+                  <button
+                    onClick={() => {
+                      const active = audioEngine.toggleMusic();
+                      setIsMusicActive(active);
+                    }}
+                    className={`text-[10px] px-2 py-0.5 rounded font-black ${
+                      isMusicActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                    }`}
+                  >
+                    {isMusicActive ? 'ON' : 'MUTE'}
+                  </button>
+                </div>
+
+                {/* Slider Volumen Música */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-white/70">
+                    <span>Volumen de Música:</span>
+                    <span className="font-mono text-purple-300">{Math.round(musicVolume * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={musicVolume}
+                    onChange={(e) => {
+                      const vol = parseFloat(e.target.value);
+                      setMusicVolume(vol);
+                      audioEngine.setMusicVolume(vol);
+                    }}
+                    className="w-full accent-purple-500 cursor-pointer"
+                  />
+                </div>
+
+                {/* Slider Volumen Efectos */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-white/70">
+                    <span>Volumen de Efectos:</span>
+                    <span className="font-mono text-yellow-300">{Math.round(effectsVolume * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={effectsVolume}
+                    onChange={(e) => {
+                      const vol = parseFloat(e.target.value);
+                      setEffectsVolume(vol);
+                      audioEngine.setEffectsEnabled(vol > 0);
+                    }}
+                    className="w-full accent-yellow-400 cursor-pointer"
+                  />
+                </div>
+
+                {/* Selector de Pista de Música */}
+                <div className="space-y-1.5 pt-1 border-t border-white/10">
+                  <label className="text-[11px] text-white/70 font-bold block">
+                    Pista de Música Activa:
+                  </label>
+                  <select
+                    value={selectedTrack}
+                    onChange={(e) => {
+                      const track = e.target.value as 'lobby' | 'question' | 'suspense' | 'podium';
+                      setSelectedTrack(track);
+                      audioEngine.unlock();
+                      audioEngine.playMusic(track);
+                    }}
+                    className="input py-1.5 text-xs bg-slate-950 border-white/10"
+                  >
+                    <option value="lobby">🎮 Lobby Alegre (124 BPM)</option>
+                    <option value="question">⏱️ Pregunta Enérgica (136 BPM)</option>
+                    <option value="suspense">😱 Suspenso y Tensión (96 BPM)</option>
+                    <option value="podium">🏆 Podio Triunfal (128 BPM)</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* BOTÓN ROBO DE PUNTOS (Activable por docente en cualquier momento) */}
+          {(gamePhase === 'question' || gamePhase === 'intro') && (
+            <button
+              onClick={handleTriggerStealPoints}
+              className="py-2 px-3.5 rounded-xl text-xs font-black flex items-center gap-1.5 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 border border-red-400/50 text-white shadow-lg shadow-red-600/30 hover:scale-105 transition-all animate-pulse"
+              title="Habilitar Robo de Puntos en todos los celulares"
+            >
+              <Zap className="w-4 h-4 fill-yellow-300 text-yellow-300" />
+              <span>ROBAR PUNTOS (500 pts)</span>
+            </button>
+          )}
+
+          {/* BOTÓN PODER PARA TODOS */}
           {gamePhase !== 'finished' && liveParticipants.length > 0 && (
             <button
               onClick={() => setGlobalPowerModalOpen(true)}
-              className="btn-primary py-2.5 px-4 rounded-xl text-xs font-black flex items-center gap-2 bg-gradient-to-r from-amber-500 to-yellow-600 border border-yellow-400/40 shadow-lg shadow-yellow-500/20 text-slate-950 hover:scale-105 transition-transform"
+              className="btn-primary py-2 px-3.5 rounded-xl text-xs font-black flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-yellow-600 border border-yellow-400/40 shadow-lg shadow-yellow-500/20 text-slate-950 hover:scale-105 transition-transform"
             >
-              <Zap className="w-4 h-4 fill-slate-950" />
-              <span>⚡ Poder para TODOS</span>
+              <Zap className="w-3.5 h-3.5 fill-slate-950" />
+              <span>⚡ Super Poder</span>
             </button>
           )}
 
           {gamePhase === 'waiting' && (
             <button
-              onClick={handleStartGame}
+              onClick={handleStartIntro}
               disabled={liveParticipants.length === 0}
               className={`py-2.5 px-6 rounded-xl text-sm font-black flex items-center gap-2 shadow-lg transition-all ${
                 liveParticipants.length > 0
@@ -366,6 +587,16 @@ export default function SessionPage() {
                   ? `INICIAR PARTIDA (${liveParticipants.length} ${liveParticipants.length === 1 ? 'alumno' : 'alumnos'})`
                   : 'Esperando que se una al menos 1 alumno...'}
               </span>
+            </button>
+          )}
+
+          {gamePhase === 'intro' && (
+            <button
+              onClick={handleStartQuestions}
+              className="py-2.5 px-5 rounded-xl text-xs font-black flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-green-500/30 hover:scale-105 transition-all"
+            >
+              <Play className="w-4 h-4 fill-current" />
+              <span>Comenzar Pregunta 1 ({introCountdown}s)</span>
             </button>
           )}
 
@@ -420,6 +651,24 @@ export default function SessionPage() {
         </div>
       </div>
 
+      {/* Banner de Robo de Puntos Activo */}
+      {stealBanner && (
+        <div className="card p-4 border-red-500/60 bg-gradient-to-r from-red-600/30 via-rose-600/20 to-red-600/30 text-white font-black text-sm flex items-center justify-center gap-3 animate-bounce-in shadow-2xl shadow-red-600/30 ring-2 ring-red-400">
+          <Zap className="w-6 h-6 fill-yellow-400 text-yellow-400 animate-pulse" />
+          <span>{stealBanner}</span>
+          <Sparkles className="w-5 h-5 text-yellow-400 animate-spin" />
+        </div>
+      )}
+
+      {/* Banner de Ganador de Robo de Puntos */}
+      {stealWinnerBanner && (
+        <div className="card p-4 border-yellow-400/60 bg-gradient-to-r from-amber-500/30 via-yellow-500/20 to-amber-500/30 text-yellow-300 font-black text-base flex items-center justify-center gap-3 animate-bounce-in shadow-2xl shadow-yellow-500/30 ring-2 ring-yellow-400">
+          <Award className="w-6 h-6 text-yellow-300 animate-bounce" />
+          <span>{stealWinnerBanner}</span>
+          <Sparkles className="w-5 h-5 text-yellow-300 animate-spin" />
+        </div>
+      )}
+
       {/* Banner de Poder Global Activado */}
       {globalPowerSuccess && (
         <div className="card p-4 border-yellow-400/40 bg-gradient-to-r from-amber-500/20 to-yellow-600/20 text-yellow-300 font-black text-sm flex items-center justify-center gap-3 animate-bounce-in shadow-xl shadow-yellow-500/20">
@@ -429,39 +678,119 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* ── FASE 1: SALA DE ESPERA CON CÓDIGO QR GIGANTE ── */}
+      {/* ── FASE 1: SALA DE ESPERA CON CÓDIGO QR GIGANTE Y CONEXIÓN MULTI-RED ── */}
       {gamePhase === 'waiting' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Columna Izquierda: QR Grande Proyectable */}
-          <div className="card p-8 border-purple-500/30 bg-gradient-to-b from-purple-950/40 to-slate-900 text-center flex flex-col items-center justify-between shadow-2xl">
+          {/* Columna Izquierda: QR Grande Proyectable y Selector de Red */}
+          <div className="card p-6 border-purple-500/30 bg-gradient-to-b from-purple-950/40 to-slate-900 text-center flex flex-col items-center justify-between shadow-2xl">
             <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-bold mb-3">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-bold mb-2">
                 <QrCode className="w-4 h-4 text-yellow-400" />
-                <span>ACCESO EXCLUSIVO CON CÁMARA</span>
+                <span>ACCESO CON CÁMARA DESDE CUALQUIER RED</span>
               </div>
               <h2 className="text-xl font-black text-white mb-1">
                 Escanea con tu celular para unirte
               </h2>
-              <p className="text-white/60 text-xs mb-4">
-                Abre la cámara normal de tu teléfono móvil y apunta al código.
+              <p className="text-white/60 text-xs mb-3">
+                Funciona desde <strong className="text-purple-300">Datos Móviles (4G/5G)</strong> o Wi-Fi.
               </p>
             </div>
 
             {/* Canvas QR */}
-            <div className="p-4 bg-white rounded-3xl shadow-2xl shadow-purple-600/40 border-4 border-purple-500/60 my-2">
+            <div className="p-4 bg-white rounded-3xl shadow-2xl shadow-purple-600/40 border-4 border-purple-500/60 my-1">
               <QRCodeSVG
                 value={qrUrl}
-                size={230}
+                size={220}
                 level="H"
                 includeMargin={false}
                 fgColor="#1e1b4b"
               />
             </div>
 
-            <div className="w-full mt-4 space-y-3">
-              {/* Enlace actual del QR */}
-              <div className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white/70 font-mono truncate">
-                {qrUrl}
+            <div className="w-full mt-3 space-y-3">
+              {/* Selector de Modo de Red (4G/5G vs Wi-Fi Local) */}
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 space-y-2 text-left">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-white/70 font-bold flex items-center gap-1">
+                    <Globe className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Red de Conexión:</span>
+                  </span>
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setConnectionMode('tunnel')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                        connectionMode === 'tunnel'
+                          ? 'bg-purple-600 text-white shadow'
+                          : 'text-white/50 hover:text-white'
+                      }`}
+                      title="Cualquier red celular 4G/5G o Internet"
+                    >
+                      🌐 4G/5G Internet
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConnectionMode('wifi')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                        connectionMode === 'wifi'
+                          ? 'bg-green-600 text-white shadow'
+                          : 'text-white/50 hover:text-white'
+                      }`}
+                      title="Mismo router Wi-Fi local"
+                    >
+                      📶 Wi-Fi
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConnectionMode('local')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                        connectionMode === 'local'
+                          ? 'bg-blue-600 text-white shadow'
+                          : 'text-white/50 hover:text-white'
+                      }`}
+                      title="Misma PC"
+                    >
+                      💻 Local
+                    </button>
+                  </div>
+                </div>
+
+                {/* URL del QR activa y editable */}
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 p-1.5 rounded-lg bg-black/40 border border-white/10 text-[10px] text-purple-300 font-mono truncate">
+                    {qrUrl}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingUrl(!isEditingUrl)}
+                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold shrink-0"
+                    title="Editar URL manual"
+                  >
+                    ✏️
+                  </button>
+                </div>
+
+                {isEditingUrl && (
+                  <div className="pt-1.5 border-t border-white/10 space-y-1">
+                    <input
+                      type="text"
+                      defaultValue={connectionMode === 'tunnel' ? tunnelUrl : wifiHost}
+                      onBlur={(e) => {
+                        if (connectionMode === 'tunnel') {
+                          handleSaveTunnelUrl(e.target.value);
+                        } else {
+                          setWifiHost(e.target.value);
+                          setIsEditingUrl(false);
+                        }
+                      }}
+                      placeholder="https://tu-tunel.loca.lt o 192.168.100.4:5173"
+                      className="input py-1 text-[11px] w-full"
+                    />
+                    <p className="text-[9px] text-white/50">
+                      Presiona fuera del campo para guardar y regenerar el QR al instante.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Botones de enlace y regeneración */}
@@ -480,25 +809,6 @@ export default function SessionPage() {
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>Nuevo QR</span>
-                </button>
-              </div>
-
-              {/* Selector de IP de red para pruebas Wi-Fi */}
-              <div className="pt-2 border-t border-white/10 text-left">
-                <button
-                  type="button"
-                  onClick={() => setUseNetworkIp(!useNetworkIp)}
-                  className="text-[11px] text-purple-300 hover:text-white flex items-center gap-1.5 w-full justify-between"
-                >
-                  <span className="flex items-center gap-1">
-                    <Wifi className="w-3.5 h-3.5 text-green-400" />
-                    <span>IP Red Wi-Fi ({networkHost}):</span>
-                  </span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    useNetworkIp ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/10 text-white/50'
-                  }`}>
-                    {useNetworkIp ? 'ACTIVADA' : 'USAR LOCAL'}
-                  </span>
                 </button>
               </div>
             </div>
@@ -538,7 +848,7 @@ export default function SessionPage() {
                 </p>
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs font-semibold">
                   <Sparkles className="w-3.5 h-3.5 text-yellow-400 animate-spin" />
-                  <span>Sala lista para recibir conexiones</span>
+                  <span>Sala lista para recibir conexiones desde cualquier red</span>
                 </div>
               </div>
             ) : (
@@ -584,15 +894,87 @@ export default function SessionPage() {
         </div>
       )}
 
+      {/* ── FASE INTRO: PANTALLA DE BIENVENIDA ANTES DEL JUEGO ── */}
+      {gamePhase === 'intro' && (
+        <div className="card p-8 md:p-12 border-purple-500/40 bg-gradient-to-b from-purple-950/60 via-slate-950 to-slate-950 text-center shadow-2xl relative overflow-hidden animate-bounce-in">
+          {/* Badge superior */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-black uppercase tracking-widest mb-4">
+            <Sparkles className="w-4 h-4 text-yellow-400 animate-spin" />
+            <span>PARTIDA EN VIVO • AXEL'S PLAY</span>
+          </div>
+
+          {/* Título de la Plataforma */}
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-yellow-300 to-pink-300 tracking-tight mb-3">
+            AXEL'S PLAY
+          </h1>
+
+          {/* Título del Juego */}
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-4 max-w-3xl mx-auto">
+            {gameData?.title || 'Seguridad Vial y Señales de Tránsito'}
+          </h2>
+
+          <p className="text-white/70 text-sm md:text-base max-w-2xl mx-auto mb-8">
+            {gameData?.description || 'Evaluación interactiva y gamificada. Prepárate para responder en tu teléfono móvil con rapidez y precisión.'}
+          </p>
+
+          {/* Tarjeta de Instrucciones Pedagógicas */}
+          <div className="max-w-2xl mx-auto p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md mb-8 text-left space-y-3 shadow-xl">
+            <h3 className="text-sm font-black text-yellow-400 uppercase tracking-wider flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-yellow-400" />
+              <span>¿CÓMO SE JUEGA?</span>
+            </h3>
+            <ul className="space-y-2 text-xs md:text-sm text-white/80">
+              <li className="flex items-start gap-2.5">
+                <span className="w-6 h-6 rounded-lg bg-red-600/30 border border-red-500/50 flex items-center justify-center text-red-300 font-black shrink-0">1</span>
+                <span>Lee la pregunta y observa la imagen en esta pantalla principal proyectada.</span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="w-6 h-6 rounded-lg bg-blue-600/30 border border-blue-500/50 flex items-center justify-center text-blue-300 font-black shrink-0">2</span>
+                <span>En tu celular, presiona la figura geométrica y el color correspondiente a tu respuesta.</span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="w-6 h-6 rounded-lg bg-amber-500/30 border border-amber-500/50 flex items-center justify-center text-amber-300 font-black shrink-0">3</span>
+                <span>Cuanto más rápido respondas correctamente, ¡más puntos sumas!</span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="w-6 h-6 rounded-lg bg-emerald-600/30 border border-emerald-500/50 flex items-center justify-center text-emerald-300 font-black shrink-0">4</span>
+                <span>⚡ ¡Atento! En cualquier momento el profe activará el <strong>ROBO DE PUNTOS</strong>. Quien toque primero el botón rojo se los lleva.</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Botón de inicio rápido con cuenta regresiva */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button
+              onClick={handleStartQuestions}
+              className="py-4 px-8 rounded-2xl text-base font-black flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-slate-950 shadow-2xl shadow-green-500/40 hover:scale-105 active:scale-95 transition-all"
+            >
+              <Play className="w-5 h-5 fill-current" />
+              <span>¡A JUGAR AHORA! ({introCountdown}s)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── FASE 2: PREGUNTA EN PANTALLA GIGANTE (PROYECTOR ESTILO KAHOOT) ── */}
       {gamePhase === 'question' && (
         <div className="space-y-6">
           {/* Header de Pregunta en Proyector */}
           <div className="card p-6 border-purple-500/30 bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-purple-950/40 text-center relative overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <span className="px-3.5 py-1 rounded-full bg-purple-600/30 border border-purple-500/40 text-purple-300 font-black text-xs uppercase tracking-wider">
-                Pregunta {currentQIndex + 1} de {questions.length}
-              </span>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className="px-3.5 py-1 rounded-full bg-purple-600/30 border border-purple-500/40 text-purple-300 font-black text-xs uppercase tracking-wider">
+                  Pregunta {currentQIndex + 1} de {questions.length}
+                </span>
+
+                {/* Badge de Multiplicador de Puntos (Doble o Triple) */}
+                {currentQ.pointsMultiplier && currentQ.pointsMultiplier > 1 && (
+                  <span className="px-3 py-1 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600 text-slate-950 font-black text-xs flex items-center gap-1 shadow-lg shadow-yellow-500/30 animate-bounce">
+                    <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                    <span>¡PUNTOS {currentQ.pointsMultiplier === 2 ? 'DOBLES (2×)' : 'TRIPLES (3×)'}!</span>
+                  </span>
+                )}
+              </div>
 
               {/* Contador de Respuestas Reales Recibidas */}
               <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-bold text-white">
@@ -611,8 +993,21 @@ export default function SessionPage() {
               </div>
             </div>
 
+            {/* Imagen Opcional de la Pregunta */}
+            {currentQ.imageUrl && (
+              <div className="my-3 flex justify-center">
+                <div className="rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl max-h-64 bg-slate-950">
+                  <img
+                    src={currentQ.imageUrl}
+                    alt="Imagen de apoyo"
+                    className="max-h-60 object-contain mx-auto rounded-xl"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Texto de la Pregunta en Tamaño Gigante */}
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white leading-tight max-w-4xl mx-auto py-4">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white leading-tight max-w-4xl mx-auto py-2">
               {currentQ.content}
             </h2>
 
@@ -714,7 +1109,7 @@ export default function SessionPage() {
               </div>
             ) : (
               <div className="flex items-end justify-center gap-4 max-w-2xl mx-auto my-8 pt-8">
-                {/* 🥈 2do Lugar (Izquierda, solo si hay al menos 2 jugadores) */}
+                {/* 🥈 2do Lugar (Izquierda) */}
                 {secondPlace && (
                   <div className="flex-1 flex flex-col items-center">
                     <div className="w-20 h-20 rounded-3xl bg-slate-400/20 p-1.5 border-2 border-slate-300/40 mb-2 shadow-lg">
@@ -729,7 +1124,7 @@ export default function SessionPage() {
                   </div>
                 )}
 
-                {/* 🥇 1er Lugar (Centro - Más Alto) */}
+                {/* 🥇 1er Lugar (Centro) */}
                 {firstPlace && (
                   <div className="flex-1 flex flex-col items-center -mt-8">
                     <div className="w-24 h-24 rounded-3xl bg-yellow-400/30 p-2 border-4 border-yellow-400 shadow-2xl shadow-yellow-500/50 mb-2 animate-float">
@@ -745,7 +1140,7 @@ export default function SessionPage() {
                   </div>
                 )}
 
-                {/* 🥉 3er Lugar (Derecha, solo si hay al menos 3 jugadores) */}
+                {/* 🥉 3er Lugar (Derecha) */}
                 {thirdPlace && (
                   <div className="flex-1 flex flex-col items-center">
                     <div className="w-20 h-20 rounded-3xl bg-amber-700/20 p-1.5 border-2 border-amber-600/40 mb-2 shadow-md">
