@@ -56,14 +56,37 @@ export default function LoginPage() {
           <div className="absolute -top-20 -right-20 w-48 h-48 bg-purple-600/30 rounded-full blur-3xl pointer-events-none" />
 
           {/* Header */}
-          <div className="text-center mb-8 relative z-10">
+          <div className="text-center mb-6 relative z-10">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-purple-600/30">
               <Gamepad2 className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-black">Acceso para Docentes</h1>
+            <h1 className="text-2xl font-black">Acceso para Administrador</h1>
             <p className="text-white/60 text-sm mt-1">
-              Gestiona tus juegos, partidas y analiza resultados
+              Controla la música, preguntas, robos de puntos y podio en AXEL'S PLAY
             </p>
+          </div>
+
+          {/* Tarjeta de credenciales por defecto / recordatorio */}
+          <div className="mb-5 p-3.5 rounded-xl bg-purple-900/30 border border-purple-500/30 flex items-center justify-between text-xs text-purple-200">
+            <div className="space-y-0.5">
+              <p className="text-white font-semibold flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+                <span>Credenciales de Administrador:</span>
+              </p>
+              <p className="text-[11px] text-white/70 font-mono">
+                profe@axelsplay.edu / admin123
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('profe@axelsplay.edu');
+                setPassword('admin123');
+              }}
+              className="px-2.5 py-1 rounded-lg bg-purple-600/40 hover:bg-purple-600/60 text-[11px] font-bold text-white transition-colors"
+            >
+              Autocompletar
+            </button>
           </div>
 
           {(error || localError) && (

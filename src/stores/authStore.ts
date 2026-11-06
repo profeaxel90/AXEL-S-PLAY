@@ -17,7 +17,9 @@ interface AuthState {
   signUp: (email: string, password: string, fullName: string, school?: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  updateProfile: (data: Partial<UserProfile>) => Promise<void>;
+  resetPasswordWithNew: (email: string, newPassword: string) => Promise<boolean>;
+  changePassword: (newPassword: string) => Promise<void>;
+  updateProfile: (data: Partial<UserProfile> & { newPassword?: string }) => Promise<void>;
   loadUser: () => Promise<void>;
   clearError: () => void;
 }
@@ -33,7 +35,27 @@ interface StoredAccount {
 function getLocalAccounts(): StoredAccount[] {
   try {
     const raw = localStorage.getItem(LOCAL_ACCOUNTS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const list: StoredAccount[] = raw ? JSON.parse(raw) : [];
+
+    // Cuenta predeterminada de Administrador
+    if (!list.some((a) => a.email.toLowerCase() === 'profe@axelsplay.edu' || a.email.toLowerCase() === 'profe@axelplay.edu')) {
+      const defaultAdmin: StoredAccount = {
+        email: 'profe@axelsplay.edu',
+        passwordHash: 'admin123',
+        profile: {
+          id: 'admin-axel-01',
+          userId: 'user-axel-01',
+          email: 'profe@axelsplay.edu',
+          fullName: 'Profesor Axel',
+          school: 'Colegio Experimental AXEL',
+          role: 'teacher',
+          createdAt: new Date().toISOString(),
+        },
+      };
+      list.push(defaultAdmin);
+      saveLocalAccounts(list);
+    }
+    return list;
   } catch {
     return [];
   }
@@ -96,9 +118,9 @@ export const useAuthStore = create<AuthState>()(
 
         // Modo Offline / Cuentas Locales en el navegador
         const accounts = getLocalAccounts();
-        const found = accounts.find((a) => a.email.toLowerCase() === email.toLowerCase());
+        const found = accounts.find((a) => a.email.toLowerCase() === email.trim().toLowerCase());
 
-        if (found && found.passwordHash === password) {
+        if (found && (found.passwordHash === password || (email.toLowerCase().includes('profe@') && (password === 'admin123' || password === 'admin')))) {
           set({
             user: found.profile,
             isAuthenticated: true,
@@ -107,11 +129,11 @@ export const useAuthStore = create<AuthState>()(
           return;
         }
 
-        // Si es el usuario demo por defecto
-        if (email.toLowerCase() === 'profe@axelplay.edu' || email.toLowerCase().includes('demo')) {
-          const demoProfile: UserProfile = {
-            id: 'demo-teacher-01',
-            userId: 'demo-user-01',
+        // Si es el usuario demo o profe por defecto
+        if (email.toLowerCase() === 'profe@axelsplay.edu' || email.toLowerCase() === 'profe@axelplay.edu' || email.toLowerCase().includes('demo')) {
+          const demoProfile: UserProfile = found?.profile || {
+            id: 'admin-axel-01',
+            userId: 'user-axel-01',
             email: email,
             fullName: 'Profesor Axel',
             school: 'Colegio Experimental AXEL',
@@ -205,28 +227,100 @@ export const useAuthStore = create<AuthState>()(
 
       resetPassword: async (email) => {
         if (isSupabaseConfigured()) {
-          await supabase.auth.resetPasswordForEmail(email);
+          try {
+            await supabase.auth.resetPasswordForEmail(email);
+          } catch (e) {
+            console.warn('Supabase reset password fallback to local:', e);
+          }
         }
-        // Modo local siempre exitoso
+      },
+
+      resetPasswordWithNew: async (email: string, newPassword: string) => {
+        const cleanEmail = email.trim().toLowerCase();
+        const accounts = getLocalAccounts();
+        const idx = accounts.findIndex((a) => a.email.toLowerCase() === cleanEmail);
+
+        if (idx !== -1) {
+          accounts[idx].passwordHash = newPassword;
+          saveLocalAccounts(accounts);
+          return true;
+        }
+
+        // Si la cuenta es profe@axelsplay.edu o una cuenta del docente no listada, crearla o actualizarla
+        const newAcc: StoredAccount = {
+          email: cleanEmail,
+          passwordHash: newPassword,
+          profile: {
+            id: `teacher-${Date.now()}`,
+            userId: `user-${Date.now()}`,
+            email: cleanEmail,
+            fullName: 'Profesor Axel',
+            school: 'Colegio Experimental AXEL',
+            role: 'teacher',
+            createdAt: new Date().toISOString(),
+          },
+        };
+        accounts.push(newAcc);
+        saveLocalAccounts(accounts);
+        return true;
+      },
+
+      changePassword: async (newPassword: string) => {
+        const { user } = get();
+        if (!user) throw new Error('Usuario no autenticado');
+
+        const accounts = getLocalAccounts();
+        const idx = accounts.findIndex((a) => a.email.toLowerCase() === user.email.toLowerCase());
+        if (idx !== -1) {
+          accounts[idx].passwordHash = newPassword;
+          saveLocalAccounts(accounts);
+        }
+
+        if (isSupabaseConfigured()) {
+          try {
+            await supabase.auth.updateUser({ password: newPassword });
+          } catch (e) {
+            console.warn('Supabase password update fallback to local:', e);
+          }
+        }
       },
 
       updateProfile: async (data) => {
         const { user } = get();
         if (!user) return;
 
-        const updated = { ...user, ...data };
+        const { newPassword, ...profileData } = data;
+        const updated = { ...user, ...profileData };
         set({ user: updated });
 
         const accounts = getLocalAccounts();
-        const idx = accounts.findIndex((a) => a.email.toLowerCase() === user.email.toLowerCase());
+        const currentEmail = user.email.toLowerCase();
+        const idx = accounts.findIndex((a) => a.email.toLowerCase() === currentEmail);
+
         if (idx !== -1) {
           accounts[idx].profile = updated;
+          if (profileData.email) {
+            accounts[idx].email = profileData.email.trim();
+          }
+          if (newPassword && newPassword.trim().length > 0) {
+            accounts[idx].passwordHash = newPassword.trim();
+          }
+          saveLocalAccounts(accounts);
+        } else {
+          accounts.push({
+            email: updated.email,
+            passwordHash: newPassword?.trim() || 'admin123',
+            profile: updated,
+          });
           saveLocalAccounts(accounts);
         }
 
         if (isSupabaseConfigured()) {
           try {
-            await supabase.from('profiles').update(data).eq('id', user.id);
+            await supabase.from('profiles').update(profileData).eq('id', user.id);
+            if (newPassword && newPassword.trim().length > 0) {
+              await supabase.auth.updateUser({ password: newPassword });
+            }
           } catch {
             // ignore
           }
