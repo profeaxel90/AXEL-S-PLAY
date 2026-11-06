@@ -9,12 +9,15 @@ export type P2PMessage =
   | { type: 'JOIN'; participant: Participant }
   | { type: 'LEAVE'; participantId: string }
   | { type: 'ROOM_UPDATE'; participants: Participant[] }
+  | { type: 'START_INTRO'; introTitle?: string; introDescription?: string }
   | { type: 'START_GAME' }
   | { type: 'QUESTION'; question: Question; index: number; total: number; timeLimit: number }
   | { type: 'ANSWER'; participantId: string; optionId: string; timeTaken: number }
   | { type: 'ANSWER_ACK'; participantId: string; isCorrect: boolean; pointsEarned: number; newScore: number }
   | { type: 'REVEAL_ANSWER'; correctOptionId: string; explanation?: string }
   | { type: 'POWER'; power: PowerUp; targetId?: string } // targetId undefined = para TODOS
+  | { type: 'STEAL_POINTS_START'; amount: number }
+  | { type: 'STEAL_POINTS_CLAIMED'; winnerId: string; winnerNickname: string; amount: number; participants?: Participant[] }
   | { type: 'PAUSE' }
   | { type: 'RESUME' }
   | { type: 'GAME_OVER'; rankings: Participant[] };
