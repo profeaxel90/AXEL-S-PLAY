@@ -419,6 +419,110 @@ class MusicSynthesizer {
   }
 }
 
+// ── Música de Podio épica/celebratoria (diferente al lobby) ──
+// 140 BPM, fanfarria triunfal con acordes mayores en escalada
+class PodiumMusicSequencer {
+  private ctx: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
+  private isPlaying = false;
+  private timerId: any = null;
+  private step = 0;
+
+  constructor(ctx: AudioContext, masterGain: GainNode) {
+    this.ctx = ctx;
+    this.masterGain = masterGain;
+  }
+
+  private playNote(freq: number, time: number, duration = 0.18, type: OscillatorType = 'triangle', vol = 0.14) {
+    if (!this.ctx || !this.masterGain) return;
+    const osc = this.ctx.createOscillator();
+    osc.type = type;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(vol, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+    osc.frequency.setValueAtTime(freq, time);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(time);
+    osc.stop(time + duration + 0.02);
+  }
+
+  private playKick(time: number, vol = 0.4) {
+    if (!this.ctx || !this.masterGain) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.frequency.setValueAtTime(150, time);
+    osc.frequency.exponentialRampToValueAtTime(40, time + 0.1);
+    gain.gain.setValueAtTime(vol, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(time);
+    osc.stop(time + 0.14);
+  }
+
+  private tick(time: number, step: number) {
+    const beat16 = step % 16;
+    // Fase de acordes épicos: C→E→G→C5 en escalada
+    const epicChords = [
+      [523.25, 659.25, 783.99, 1046.5],  // C mayor
+      [587.33, 739.99, 880.0, 1174.66],  // D mayor
+      [659.25, 830.61, 987.77, 1318.5],  // E mayor
+      [783.99, 987.77, 1174.66, 1567.98],// G mayor
+    ];
+    const chordIdx = Math.floor((step % 64) / 16);
+    const chord = epicChords[chordIdx];
+
+    // Kick fuerte en tiempos 1 y 3
+    if (beat16 === 0 || beat16 === 8) {
+      this.playKick(time, 0.45);
+    }
+    // Snare en tiempos 2 y 4
+    if (beat16 === 4 || beat16 === 12) {
+      this.playKick(time, 0.3);
+    }
+    // Bajo pulsante
+    if (beat16 % 4 === 0) {
+      this.playNote(chord[0] / 2, time, 0.28, 'sawtooth', 0.3);
+    }
+    // Acordes de fanfarria en cada tiempo fuerte
+    if (beat16 % 4 === 0) {
+      chord.forEach((f) => this.playNote(f, time, 0.24, 'triangle', 0.13));
+    }
+    // Melodía de triunfo ascendente
+    const melodyMap: Record<number, number> = {
+      2: 1046.5,
+      6: 1174.66,
+      10: 1318.5,
+      14: 1567.98,
+    };
+    if (melodyMap[beat16]) {
+      this.playNote(melodyMap[beat16], time, 0.16, 'square', 0.1);
+    }
+  }
+
+  start() {
+    if (this.isPlaying) return;
+    this.isPlaying = true;
+    this.step = 0;
+    const bpm = 140;
+    const stepMs = (60 / bpm / 4) * 1000;
+    this.timerId = setInterval(() => {
+      if (!this.ctx || !this.isPlaying) return;
+      this.tick(this.ctx.currentTime, this.step);
+      this.step++;
+    }, stepMs);
+  }
+
+  stop() {
+    this.isPlaying = false;
+    if (this.timerId) {
+      clearInterval(this.timerId);
+      this.timerId = null;
+    }
+  }
+}
+
 // ── Constantes de Música Oficial ──
 export const OFFICIAL_TRACK_NAME = '"Stranger Things" (Kyle Dixon & Michael Stein)';
 export const OFFICIAL_TRACK_URL = '/audio/stranger_things_theme.wav';
@@ -426,6 +530,7 @@ export const OFFICIAL_TRACK_URL = '/audio/stranger_things_theme.wav';
 // ── Motor de Audio Global de AXEL'S PLAY ──
 class AudioEngine {
   private synth = new MusicSynthesizer();
+  private podiumSequencer: PodiumMusicSequencer | null = null;
   private settings: AudioSettings = {
     musicEnabled: true,
     effectsEnabled: true,
@@ -674,6 +779,55 @@ class AudioEngine {
     this.stopCustomAudio();
     if (this.synth.getTrack() === 'lobby') {
       this.synth.stopMusic();
+    }
+  }
+
+  // ── Música de Podio épica/celebratoria (140 BPM, fanfarria triunfal) ──
+  public playPodiumMusic() {
+    if (!this.settings.musicEnabled) return;
+    this.synth.stopMusic();
+    this.stopCustomAudio();
+    this.unlock();
+    // Usar la pista 'podium' del sintetizador (ya tiene fanfarria épica)
+    this.synth.startMusic('podium');
+  }
+
+  // ── Síntesis de Voz "AXEL'S PLAY" con Web Speech API ──
+  public speakAxelsPlay() {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance("AXEL'S PLAY");
+      utterance.pitch = 1.3;
+      utterance.rate = 0.85;
+      utterance.volume = 1;
+
+      const trySpeak = (lang: string) => {
+        const voices = window.speechSynthesis.getVoices();
+        const voice = voices.find((v) => v.lang.startsWith(lang.split('-')[0])) || null;
+        utterance.lang = lang;
+        if (voice) utterance.voice = voice;
+        window.speechSynthesis.speak(utterance);
+      };
+
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        trySpeak('es-ES');
+      } else {
+        window.speechSynthesis.onvoiceschanged = () => {
+          window.speechSynthesis.onvoiceschanged = null;
+          const available = window.speechSynthesis.getVoices();
+          trySpeak(available.length > 0 ? 'es-ES' : 'en-US');
+        };
+        setTimeout(() => {
+          if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+            utterance.lang = 'en-US';
+            window.speechSynthesis.speak(utterance);
+          }
+        }, 500);
+      }
+    } catch {
+      // Ignorar si Web Speech API no está soportada
     }
   }
 

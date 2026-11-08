@@ -3,11 +3,13 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   Save, ArrowLeft, Plus, Trash2, Copy, Eye, Clock,
   Award, Sparkles, CheckCircle2, Image as ImageIcon,
-  HelpCircle, Settings, Layers, ListOrdered, FileText, Upload
+  HelpCircle, Settings, Layers, ListOrdered, FileText, Upload, Database
 } from 'lucide-react';
 import { SUBJECTS } from '../../types';
 import type { QuestionType, Difficulty, GameMode, GradeLevel } from '../../types';
 import DocumentQuestionImporterModal from '../../components/teacher/DocumentQuestionImporterModal';
+import QuestionBankPickerModal from '../../components/teacher/QuestionBankPickerModal';
+import type { BankItem } from '../../data/questionBank';
 import type { ExtractedQuestion } from '../../lib/documentQuestionExtractor';
 
 interface QuestionDraft {
@@ -75,6 +77,7 @@ export default function GameEditorPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
+  const [isBankModalOpen, setIsBankModalOpen] = useState(false);
 
   const activeQuestion = questions[activeQuestionIndex] || questions[0];
 
@@ -92,6 +95,48 @@ export default function GameEditorPage() {
     }));
     setQuestions((prev) => [...prev, ...newDrafts]);
     setActiveQuestionIndex(questions.length); // seleccionar la primera pregunta nueva
+  };
+
+  const handleImportFromBank = (bankItems: BankItem[]) => {
+    const newDrafts: QuestionDraft[] = bankItems.map((item, idx) => {
+      let options = item.options?.map((opt, oIdx) => ({
+        id: `opt-bank-${Date.now()}-${idx}-${oIdx}`,
+        text: opt.text,
+        isCorrect: opt.isCorrect,
+      }));
+
+      if (!options || options.length === 0) {
+        if (item.type === 'true_false') {
+          const isV = item.correctAnswer.toLowerCase().includes('verdader');
+          options = [
+            { id: `opt-bank-${Date.now()}-${idx}-1`, text: 'Verdadero', isCorrect: isV },
+            { id: `opt-bank-${Date.now()}-${idx}-2`, text: 'Falso', isCorrect: !isV },
+          ];
+        } else {
+          options = [
+            { id: `opt-bank-${Date.now()}-${idx}-1`, text: item.correctAnswer, isCorrect: true },
+            { id: `opt-bank-${Date.now()}-${idx}-2`, text: 'Opción alternativa A', isCorrect: false },
+            { id: `opt-bank-${Date.now()}-${idx}-3`, text: 'Opción alternativa B', isCorrect: false },
+            { id: `opt-bank-${Date.now()}-${idx}-4`, text: 'Opción alternativa C', isCorrect: false },
+          ];
+        }
+      }
+
+      return {
+        id: `q-bank-${Date.now()}-${idx}`,
+        type: item.type,
+        content: item.content,
+        timeLimit: timePerQuestion || 30,
+        points: 1000,
+        pointsMultiplier: 1,
+        difficulty: item.difficulty || 'medium',
+        explanation: `Respuesta correcta: ${item.correctAnswer}`,
+        options,
+      };
+    });
+
+    setQuestions((prev) => [...prev, ...newDrafts]);
+    setActiveQuestionIndex(questions.length);
   };
 
   useEffect(() => {
@@ -189,6 +234,17 @@ export default function GameEditorPage() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsBankModalOpen(true)}
+            className="py-2.5 px-4 rounded-xl text-xs font-black flex items-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-lg shadow-amber-600/30 border border-amber-400/40 hover:scale-105 transition-all"
+            title="Seleccionar preguntas del Banco de Preguntas central"
+          >
+            <Database className="w-4 h-4 text-amber-200" />
+            <span>📚 Desde el Banco</span>
+            <span className="bg-amber-400 text-slate-950 text-[10px] px-1.5 py-0.5 font-black rounded-full">POPULAR</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setIsDocModalOpen(true)}
@@ -353,7 +409,16 @@ export default function GameEditorPage() {
             <span className="text-xs font-bold uppercase tracking-wider text-white/60">
               Preguntas ({questions.length})
             </span>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsBankModalOpen(true)}
+                className="btn-secondary py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center gap-1 text-amber-300 border-amber-500/30 hover:bg-amber-500/10"
+                title="Seleccionar y jalar preguntas del Banco de Preguntas"
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span>Banco</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setIsDocModalOpen(true)}
@@ -649,6 +714,13 @@ export default function GameEditorPage() {
         isOpen={isDocModalOpen}
         onClose={() => setIsDocModalOpen(false)}
         onImport={handleImportExtractedQuestions}
+      />
+
+      {/* Modal de Selección desde el Banco de Preguntas */}
+      <QuestionBankPickerModal
+        isOpen={isBankModalOpen}
+        onClose={() => setIsBankModalOpen(false)}
+        onImport={handleImportFromBank}
       />
     </div>
   );

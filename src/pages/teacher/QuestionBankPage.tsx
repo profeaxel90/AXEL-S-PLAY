@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
   Database, Plus, Search, Filter, Download, Upload,
@@ -75,7 +75,23 @@ const INITIAL_BANK: BankItem[] = [
 ];
 
 export default function QuestionBankPage() {
-  const [questions, setQuestions] = useState<BankItem[]>(INITIAL_BANK);
+  const [questions, setQuestions] = useState<BankItem[]>(() => {
+    try {
+      const stored = sessionStorage.getItem('question_bank');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_BANK;
+  });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('question_bank', JSON.stringify(questions));
+    } catch {}
+  }, [questions]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
@@ -303,8 +319,11 @@ export default function QuestionBankPage() {
                       {q.difficulty}
                     </span>
                   </td>
-                  <td className="py-3.5 px-4 text-green-300 font-medium">
-                    {q.correctAnswer}
+                  <td className="py-3.5 px-4">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold shadow-sm">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>{q.correctAnswer}</span>
+                    </span>
                   </td>
                   <td className="py-3.5 px-4 text-right">
                     <button

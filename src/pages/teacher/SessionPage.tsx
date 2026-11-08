@@ -43,6 +43,32 @@ const OPTION_STYLES = [
   },
 ];
 
+// Componente de puntuación animada con incremento en tiempo real
+function AnimatedScoreValue({ target, start = 0, duration = 1200 }: { target: number; start?: number; duration?: number }) {
+  const [val, setVal] = useState(start);
+
+  useEffect(() => {
+    let startTimestamp: number | null = null;
+    const initial = start;
+    const diff = target - initial;
+
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      // Curva easeOutExpo para sensación de videojuego arcade
+      const ease = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+      setVal(Math.floor(initial + diff * ease));
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      }
+    };
+    const req = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(req);
+  }, [target, start, duration]);
+
+  return <span>{val.toLocaleString()} pts</span>;
+}
+
 export default function SessionPage() {
   const { gameId } = useParams<{ gameId: string }>();
 
@@ -140,9 +166,23 @@ export default function SessionPage() {
   const hostSyncRef = useRef<GameHostSync | null>(null);
   const currentQ = questions[currentQIndex] || questions[0];
 
+  // ── Iniciar música de lobby automáticamente al montar ──
+  useEffect(() => {
+    // Pequeño delay para esperar el primer gesto de usuario (política de autoplay)
+    const t = setTimeout(() => {
+      audioEngine.playLobbyMusic();
+      setIsLobbyMusicPlaying(true);
+    }, 300);
+    return () => {
+      clearTimeout(t);
+      audioEngine.stopLobbyMusic();
+    };
+  }, []);
+
   // ── Inicializar Motor de Sincronización en Tiempo Real (SSE Local + P2P) ──
   useEffect(() => {
     const hostSync = new GameHostSync(token);
+    hostSyncRef.current = hostSync;
     hostSyncRef.current = hostSync;
 
     hostSync.onEvent = (msg: GameEventMessage) => {
@@ -289,6 +329,9 @@ export default function SessionPage() {
       return;
     }
 
+    // Iniciar automáticamente música épica de podio estilo Kahoot
+    audioEngine.playPodiumMusic();
+
     // 1. Mostrar 3er puesto
     const t1 = setTimeout(() => {
       setPodiumStep(1);
@@ -382,16 +425,17 @@ export default function SessionPage() {
     const tZoom = setTimeout(() => {
       setIntroStep(3);
       audioEngine.playEffect('sfx_intro');
+      audioEngine.speakAxelsPlay();
       hostSyncRef.current?.broadcast('START_INTRO', {
         introStep: 3,
         introTitle: "AXEL'S PLAY",
       });
     }, 5600);
 
-    // Paso 4: ¡EMPIEZA EL JUEGO! (8.2s)
+    // Paso 4: ¡EMPIEZA EL JUEGO! (8.5s — pantalla AXEL'S PLAY dura 4s extra)
     const tStart = setTimeout(() => {
       handleStartQuestions();
-    }, 8200);
+    }, 9600);
   };
 
   const handleStartQuestions = () => {
@@ -449,37 +493,38 @@ export default function SessionPage() {
     audioEngine.playEffect('sfx_time_up');
 
     // Reproducir sonido de monedas digitales cayendo para la tabla de clasificación
-    setTimeout(() => {
-      audioEngine.playEffect('sfx_digital_coins');
-    }, 300);
+    setTimeout(() => audioEngine.playEffect('sfx_digital_coins'), 200);
+    setTimeout(() => audioEngine.playEffect('sfx_digital_coins'), 600);
+    setTimeout(() => audioEngine.playEffect('sfx_digital_coins'), 1000);
 
-    // Calcular el ranking Top 7 con los puntajes más actualizados
+    // Calcular el ranking Top 5 con los puntajes más actualizados y animación de puntos
     setLiveParticipants((latest) => {
-      const top7 = [...latest]
+      const top5 = [...latest]
         .sort((a, b) => b.score - a.score)
-        .slice(0, 7)
+        .slice(0, 5)
         .map((p, idx) => ({
           id: p.id,
           nickname: p.nickname,
           avatar: p.avatar,
           score: p.score,
+          prevScore: Math.max(0, p.score - (p.correctAnswers ? 100 : 0)),
           rank: idx + 1,
           correctAnswers: p.correctAnswers || 0,
           stealCount: p.stealCount || 0,
         }));
 
-      setLeaderboardData(top7);
+      setLeaderboardData(top5);
       setShowLeaderboard(true);
 
       // Sincronizar tabla de clasificación con todos los participantes
       hostSyncRef.current?.broadcast('LEADERBOARD', {
-        rankings: top7,
+        rankings: top5,
       });
 
       hostSyncRef.current?.broadcast('REVEAL_ANSWER', {
         correctOptionId: currentQ.correctAnswer as string,
         explanation: currentQ.explanation,
-        rankings: top7,
+        rankings: top5,
       });
 
       return latest;
@@ -1798,7 +1843,7 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* ── TABLA DE CLASIFICACIÓN TOP 7 POST-PREGUNTA EN PROYECTOR ── */}
+      {/* ── TABLA DE CLASIFICACIÓN TOP 5 POST-PREGUNTA EN PROYECTOR (ANIMADA EN TIEMPO REAL) ── */}
       {showLeaderboard && leaderboardData.length > 0 && gamePhase === 'question' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-bounce-in">
           <div className="card max-w-xl w-full p-6 md:p-8 border-purple-500/50 bg-slate-900/95 shadow-2xl text-center space-y-5">
@@ -1806,7 +1851,7 @@ export default function SessionPage() {
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-6 h-6 text-yellow-400" />
                 <h3 className="text-xl md:text-2xl font-black text-white">
-                  Clasificación Actual · TOP 7
+                  Clasificación Actual · TOP 5 🏆
                 </h3>
               </div>
               <button
@@ -1817,60 +1862,69 @@ export default function SessionPage() {
               </button>
             </div>
 
-            <p className="text-xs text-purple-200">
-              Puntajes actualizados en tiempo real según rapidez de respuesta y robos de puntos
-            </p>
+            <div className="flex items-center justify-center gap-2 text-xs text-purple-200 bg-purple-950/50 py-1.5 px-3 rounded-xl border border-purple-500/20">
+              <span className="animate-spin text-sm">🪙</span>
+              <span>¡Puntajes sumándose en tiempo real! Sonando monedas digitales</span>
+            </div>
 
-            <div className="space-y-2">
-              {leaderboardData.slice(0, 7).map((p, idx) => {
+            <div className="space-y-2.5">
+              {leaderboardData.slice(0, 5).map((p, idx) => {
                 const isTop1 = idx === 0;
                 const isTop2 = idx === 1;
                 const isTop3 = idx === 2;
+                const medal = isTop1 ? '🥇' : isTop2 ? '🥈' : isTop3 ? '🥉' : `#${idx + 1}`;
+                const prev = p.prevScore !== undefined ? p.prevScore : Math.max(0, p.score - 100);
+                const gained = p.score - prev;
 
                 return (
                   <div
                     key={p.id || idx}
-                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all transform hover:scale-[1.01] ${
                       isTop1
-                        ? 'bg-yellow-400/20 border-yellow-400/50 shadow-lg shadow-yellow-500/10'
+                        ? 'bg-yellow-400/20 border-yellow-400/60 shadow-lg shadow-yellow-500/20 ring-1 ring-yellow-400/30'
                         : isTop2
-                        ? 'bg-slate-400/15 border-slate-300/30'
+                        ? 'bg-slate-400/15 border-slate-300/40'
                         : isTop3
-                        ? 'bg-amber-600/15 border-amber-500/30'
+                        ? 'bg-amber-600/15 border-amber-500/40'
                         : 'bg-white/5 border-white/10'
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <span
-                        className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-base shadow-sm ${
                           isTop1
-                            ? 'bg-yellow-400 text-slate-950 shadow-md shadow-yellow-400/40'
+                            ? 'bg-yellow-400 text-slate-950 shadow-md shadow-yellow-400/50'
                             : isTop2
                             ? 'bg-slate-300 text-slate-950'
                             : isTop3
                             ? 'bg-amber-600 text-white'
-                            : 'bg-white/10 text-white/70'
+                            : 'bg-white/10 text-white/80'
                         }`}
                       >
-                        #{idx + 1}
+                        {medal}
                       </span>
                       <img
                         src={p.avatar}
                         alt={p.nickname}
-                        className="w-9 h-9 rounded-xl object-contain bg-slate-800 p-0.5 border border-white/15"
+                        className="w-10 h-10 rounded-xl object-contain bg-slate-800 p-0.5 border border-white/15 shadow-sm"
                       />
                       <div className="text-left">
-                        <div className="font-extrabold text-sm text-white">{p.nickname}</div>
-                        <div className="text-[10px] text-white/50">
-                          {p.correctAnswers !== undefined ? `${p.correctAnswers} correctas` : 'Participante'}
-                          {p.stealCount ? ` · ${p.stealCount} robos` : ''}
+                        <div className="font-extrabold text-sm md:text-base text-white">{p.nickname}</div>
+                        <div className="text-[11px] text-white/60 flex items-center gap-1.5">
+                          <span>{p.correctAnswers !== undefined ? `${p.correctAnswers} correctas` : 'Participante'}</span>
+                          {p.stealCount ? <span className="text-amber-300 font-semibold">· {p.stealCount} robos</span> : null}
                         </div>
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <div className="text-base font-black text-yellow-400">
-                        {p.score.toLocaleString()} pts
+                    <div className="text-right flex items-center gap-2">
+                      {gained > 0 && (
+                        <span className="text-xs font-black text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-lg animate-pulse">
+                          +{gained}
+                        </span>
+                      )}
+                      <div className="text-base md:text-lg font-black text-yellow-400 min-w-24">
+                        <AnimatedScoreValue target={p.score} start={prev} duration={1400} />
                       </div>
                     </div>
                   </div>
