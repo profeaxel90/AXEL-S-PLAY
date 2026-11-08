@@ -144,9 +144,10 @@ export default function SessionPage() {
   );
   const [customIsPlaying, setCustomIsPlaying] = useState(false);
 
-  // Leaderboard después de revelar respuesta (Top 7)
+  // Leaderboard después de revelar respuesta (Top 5)
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+  const [isLeaderboardAnimated, setIsLeaderboardAnimated] = useState(false);
 
   // Secuencia animada del Podio (1=3er, 2=2do, 3=1er con confeti, 4=finalizado)
   const [podiumStep, setPodiumStep] = useState(0);
@@ -180,15 +181,28 @@ export default function SessionPage() {
   const [latestStealEvent, setLatestStealEvent] = useState<{ from: string; to: string; amount: number } | null>(null);
   const currentQ = questions[currentQIndex] || questions[0];
 
-  // ── Iniciar música de lobby automáticamente al montar ──
+  // ── Iniciar música de lobby automáticamente al montar con fallback de gesto ──
   useEffect(() => {
-    // Pequeño delay para esperar el primer gesto de usuario (política de autoplay)
-    const t = setTimeout(() => {
+    // Intentar reproducción inmediata al entrar al lobby
+    audioEngine.playLobbyMusic();
+    setIsLobbyMusicPlaying(true);
+
+    // Fallback asegurado: si el navegador restringió AudioContext sin interacción previa,
+    // al primer clic o pulsación en cualquier parte de la pantalla inicia de inmediato
+    const unlockAndPlay = () => {
+      audioEngine.unlock();
       audioEngine.playLobbyMusic();
       setIsLobbyMusicPlaying(true);
-    }, 300);
+      window.removeEventListener('pointerdown', unlockAndPlay);
+      window.removeEventListener('keydown', unlockAndPlay);
+    };
+
+    window.addEventListener('pointerdown', unlockAndPlay, { once: true });
+    window.addEventListener('keydown', unlockAndPlay, { once: true });
+
     return () => {
-      clearTimeout(t);
+      window.removeEventListener('pointerdown', unlockAndPlay);
+      window.removeEventListener('keydown', unlockAndPlay);
       audioEngine.stopLobbyMusic();
     };
   }, []);
@@ -280,7 +294,9 @@ export default function SessionPage() {
       } else if (msg.type === 'LEADERBOARD') {
         if (msg.rankings) {
           setLeaderboardData(msg.rankings);
+          setIsLeaderboardAnimated(false);
           setShowLeaderboard(true);
+          setTimeout(() => setIsLeaderboardAnimated(true), 350);
         }
       } else if (msg.type === 'STEAL_POINTS_CLAIMED') {
         const amt = msg.amount || 50;
@@ -449,7 +465,7 @@ export default function SessionPage() {
       });
     }, 3300);
 
-    // Paso 3: AXEL'S PLAY EN ZOOM CINEMATOGRÁFICO (5.6s - Fanfarria limpia sin voz)
+    // Paso 3: AXEL'S PLAY EN PRESENTACIÓN CINEMATOGRÁFICA LEGIBLE (5.6s - Fanfarria limpia sin voz)
     const tZoom = setTimeout(() => {
       setIntroStep(3);
       audioEngine.playEffect('sfx_intro');
@@ -459,10 +475,10 @@ export default function SessionPage() {
       });
     }, 5600);
 
-    // Paso 4: ¡EMPIEZA EL JUEGO! (8.5s — pantalla AXEL'S PLAY dura 4s extra)
+    // Paso 4: ¡EMPIEZA EL JUEGO! (12.6s — la pantalla AXEL'S PLAY dura 7s completos para máxima legibilidad)
     const tStart = setTimeout(() => {
       handleStartQuestions();
-    }, 9600);
+    }, 12600);
   };
 
   const handleStartQuestions = () => {
@@ -592,7 +608,9 @@ export default function SessionPage() {
       const climbedIn = top5.filter((p) => (p.prevRank ?? 99) > 5);
 
       setLeaderboardData(top5);
+      setIsLeaderboardAnimated(false);
       setShowLeaderboard(true);
+      setTimeout(() => setIsLeaderboardAnimated(true), 350);
 
       // Sincronizar tabla de clasificación con todos los participantes
       hostSyncRef.current?.broadcast('LEADERBOARD', {
@@ -1165,24 +1183,6 @@ export default function SessionPage() {
                 <span>{isPaused ? 'Reanudar' : 'Pausar'}</span>
               </button>
 
-              {!isAnswerRevealed ? (
-                <button
-                  onClick={handleRevealAnswer}
-                  className="btn-primary py-2 px-3 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500"
-                >
-                  <Eye className="w-4 h-4" />
-                  <span>Revelar Respuesta</span>
-                </button>
-              ) : (
-                <button
-                  onClick={handleNextQuestion}
-                  className="btn-primary py-2 px-4 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg shadow-purple-600/30 animate-bounce-in"
-                >
-                  <SkipForward className="w-4 h-4" />
-                  <span>{currentQIndex + 1 < questions.length ? 'Siguiente Pregunta' : 'Ver Podio Olímpico'}</span>
-                </button>
-              )}
-
               <button
                 onClick={handleEndGame}
                 className="btn-danger py-2 px-3 rounded-xl text-xs font-bold flex items-center gap-1.5"
@@ -1592,19 +1592,38 @@ export default function SessionPage() {
             </div>
           )}
 
-          {/* PASO 3: AXEL'S PLAY EN ZOOM CINEMATOGRÁFICO */}
+          {/* PASO 3: AXEL'S PLAY EN PRESENTACIÓN CINEMATOGRÁFICA LEGIBLE (7 SEGUNDOS) */}
           {introStep === 3 && (
-            <div className="flex flex-col items-center justify-center space-y-6 animate-fade-in relative">
-              <div className="absolute -inset-16 bg-gradient-to-r from-purple-600 via-pink-600 to-yellow-400 rounded-full blur-3xl opacity-50 animate-pulse pointer-events-none" />
-              <div className="relative animate-zoom-in">
-                <h1 className="text-6xl sm:text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-yellow-300 to-pink-300 tracking-tighter drop-shadow-[0_15px_50px_rgba(168,85,247,0.8)] scale-110 sm:scale-125 transition-transform">
+            <div className="flex flex-col items-center justify-center space-y-6 animate-fade-in relative max-w-4xl mx-auto py-8">
+              <div className="absolute -inset-20 bg-gradient-to-r from-purple-600 via-pink-600 to-yellow-400 rounded-full blur-3xl opacity-40 animate-pulse pointer-events-none" />
+              
+              <div className="relative">
+                <span className="text-xs md:text-sm font-black uppercase tracking-[0.3em] text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-4 py-1.5 rounded-full inline-block mb-4 shadow-sm animate-pulse">
+                  ⭐ Plataforma de Evaluación Gamificada ⭐
+                </span>
+                <h1 className="text-6xl sm:text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-purple-200 to-pink-300 tracking-tight drop-shadow-[0_15px_60px_rgba(168,85,247,0.9)] select-none">
                   AXEL'S PLAY
                 </h1>
               </div>
-              <div className="flex items-center gap-2 text-yellow-300 font-black text-xl sm:text-3xl tracking-widest animate-bounce pt-6">
-                <Zap className="w-6 h-6 fill-yellow-400 text-yellow-400" />
-                <span>¡A JUGAR AHORA!</span>
-                <Zap className="w-6 h-6 fill-yellow-400 text-yellow-400" />
+
+              <div className="space-y-3 pt-2 text-center">
+                <p className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white tracking-wide drop-shadow-md">
+                  ¡PREPARADOS PARA LA PRIMERA PREGUNTA!
+                </p>
+                <p className="text-xs sm:text-sm text-purple-200/80">
+                  Mira la pantalla gigante, piensa rápido y responde en tu teléfono
+                </p>
+
+                {/* Barra de progreso de lectura pausada de 7 segundos */}
+                <div className="w-64 sm:w-80 h-2 bg-white/10 rounded-full overflow-hidden mx-auto mt-4 border border-white/20">
+                  <div
+                    className="h-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-500 rounded-full animate-pulse"
+                    style={{
+                      width: '100%',
+                      animation: 'progress7s 7s linear forwards',
+                    }}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -2131,39 +2150,35 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* ── TABLA DE CLASIFICACIÓN TOP 5 POST-PREGUNTA EN PROYECTOR (ANIMADA EN TIEMPO REAL) ── */}
+      {/* ── TABLA DE CLASIFICACIÓN TOP 5 COMPACTA Y ANIMADA FÍSICAMENTE ── */}
       {showLeaderboard && leaderboardData.length > 0 && gamePhase === 'question' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-bounce-in">
-          <div className="card max-w-xl w-full p-6 md:p-8 border-purple-500/50 bg-slate-900/95 shadow-2xl text-center space-y-5">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
+          <div className="card max-w-md w-full p-4 sm:p-5 border-purple-500/40 bg-slate-900/95 shadow-2xl text-center space-y-2.5 rounded-2xl max-h-[92vh] overflow-hidden flex flex-col justify-between">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
               <div className="flex items-center gap-2">
-                <BarChart3 className="w-6 h-6 text-yellow-400" />
-                <h3 className="text-xl md:text-2xl font-black text-white">
-                  Clasificación Actual · TOP 5 🏆
+                <BarChart3 className="w-5 h-5 text-yellow-400" />
+                <h3 className="text-base sm:text-lg font-black text-white">
+                  Clasificación · TOP 5 🏆
                 </h3>
               </div>
               <button
                 onClick={() => setShowLeaderboard(false)}
-                className="text-xs px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white/70"
+                className="text-xs px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70"
               >
                 Cerrar ✕
               </button>
             </div>
 
-            {/* Notificación de Robo de Puntos activo en esta ronda */}
+            {/* Notificación compacta de Robo de Puntos si ocurrió */}
             {latestStealEvent && (
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-red-600/30 via-amber-600/30 to-yellow-600/30 border border-yellow-400/40 text-yellow-200 text-xs font-black flex items-center justify-center gap-2 animate-bounce-in shadow-md">
-                <span className="text-base">🗡️</span>
-                <span>¡{latestStealEvent.from} le robó {latestStealEvent.amount} puntos a {latestStealEvent.to}!</span>
+              <div className="py-1 px-3 rounded-xl bg-gradient-to-r from-red-600/30 via-amber-600/30 to-yellow-600/30 border border-yellow-400/40 text-yellow-200 text-[11px] font-black flex items-center justify-center gap-1.5 animate-bounce-in shadow-sm">
+                <span>🗡️</span>
+                <span>¡{latestStealEvent.from} robó {latestStealEvent.amount} pts a {latestStealEvent.to}!</span>
               </div>
             )}
 
-            <div className="flex items-center justify-center gap-2 text-xs text-purple-200 bg-purple-950/50 py-1.5 px-3 rounded-xl border border-purple-500/20">
-              <span className="animate-spin text-sm">🪙</span>
-              <span>¡Puntajes sumándose en tiempo real! Observa quién sube y quién baja</span>
-            </div>
-
-            <div className="space-y-2.5">
+            {/* Lista de Filas Compactas con Desplazamiento Físico Animado (Sin badges de texto) */}
+            <div className="space-y-1.5 relative overflow-hidden py-1">
               {leaderboardData.slice(0, 5).map((p, idx) => {
                 const isTop1 = idx === 0;
                 const isTop2 = idx === 1;
@@ -2172,26 +2187,39 @@ export default function SessionPage() {
                 const prev = p.prevScore !== undefined ? p.prevScore : Math.max(0, p.score - 100);
                 const gained = p.score - prev;
                 const rankDelta = p.rankDelta !== undefined ? p.rankDelta : 0;
-                const isNewInTop5 = p.prevRank !== undefined && p.prevRank > 5;
+
+                // Desplazamiento físico: si subió puestos parte de abajo; si bajó parte de arriba
+                const rowHeight = 52;
+                const initialOffsetY = !isLeaderboardAnimated ? rankDelta * rowHeight : 0;
 
                 return (
                   <div
                     key={p.id || idx}
-                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all duration-700 transform ${
-                      rankDelta > 0 ? 'scale-[1.01] -translate-y-0.5' : rankDelta < 0 ? 'translate-y-0.5' : ''
+                    style={{
+                      transform: `translateY(${initialOffsetY}px)`,
+                      transition: isLeaderboardAnimated
+                        ? 'transform 850ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 400ms ease, border-color 400ms ease'
+                        : 'none',
+                    }}
+                    className={`flex items-center justify-between p-2.5 rounded-xl border ${
+                      rankDelta > 0 && isLeaderboardAnimated
+                        ? 'ring-2 ring-emerald-400/60 shadow-lg shadow-emerald-500/25 border-emerald-400/50'
+                        : rankDelta < 0 && isLeaderboardAnimated
+                        ? 'border-white/10 opacity-95'
+                        : ''
                     } ${
                       isTop1
-                        ? 'bg-yellow-400/20 border-yellow-400/60 shadow-lg shadow-yellow-500/20 ring-1 ring-yellow-400/30'
+                        ? 'bg-yellow-400/20 border-yellow-400/50 shadow-md shadow-yellow-500/10'
                         : isTop2
-                        ? 'bg-slate-400/15 border-slate-300/40'
+                        ? 'bg-slate-400/15 border-slate-300/30'
                         : isTop3
-                        ? 'bg-amber-600/15 border-amber-500/40'
+                        ? 'bg-amber-600/15 border-amber-500/30'
                         : 'bg-white/5 border-white/10'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <span
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-base shadow-sm ${
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0 ${
                           isTop1
                             ? 'bg-yellow-400 text-slate-950 shadow-md shadow-yellow-400/50'
                             : isTop2
@@ -2206,51 +2234,35 @@ export default function SessionPage() {
                       <img
                         src={p.avatar}
                         alt={p.nickname}
-                        className="w-10 h-10 rounded-xl object-contain bg-slate-800 p-0.5 border border-white/15 shadow-sm"
+                        className="w-8 h-8 rounded-lg object-contain bg-slate-800 p-0.5 border border-white/15 shrink-0"
                       />
-                      <div className="text-left">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-extrabold text-sm md:text-base text-white">{p.nickname}</span>
-                          {/* Indicador animado de subida o bajada de puesto */}
-                          {rankDelta > 0 && (
-                            <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                              ▲ +{rankDelta} {rankDelta === 1 ? 'puesto' : 'puestos'}
-                            </span>
-                          )}
-                          {rankDelta < 0 && (
-                            <span className="text-[10px] font-black text-rose-400 bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                              ▼ {rankDelta} {rankDelta === -1 ? 'puesto' : 'puestos'}
-                            </span>
-                          )}
-                          {isNewInTop5 && (
-                            <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.5 rounded-md animate-pulse">
-                              🔥 ¡Entró al TOP 5!
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-white/60 flex items-center gap-1.5 mt-0.5">
-                          <span>{p.correctAnswers !== undefined ? `${p.correctAnswers} correctas` : 'Participante'}</span>
-                          {p.stealCount ? <span className="text-amber-300 font-semibold">· {p.stealCount} robos</span> : null}
+                      <div className="text-left truncate">
+                        <span className="font-extrabold text-xs sm:text-sm text-white truncate block max-w-[130px] sm:max-w-[170px]">
+                          {p.nickname}
+                        </span>
+                        <div className="text-[10px] text-white/50 flex items-center gap-1">
+                          <span>{p.correctAnswers !== undefined ? `${p.correctAnswers} aciertos` : 'Participante'}</span>
+                          {p.stealCount ? <span className="text-amber-300">· ⚡{p.stealCount}</span> : null}
                         </div>
                       </div>
                     </div>
 
-                    <div className="text-right flex items-center gap-2">
+                    <div className="text-right flex items-center gap-2 shrink-0">
                       {gained > 0 ? (
-                        <span className="text-xs font-black text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-lg animate-pulse shadow-sm shadow-emerald-500/20">
+                        <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 rounded-md animate-pulse">
                           +{gained}
                         </span>
                       ) : gained < 0 ? (
-                        <span className="text-xs font-black text-rose-400 bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 rounded-lg animate-pulse shadow-sm shadow-rose-500/20">
+                        <span className="text-[10px] font-black text-rose-400 bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.5 rounded-md">
                           {gained}
                         </span>
                       ) : (
-                        <span className="text-[10px] font-bold text-amber-300/80 bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded-md" title="No sumó puntos por error de respuesta o tiempo agotado">
-                          +0 (Error/⏰)
+                        <span className="text-[10px] font-bold text-amber-300/70 bg-amber-500/10 border border-amber-500/20 px-1 py-0.5 rounded-md">
+                          +0
                         </span>
                       )}
-                      <div className="text-base md:text-lg font-black text-yellow-400 min-w-24">
-                        <AnimatedScoreValue target={p.score} start={prev} duration={1400} />
+                      <div className="text-sm sm:text-base font-black text-yellow-400 min-w-16">
+                        <AnimatedScoreValue target={p.score} start={prev} duration={1200} />
                       </div>
                     </div>
                   </div>
@@ -2258,37 +2270,21 @@ export default function SessionPage() {
               })}
             </div>
 
-            {/* Aviso visual de participantes que perdieron puntos y cayeron del Top 5 */}
-            {liveParticipants
-              .map((p, idx) => ({ ...p, rankNow: idx + 1, oldRank: prevRanksRef.current.get(p.id) ?? 99 }))
-              .filter((p) => p.oldRank <= 5 && p.rankNow > 5)
-              .slice(0, 2)
-              .map((fallen) => (
-                <div key={fallen.id} className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-[11px] text-rose-300 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span>📉</span>
-                    <span><strong>{fallen.nickname}</strong> bajó al puesto #{fallen.rankNow} tras perder puntos o por tiempo agotado</span>
-                  </div>
-                  <span className="font-extrabold text-white/70">{fallen.score} pts</span>
-                </div>
-              ))}
-
-            <div className="pt-2 flex justify-end gap-2">
+            <div className="pt-2 flex justify-end gap-2 border-t border-white/5">
               <button
                 onClick={() => {
                   setShowLeaderboard(false);
                   handleNextQuestion();
                 }}
-                className="btn-primary py-2.5 px-6 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg shadow-purple-600/30"
+                className="btn-primary py-2 px-5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg shadow-purple-600/30 ml-auto"
               >
-                <span>Avanzar a Siguiente Pregunta</span>
+                <span>Siguiente Pregunta</span>
                 <SkipForward className="w-4 h-4" />
               </button>
             </div>
           </div>
         </div>
       )}
-
       {/* ── MODAL QR GIGANTE EXPANDIDO PARA PROYECTAR A TODA LA CLASE ── */}
       {qrExpanded && (
         <div

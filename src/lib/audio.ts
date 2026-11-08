@@ -79,49 +79,20 @@ class MusicSynthesizer {
     }
   }
 
-  // ── Primitivas de Sonido Acústico Natural Estilo Kahoot (Marimba de Madera, Silencios y Pizzicato Cálido) ──
-  // 1. Marimba Acústica Natural: Barra de madera de palisandro con resonador cálido (suave, nada chillón)
-  private playMarimba(freq: number, time: number, duration = 0.16, vol = 0.085) {
+  // ── Primitivas Sonoras Estilo Kahoot (Sintetizadores FM, Funk Bass y Percusión Digital Suave) ──
+  // 1. Shaker / Hi-Hat Digital Suave (Marca el pulso sin cansar)
+  private playHiHat(time: number, vol = 0.025) {
     if (!this.ctx || !this.masterMusicGain) return;
     const osc = this.ctx.createOscillator();
     const filter = this.ctx.createBiquadFilter();
     const gain = this.ctx.createGain();
 
-    // Senoide pura filtrada para eliminar asperezas digitales
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, time);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(8400, time);
+    osc.frequency.exponentialRampToValueAtTime(12000, time + 0.02);
 
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(850, time);
-    filter.frequency.exponentialRampToValueAtTime(350, time + duration);
-
-    // Envolvente de baqueta de fieltro sobre madera: ataque suave (4ms) y decaimiento natural
-    gain.gain.setValueAtTime(0.0001, time);
-    gain.gain.exponentialRampToValueAtTime(vol, time + 0.004);
-    gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.masterMusicGain);
-
-    osc.start(time);
-    osc.stop(time + duration + 0.02);
-  }
-
-  // 2. Toque de Madera Orgánico Suave (espaciado, solo para marcar el pulso del aula)
-  private playWoodblock(time: number, pitch = 920, vol = 0.035) {
-    if (!this.ctx || !this.masterMusicGain) return;
-    const osc = this.ctx.createOscillator();
-    const filter = this.ctx.createBiquadFilter();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(pitch, time);
-    osc.frequency.exponentialRampToValueAtTime(pitch * 0.45, time + 0.022);
-
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(pitch, time);
-    filter.Q.setValueAtTime(3.0, time);
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(6500, time);
 
     gain.gain.setValueAtTime(vol, time);
     gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.025);
@@ -131,22 +102,109 @@ class MusicSynthesizer {
     gain.connect(this.masterMusicGain);
 
     osc.start(time);
-    osc.stop(time + 0.028);
+    osc.stop(time + 0.03);
   }
 
-  // 3. Bajo Acústico Pizzicato Cálido (cuerdas de contrabajo suaves, sin retumbes)
-  private playPizzicatoBass(freq: number, time: number, duration = 0.22, vol = 0.12) {
+  // 2. Synth Bass Funky & Saltarín (El alma rítmica del concurso, estilo Kahoot)
+  private playSynthBass(freq: number, time: number, duration = 0.16, vol = 0.14) {
+    if (!this.ctx || !this.masterMusicGain) return;
+    const osc1 = this.ctx.createOscillator();
+    const osc2 = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    // Mezcla de onda triangular (cuerpo cálido) y sutil diente de sierra (definición)
+    osc1.type = 'triangle';
+    osc1.frequency.setValueAtTime(freq, time);
+
+    osc2.type = 'sawtooth';
+    osc2.frequency.setValueAtTime(freq, time);
+
+    // Filtro dinámico envolvente funky: abre y cierra rápidamente
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(450, time);
+    filter.frequency.exponentialRampToValueAtTime(110, time + duration);
+    filter.Q.setValueAtTime(2.5, time);
+
+    gain.gain.setValueAtTime(vol, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
+    osc1.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterMusicGain);
+
+    osc1.start(time);
+    osc2.start(time);
+    osc1.stop(time + duration + 0.02);
+    osc2.stop(time + duration + 0.02);
+  }
+
+  // 3. Pluck Melódico y Alegre (Marimba / Teclado Digital Estilo Kahoot)
+  private playMarimba(freq: number, time: number, duration = 0.15, vol = 0.1) {
     if (!this.ctx || !this.masterMusicGain) return;
     const osc = this.ctx.createOscillator();
     const filter = this.ctx.createBiquadFilter();
     const gain = this.ctx.createGain();
 
-    osc.type = 'triangle';
+    osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, time);
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(320, time);
-    filter.frequency.exponentialRampToValueAtTime(90, time + duration);
+    filter.frequency.setValueAtTime(1800, time);
+    filter.frequency.exponentialRampToValueAtTime(400, time + duration);
+
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.exponentialRampToValueAtTime(vol, time + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterMusicGain);
+
+    osc.start(time);
+    osc.stop(time + duration + 0.02);
+  }
+
+  // 4. Tick de Reloj de Concurso Estéreo (Para la tensión de la cuenta regresiva)
+  private playWoodblock(time: number, pitch = 1100, vol = 0.035) {
+    if (!this.ctx || !this.masterMusicGain) return;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(pitch, time);
+    osc.frequency.exponentialRampToValueAtTime(pitch * 0.5, time + 0.02);
+
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(pitch, time);
+    filter.Q.setValueAtTime(4.0, time);
+
+    gain.gain.setValueAtTime(vol, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.02);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterMusicGain);
+
+    osc.start(time);
+    osc.stop(time + 0.025);
+  }
+
+  // 5. Stabs de Sintetizador Triunfal para Podio y Momentos Clave
+  private playBrassStab(freq: number, time: number, duration = 0.22, vol = 0.12) {
+    if (!this.ctx || !this.masterMusicGain) return;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, time);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1400, time);
+    filter.frequency.exponentialRampToValueAtTime(320, time + duration);
 
     gain.gain.setValueAtTime(vol, time);
     gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
@@ -159,114 +217,166 @@ class MusicSynthesizer {
     osc.stop(time + duration + 0.02);
   }
 
-  // ── Secuenciadores Musicales Anti-Fatiga (Frases Espaciadas con Silencios de Respiración) ──
-  // 1. Lobby Theme: 116 BPM, relajado, alegre, marimba dulce con pausas amplias
+  // ── Secuenciadores Musicales Estilo Kahoot (Groove Bailable, Tensión de Concurso y Podio Olímpico) ──
+  // 1. Lobby Theme: 124 BPM, Funky, Bailable y Alegre (Inspirado en la Sala de Espera de Kahoot)
   private tickLobby(time: number, step: number) {
     const beat16 = step % 16;
-    const bar64 = step % 64; // Ciclo amplio de 4 compases
+    const bar64 = step % 64; // Ciclo de 4 compases
 
-    // Pulso muy sutil de madera únicamente en tiempos 2 y 4 (sin machacar)
-    if (beat16 === 4 || beat16 === 12) {
-      this.playWoodblock(time, 950, 0.03);
+    // Shaker / Hi-Hat digital suave y continuo para dar ritmo bailable sin fatiga auditiva
+    if (beat16 % 2 === 0) {
+      this.playHiHat(time, beat16 % 4 === 2 ? 0.03 : 0.018);
     }
 
-    // Melodía con silencios amplios (respiración musical que no fatiga el oído)
-    // Compás 1: Frase inicial alegre
-    // Compás 2: Silencio de reposo con solo bajo suave
-    // Compás 3: Respuesta melódica
-    // Compás 4: Cierre con arpegio suave
-    const lobbyNotes: Record<number, number> = {
-      // Compás 1: Frase A (D - F - E - D)
-      0: 293.66,  // D4
-      3: 349.23,  // F4
-      6: 329.63,  // E4
-      9: 293.66,  // D4
-      // Compás 2: Silencio melódico (deja respirar)
-      // Compás 3: Frase B (C - D - G - A)
-      32: 261.63, // C4
-      35: 293.66, // D4
-      38: 392.00, // G4
-      42: 440.00, // A4
-      // Compás 4: Cierre suave
-      48: 392.00, // G4
-      54: 523.25, // C5
+    // Woodblock sutil en tiempos 4 y 12 (marcando el compás 2 y 4 de forma muy elegante)
+    if (beat16 === 4 || beat16 === 12) {
+      this.playWoodblock(time, 1050, 0.025);
+    }
+
+    // Línea de bajo Funky Syncopado estilo disco/electro-pop (D2, D3, F2, G2, A2)
+    // El clásico bajo saltarín de Kahoot que invita a los alumnos a moverse
+    const bassRhythm: Record<number, number> = {
+      0: 146.83,  // D3
+      3: 146.83,  // D3
+      6: 174.61,  // F3
+      8: 196.00,  // G3
+      10: 220.00, // A3
+      12: 146.83, // D3
+      14: 130.81, // C3
     };
 
-    if (lobbyNotes[bar64]) {
-      this.playMarimba(lobbyNotes[bar64], time, 0.16, 0.08);
+    if (bassRhythm[beat16] !== undefined) {
+      // Variación armónica en compás 4
+      const freq = bar64 >= 48 ? bassRhythm[beat16] * 0.9 : bassRhythm[beat16];
+      this.playSynthBass(freq * 0.5, time, 0.14, 0.13);
     }
 
-    // Bajo cálido únicamente en el primer tiempo de cada compás (beat16 === 0)
-    if (beat16 === 0) {
-      const bassProg = [146.83, 116.54, 130.81, 146.83]; // D3, Bb2, C3, D3
-      const cIdx = Math.floor(bar64 / 16);
-      this.playPizzicatoBass(bassProg[cIdx], time, 0.28, 0.13);
+    // Melodía pegadiza en sintetizador pluck / marimba electrónica estilo Kahoot
+    // Frase A (Compás 1), Reposo rítmico (Compás 2), Frase B (Compás 3), Cierre alegre (Compás 4)
+    const lobbyMelody: Record<number, number> = {
+      // Compás 1: Motivo principal bailable
+      0: 587.33,  // D5
+      2: 587.33,  // D5
+      5: 698.46,  // F5
+      8: 659.25,  // E5
+      11: 587.33, // D5
+      // Compás 2: Pequeño riff de respuesta sincopado
+      20: 783.99, // G5
+      23: 698.46, // F5
+      26: 659.25, // E5
+      // Compás 3: Frase ascendente enérgica
+      32: 523.25, // C5
+      35: 587.33, // D5
+      38: 698.46, // F5
+      41: 783.99, // G5
+      44: 880.00, // A5
+      // Compás 4: Cierre con acordes plucks
+      48: 783.99, // G5
+      52: 698.46, // F5
+      56: 587.33, // D5
+      60: 523.25, // C5
+    };
+
+    if (lobbyMelody[bar64] !== undefined) {
+      this.playMarimba(lobbyMelody[bar64], time, 0.16, 0.09);
     }
   }
 
-  // 2. Question Theme: 120 BPM, cuenta regresiva lúdica con frases de marimba espaciadas
+  // 2. Question Theme: 132 BPM, Tensión de Concurso Televisivo (Inspirado en el Countdown de Kahoot)
+  // Bajo pulsante "bouncy", reloj electrónico nítido y arpegios de anticipación
   private tickQuestion(time: number, step: number) {
     const beat16 = step % 16;
     const bar64 = step % 64;
 
-    // Reloj suave únicamente en negras (tiempos 0, 4, 8, 12), volumen ultra bajo no invasivo
+    // Reloj electrónico de concurso nítido y suave (tick-tock constante en cada negra)
     if (beat16 % 4 === 0) {
-      this.playWoodblock(time, 1020, 0.025);
+      this.playWoodblock(time, beat16 === 0 ? 1200 : 980, 0.035);
     }
 
-    // Melodía de marimba con espacio para pensar:
-    // Toca 3 notas, luego pausa de 2 tiempos, luego respuesta
-    const questionPhrases: Record<number, number> = {
-      // Compás 1
-      0: 587.33,  // D5
-      4: 698.46,  // F5
-      8: 659.25,  // E5
-      // Compás 2: Salto característico de Kahoot
-      16: 622.25, // Eb5
-      20: 587.33, // D5
-      24: 622.25, // Eb5
-      // Compás 3: Pausa reflexiva
-      // Compás 4: Arpegio ascendente ágil
-      48: 523.25, // C5
-      52: 587.33, // D5
-      56: 698.46, // F5
-      60: 783.99, // G5
+    // Hi-hat en contratiempos (beat 2, 6, 10, 14) para sensación de cuenta regresiva rápida
+    if (beat16 % 4 === 2) {
+      this.playHiHat(time, 0.022);
+    }
+
+    // Synth Bass pulsante de juego de televisión (línea de bajo continua y enérgica en corcheas)
+    // Tensión pura sin saturación de tambores molestos
+    const questionBassNotes = [
+      146.83, 146.83, 174.61, 146.83, 196.00, 174.61, 146.83, 130.81, // D, D, F, D, G, F, D, C
+    ];
+    if (beat16 % 2 === 0) {
+      const bIdx = (beat16 / 2) % questionBassNotes.length;
+      const root = bar64 >= 32 && bar64 < 48 ? questionBassNotes[bIdx] * 1.12 : questionBassNotes[bIdx];
+      this.playSynthBass(root * 0.5, time, 0.12, 0.14);
+    }
+
+    // Arpegios sincopados de tensión y adrenalina estilo "Game Show"
+    // Frases cortas y ágiles que generan expectativa entre pregunta y opciones
+    const countdownChords: Record<number, number[]> = {
+      // Compás 1: Stabs de alerta y concentración
+      0: [587.33, 698.46],  // D5 + F5
+      3: [659.25, 783.99],  // E5 + G5
+      6: [587.33, 698.46],  // D5 + F5
+      // Compás 2: Salto característico de tensión
+      16: [622.25, 739.99], // Eb5 + F#5 (tensión cromática de concurso)
+      20: [587.33, 698.46], // D5 + F5
+      24: [523.25, 659.25], // C5 + E5
+      // Compás 3: Arpegio ascendente rápido
+      32: [440.00],         // A4
+      35: [523.25],         // C5
+      38: [587.33],         // D5
+      41: [698.46],         // F5
+      44: [783.99],         // G5
+      // Compás 4: Cuenta final con urgencia armónica
+      48: [659.25, 783.99], // E5 + G5
+      52: [622.25, 739.99], // Eb5 + F#5
+      56: [587.33, 698.46], // D5 + F5
+      60: [783.99, 1046.5], // G5 + C6 (cierre en lo alto)
     };
 
-    if (questionPhrases[bar64]) {
-      this.playMarimba(questionPhrases[bar64], time, 0.14, 0.085);
-    }
-
-    // Bajo discreto en tiempos 0 y 8
-    if (beat16 === 0 || beat16 === 8) {
-      const qBass = bar64 < 32 ? 146.83 : 130.81; // D3 o C3
-      this.playPizzicatoBass(qBass, time, 0.2, 0.11);
+    if (countdownChords[bar64] !== undefined) {
+      countdownChords[bar64].forEach((freq) => {
+        this.playMarimba(freq, time, 0.13, 0.08);
+      });
     }
   }
 
-  // 3. Podium: 128 BPM, fanfarria triunfal en marimba y campanas de victoria (sin bombos)
+  // 3. Podium Theme: 136 BPM, Fanfarria Triunfal y Celebración Olímpica (Estilo Ceremonia Kahoot)
+  // Acordes mayores brillantes, bajo bailable de fiesta y campanas de victoria
   private tickPodium(time: number, step: number) {
     const beat16 = step % 16;
     const phrase32 = step % 32;
 
-    // Woodblock festivo
-    if (beat16 % 4 === 2) {
-      this.playWoodblock(time, 1300, 0.06);
+    // Hi-hat de fiesta bailable en todas las semicorcheas
+    this.playHiHat(time, beat16 % 4 === 0 ? 0.03 : 0.015);
+
+    // Caja / Woodblock festivo en tiempos 4 y 12
+    if (beat16 === 4 || beat16 === 12) {
+      this.playWoodblock(time, 1350, 0.04);
     }
 
-    // Arpegios mayores triunfales en marimba
-    const victoryNotes = [
-      523.25, 659.25, 783.99, 1046.5, // C5, E5, G5, C6
-      587.33, 739.99, 880.00, 1174.66,// D5, F#5, A5, D6
-    ];
-    if (beat16 % 2 === 0) {
-      const idx = (beat16 / 2 + Math.floor(phrase32 / 16) * 4) % victoryNotes.length;
-      this.playMarimba(victoryNotes[idx], time, 0.15, 0.17);
+    // Bajo de celebración bailable (Four-on-the-floor en tónicas de victoria: C - F - G - C)
+    if (beat16 % 4 === 0) {
+      const rootProg = phrase32 < 16 ? 130.81 : 174.61; // C3 o F3
+      this.playSynthBass(rootProg * 0.5, time, 0.18, 0.16);
     }
 
-    // Bajo de celebración
-    if (beat16 === 0 || beat16 === 8) {
-      this.playPizzicatoBass(130.81, time, 0.25, 0.22); // C3
+    // Fanfarria triunfal en sintetizador brass con acordes mayores de victoria
+    const victoryChords: Record<number, number[]> = {
+      0: [523.25, 659.25, 783.99],  // Do Mayor (C5 - E5 - G5)
+      4: [523.25, 659.25, 783.99],
+      8: [587.33, 739.99, 880.00],  // Re Mayor (D5 - F#5 - A5)
+      12: [659.25, 783.99, 1046.5], // Mi menor / Do alto
+      16: [698.46, 880.00, 1046.5], // Fa Mayor (F5 - A5 - C6)
+      20: [783.99, 987.77, 1174.66],// Sol Mayor (G5 - B5 - D6)
+      24: [1046.5, 1318.5, 1567.98],// ¡Do Mayor Octava Superior! (C6 - E6 - G6)
+      28: [1046.5, 1318.5, 1567.98],
+    };
+
+    if (victoryChords[phrase32] !== undefined) {
+      victoryChords[phrase32].forEach((freq) => {
+        this.playBrassStab(freq, time, 0.22, 0.09);
+        this.playMarimba(freq, time, 0.16, 0.08);
+      });
     }
   }
 
@@ -282,7 +392,7 @@ class MusicSynthesizer {
       this.playMarimba(392.00, time, 0.2, 0.12); // G4
     }
     if (beat16 === 0) {
-      this.playPizzicatoBass(92.5, time, 0.3, 0.2); // F#2
+      this.playSynthBass(92.5, time, 0.3, 0.15); // F#2
     }
   }
 
@@ -296,7 +406,7 @@ class MusicSynthesizer {
     this.isPlaying = true;
     this.step = 0;
 
-    const bpm = track === 'question' ? 136 : track === 'lobby' ? 124 : track === 'suspense' ? 96 : 128;
+    const bpm = track === 'question' ? 132 : track === 'lobby' ? 124 : track === 'suspense' ? 96 : 136;
     const stepDurationMs = (60 / bpm / 4) * 1000; // semicorchea
 
     this.timerId = setInterval(() => {
