@@ -165,6 +165,19 @@ export default function SessionPage() {
 
   const hostSyncRef = useRef<GameHostSync | null>(null);
   const roundStartScoresRef = useRef<Map<string, number>>(new Map());
+  const prevRanksRef = useRef<Map<string, number>>(new Map());
+  const [studentAnswersHistory, setStudentAnswersHistory] = useState<Record<string, Array<{
+    questionIndex: number;
+    questionPrompt: string;
+    selectedText: string;
+    isCorrect: boolean;
+    isTimeout: boolean;
+    correctText: string;
+    explanation: string;
+  }>>>({});
+  const [selectedStudentForReport, setSelectedStudentForReport] = useState<Participant | null>(null);
+  const [stealHistory, setStealHistory] = useState<Array<{ from: string; to: string; amount: number; time: string }>>([]);
+  const [latestStealEvent, setLatestStealEvent] = useState<{ from: string; to: string; amount: number } | null>(null);
   const currentQ = questions[currentQIndex] || questions[0];
 
   // ── Iniciar música de lobby automáticamente al montar ──
@@ -248,9 +261,18 @@ export default function SessionPage() {
         audioEngine.playEffect('sfx_tick');
       } else if (msg.type === 'STEAL_RESULT') {
         if (msg.success) {
-          setStealWinnerBanner(`🗡️ ¡${msg.fromNickname} robó 50 puntos a ${msg.toNickname}!`);
+          const amt = msg.amount || 50;
+          const from = msg.fromNickname || 'Estudiante';
+          const to = msg.toNickname || 'Estudiante';
+          const bannerMsg = `🗡️ ¡${from} le robó ${amt} puntos a ${to}!`;
+          setStealWinnerBanner(bannerMsg);
+          setLatestStealEvent({ from, to, amount: amt });
+          setStealHistory((prev) => [
+            { from, to, amount: amt, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+            ...prev,
+          ]);
           audioEngine.playEffect('sfx_steal_alert');
-          setTimeout(() => setStealWinnerBanner(null), 5000);
+          setTimeout(() => setStealWinnerBanner(null), 7000);
           if (msg.participants) {
             setLiveParticipants(msg.participants);
           }
@@ -261,13 +283,18 @@ export default function SessionPage() {
           setShowLeaderboard(true);
         }
       } else if (msg.type === 'STEAL_POINTS_CLAIMED') {
-        // Soporte retrocompatible
-        if (msg.winnerNickname) {
-          setStealBanner(null);
-          setStealWinnerBanner(`¡⚡ ${msg.winnerNickname} robó +${msg.amount || 50} puntos!`);
-          audioEngine.playEffect('sfx_steal_win');
-          setTimeout(() => setStealWinnerBanner(null), 5000);
-        }
+        const amt = msg.amount || 50;
+        const winner = msg.winnerNickname || 'Estudiante';
+        const bannerMsg = `🗡️ ¡${winner} ejecutó el Robo de Puntos y ganó +${amt} pts!`;
+        setStealBanner(null);
+        setStealWinnerBanner(bannerMsg);
+        setLatestStealEvent({ from: winner, to: 'Rivales', amount: amt });
+        setStealHistory((prev) => [
+          { from: winner, to: 'Rivales', amount: amt, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+          ...prev,
+        ]);
+        audioEngine.playEffect('sfx_steal_win');
+        setTimeout(() => setStealWinnerBanner(null), 7000);
         if (msg.participants) {
           setLiveParticipants(msg.participants);
         }
@@ -422,11 +449,10 @@ export default function SessionPage() {
       });
     }, 3300);
 
-    // Paso 3: AXEL'S PLAY EN ZOOM CINEMATOGRÁFICO (5.6s)
+    // Paso 3: AXEL'S PLAY EN ZOOM CINEMATOGRÁFICO (5.6s - Fanfarria limpia sin voz)
     const tZoom = setTimeout(() => {
       setIntroStep(3);
       audioEngine.playEffect('sfx_intro');
-      audioEngine.speakAxelsPlay();
       hostSyncRef.current?.broadcast('START_INTRO', {
         introStep: 3,
         introTitle: "AXEL'S PLAY",
@@ -448,7 +474,9 @@ export default function SessionPage() {
     const firstQ = questions[0];
     setTimerLeft(firstQ.timeLimit || 20);
 
-    // Guardar puntajes iniciales de la ronda para la animación exacta del leaderboard
+    // Guardar puntajes y rankings iniciales para animación de subida/bajada
+    const initialSorted = [...liveParticipants].sort((a, b) => b.score - a.score);
+    prevRanksRef.current = new Map(initialSorted.map((p, idx) => [p.id, idx + 1]));
     roundStartScoresRef.current = new Map(liveParticipants.map((p) => [p.id, p.score]));
 
     // Iniciar la música repetitiva de la pregunta (se detiene cuando todos responden)
@@ -479,7 +507,9 @@ export default function SessionPage() {
     setAnsweredCount(0);
     setTimerLeft(nextQ.timeLimit || 20);
 
-    // Guardar puntajes iniciales de la ronda para la animación exacta del leaderboard
+    // Guardar puntajes y rankings de la ronda anterior para calcular ascensos y descensos
+    const prevSorted = [...liveParticipants].sort((a, b) => b.score - a.score);
+    prevRanksRef.current = new Map(prevSorted.map((p, idx) => [p.id, idx + 1]));
     roundStartScoresRef.current = new Map(liveParticipants.map((p) => [p.id, p.score]));
 
     // Iniciar la música repetitiva de la siguiente pregunta
@@ -495,34 +525,71 @@ export default function SessionPage() {
 
   const handleRevealAnswer = () => {
     setIsAnswerRevealed(true);
-    // Detener la música de la pregunta y sonar bit indicador de tiempo acabado
+    // Detener la música de la pregunta y sonar campanas de fin de tiempo
     audioEngine.stopQuestionMusic();
     audioEngine.playEffect('sfx_time_up');
+
+    // Registrar en el historial pedagógico a quienes se les agotó el tiempo sin responder
+    setStudentAnswersHistory((prev) => {
+      const nextHist = { ...prev };
+      const correctOptText = currentQ.options?.find((o) => o.isCorrect)?.text || String(currentQ.correctAnswer);
+      liveParticipants.forEach((p) => {
+        const studentList = nextHist[p.id] ? [...nextHist[p.id]] : [];
+        const hasAnswer = studentList.some((a) => a.questionIndex === currentQIndex);
+        if (!hasAnswer) {
+          studentList.push({
+            questionIndex: currentQIndex,
+            questionPrompt: currentQ.content,
+            selectedText: '⏰ Tiempo Agotado (No respondió)',
+            isCorrect: false,
+            isTimeout: true,
+            correctText: correctOptText,
+            explanation: currentQ.explanation || 'Se acabó el tiempo límite antes de que enviara una opción.',
+          });
+          nextHist[p.id] = studentList;
+        }
+      });
+      return nextHist;
+    });
 
     // Reproducir sonido de monedas digitales cayendo para la tabla de clasificación
     setTimeout(() => audioEngine.playEffect('sfx_digital_coins'), 200);
     setTimeout(() => audioEngine.playEffect('sfx_digital_coins'), 600);
     setTimeout(() => audioEngine.playEffect('sfx_digital_coins'), 1000);
 
-    // Calcular el ranking Top 5 con los puntajes más actualizados y animación de puntos
+    // Calcular el ranking Top 5 con los puntajes más actualizados y animación de subida/bajada
     setLiveParticipants((latest) => {
-      const top5 = [...latest]
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
-        .map((p, idx) => {
-          const prev = roundStartScoresRef.current.get(p.id) ?? p.score;
-          return {
-            id: p.id,
-            nickname: p.nickname,
-            avatar: p.avatar,
-            score: p.score,
-            prevScore: prev,
-            gained: p.score - prev,
-            rank: idx + 1,
-            correctAnswers: p.correctAnswers || 0,
-            stealCount: p.stealCount || 0,
-          };
-        });
+      const sorted = [...latest].sort((a, b) => b.score - a.score);
+
+      const top5 = sorted.slice(0, 5).map((p, idx) => {
+        const prevScore = roundStartScoresRef.current.get(p.id) ?? p.score;
+        const prevRank = prevRanksRef.current.get(p.id) ?? idx + 1;
+        const rankNow = idx + 1;
+        const rankDelta = prevRank - rankNow; // > 0 subió, < 0 bajó
+
+        return {
+          id: p.id,
+          nickname: p.nickname,
+          avatar: p.avatar,
+          score: p.score,
+          prevScore,
+          gained: p.score - prevScore,
+          rank: rankNow,
+          prevRank,
+          rankDelta,
+          correctAnswers: p.correctAnswers || 0,
+          stealCount: p.stealCount || 0,
+        };
+      });
+
+      // Detectar participantes que cayeron del Top 5 al puesto 6 o posterior
+      const fallen = sorted.slice(5).filter((p) => {
+        const oldRank = prevRanksRef.current.get(p.id) ?? 99;
+        return oldRank <= 5;
+      });
+
+      // Detectar participantes que entraron al Top 5 viniendo de afuera
+      const climbedIn = top5.filter((p) => (p.prevRank ?? 99) > 5);
 
       setLeaderboardData(top5);
       setShowLeaderboard(true);
@@ -553,6 +620,32 @@ export default function SessionPage() {
       authorized: true,
       amount: 50,
     });
+
+    // Simular que un bot intenta robar a otro si hay participantes en la sala
+    const bots = liveParticipants.filter((p) => p.id.startsWith('bot-'));
+    if (bots.length >= 2) {
+      setTimeout(() => {
+        const thief = bots[0];
+        const victim = bots[1];
+        const amt = 50;
+        setLiveParticipants((prev) =>
+          prev.map((p) => {
+            if (p.id === thief.id) return { ...p, score: p.score + amt, stealCount: (p.stealCount || 0) + 1 };
+            if (p.id === victim.id) return { ...p, score: Math.max(0, p.score - amt) };
+            return p;
+          })
+        );
+        const bannerMsg = `🗡️ ¡${thief.nickname} le robó ${amt} puntos a ${victim.nickname}!`;
+        setStealWinnerBanner(bannerMsg);
+        setLatestStealEvent({ from: thief.nickname, to: victim.nickname, amount: amt });
+        setStealHistory((prev) => [
+          { from: thief.nickname, to: victim.nickname, amount: amt, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+          ...prev,
+        ]);
+        audioEngine.playEffect('sfx_steal_alert');
+        setTimeout(() => setStealWinnerBanner(null), 7000);
+      }, 3000);
+    }
   };
 
   const handleTriggerStealPoints = () => {
@@ -672,6 +765,25 @@ export default function SessionPage() {
           ptsDelta = 0;
           roundReason = 'panic_error';
         }
+
+        // Guardar detalle pedagógico de la respuesta del bot para el Reporte Final
+        const correctOptText = currentQ.options?.find((o) => o.isCorrect)?.text || String(currentQ.correctAnswer);
+        const wrongOpt = currentQ.options?.find((o) => !o.isCorrect)?.text || 'Opción distractora';
+        const selectedText = isCorrect ? correctOptText : wrongOpt;
+
+        setStudentAnswersHistory((prev) => {
+          const list = prev[bot.id] ? [...prev[bot.id]] : [];
+          list.push({
+            questionIndex: currentQIndex,
+            questionPrompt: currentQ.content,
+            selectedText,
+            isCorrect,
+            isTimeout: false,
+            correctText: correctOptText,
+            explanation: currentQ.explanation || 'Se analizó el contenido conceptual de la pregunta.',
+          });
+          return { ...prev, [bot.id]: list };
+        });
 
         setLiveParticipants((prev) =>
           prev.map((p) => {
@@ -1788,6 +1900,106 @@ export default function SessionPage() {
               </div>
             )}
 
+            {/* ── TABLA COMPLETA DE REPORTE PEDAGÓGICO DE TODOS LOS PARTICIPANTES ── */}
+            <div className="mt-8 text-left space-y-4 pt-6 border-t border-white/10">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    <span>📋 Reporte Pedagógico de Todos los Participantes</span>
+                    <span className="text-xs text-purple-300 font-semibold bg-purple-900/40 px-2 py-0.5 rounded-full border border-purple-500/30">
+                      {sortedParticipants.length} estudiantes
+                    </span>
+                  </h3>
+                  <p className="text-xs text-white/50 mt-0.5">
+                    Selecciona el nombre de cualquier estudiante para diagnosticar en qué preguntas se equivocó y ver la retroalimentación
+                  </p>
+                </div>
+              </div>
+
+              {/* Historial de Robos de Puntos si ocurrieron durante la partida */}
+              {stealHistory.length > 0 && (
+                <div className="p-3.5 rounded-2xl bg-amber-950/30 border border-amber-500/30 space-y-2">
+                  <span className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                    <span>🗡️ Registro de Robos de Puntos en la Partida</span>
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {stealHistory.map((s, sIdx) => (
+                      <span key={sIdx} className="text-[11px] bg-slate-900/80 border border-amber-500/30 text-amber-200 px-2.5 py-1 rounded-xl">
+                        {s.time} · <strong>{s.from}</strong> le robó {s.amount} pts a <strong>{s.to}</strong>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/60 shadow-xl">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10 bg-white/5 text-white/60">
+                      <th className="py-3 px-3 text-left">Puesto</th>
+                      <th className="py-3 px-4 text-left">Estudiante (Clic para ver errores)</th>
+                      <th className="py-3 px-3 text-center">Puntaje Total</th>
+                      <th className="py-3 px-3 text-center">Aciertos / Fallos</th>
+                      <th className="py-3 px-3 text-center">% Precisión</th>
+                      <th className="py-3 px-3 text-right">Diagnóstico</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {sortedParticipants.map((p, idx) => {
+                      const history = studentAnswersHistory[p.id] || [];
+                      const correctCount = p.correctAnswers || history.filter((h) => h.isCorrect).length;
+                      const totalQ = questions.length;
+                      const wrongCount = Math.max(0, totalQ - correctCount);
+                      const accuracy = Math.round((correctCount / totalQ) * 100);
+
+                      return (
+                        <tr
+                          key={p.id}
+                          onClick={() => setSelectedStudentForReport(p)}
+                          className="hover:bg-purple-600/15 cursor-pointer transition-colors group"
+                        >
+                          <td className="py-3 px-3 font-black text-white/80">
+                            {idx === 0 ? '🥇 1°' : idx === 1 ? '🥈 2°' : idx === 2 ? '🥉 3°' : `#${idx + 1}`}
+                          </td>
+                          <td className="py-3 px-4 font-bold text-white flex items-center gap-2.5">
+                            <img src={p.avatar} alt={p.nickname} className="w-7 h-7 rounded-lg bg-slate-800 border border-white/10" />
+                            <span className="group-hover:text-yellow-300 underline-offset-2 group-hover:underline">
+                              {p.nickname}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center font-black text-yellow-400">
+                            {p.score.toLocaleString()} pts
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="text-emerald-400 font-bold">{correctCount} ✅</span>
+                            <span className="text-white/30 mx-1">/</span>
+                            <span className="text-rose-400 font-bold">{wrongCount} ❌</span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className={`px-2 py-0.5 rounded-md font-extrabold ${accuracy >= 70 ? 'bg-emerald-500/20 text-emerald-300' : accuracy >= 40 ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                              {accuracy}%
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedStudentForReport(p);
+                              }}
+                              className="py-1 px-2.5 rounded-lg bg-purple-600/20 border border-purple-500/40 text-purple-300 hover:bg-purple-600 hover:text-white transition-all text-[11px] font-bold"
+                            >
+                              Ver errores 🔍
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             {/* Acciones Finales */}
             <div className="flex items-center justify-center gap-3 pt-6 border-t border-white/10">
               <Link
@@ -1938,9 +2150,17 @@ export default function SessionPage() {
               </button>
             </div>
 
+            {/* Notificación de Robo de Puntos activo en esta ronda */}
+            {latestStealEvent && (
+              <div className="p-3 rounded-2xl bg-gradient-to-r from-red-600/30 via-amber-600/30 to-yellow-600/30 border border-yellow-400/40 text-yellow-200 text-xs font-black flex items-center justify-center gap-2 animate-bounce-in shadow-md">
+                <span className="text-base">🗡️</span>
+                <span>¡{latestStealEvent.from} le robó {latestStealEvent.amount} puntos a {latestStealEvent.to}!</span>
+              </div>
+            )}
+
             <div className="flex items-center justify-center gap-2 text-xs text-purple-200 bg-purple-950/50 py-1.5 px-3 rounded-xl border border-purple-500/20">
               <span className="animate-spin text-sm">🪙</span>
-              <span>¡Puntajes sumándose en tiempo real! Sonando monedas digitales</span>
+              <span>¡Puntajes sumándose en tiempo real! Observa quién sube y quién baja</span>
             </div>
 
             <div className="space-y-2.5">
@@ -1951,11 +2171,15 @@ export default function SessionPage() {
                 const medal = isTop1 ? '🥇' : isTop2 ? '🥈' : isTop3 ? '🥉' : `#${idx + 1}`;
                 const prev = p.prevScore !== undefined ? p.prevScore : Math.max(0, p.score - 100);
                 const gained = p.score - prev;
+                const rankDelta = p.rankDelta !== undefined ? p.rankDelta : 0;
+                const isNewInTop5 = p.prevRank !== undefined && p.prevRank > 5;
 
                 return (
                   <div
                     key={p.id || idx}
-                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all transform hover:scale-[1.01] ${
+                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all duration-700 transform ${
+                      rankDelta > 0 ? 'scale-[1.01] -translate-y-0.5' : rankDelta < 0 ? 'translate-y-0.5' : ''
+                    } ${
                       isTop1
                         ? 'bg-yellow-400/20 border-yellow-400/60 shadow-lg shadow-yellow-500/20 ring-1 ring-yellow-400/30'
                         : isTop2
@@ -1985,8 +2209,26 @@ export default function SessionPage() {
                         className="w-10 h-10 rounded-xl object-contain bg-slate-800 p-0.5 border border-white/15 shadow-sm"
                       />
                       <div className="text-left">
-                        <div className="font-extrabold text-sm md:text-base text-white">{p.nickname}</div>
-                        <div className="text-[11px] text-white/60 flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-extrabold text-sm md:text-base text-white">{p.nickname}</span>
+                          {/* Indicador animado de subida o bajada de puesto */}
+                          {rankDelta > 0 && (
+                            <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                              ▲ +{rankDelta} {rankDelta === 1 ? 'puesto' : 'puestos'}
+                            </span>
+                          )}
+                          {rankDelta < 0 && (
+                            <span className="text-[10px] font-black text-rose-400 bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                              ▼ {rankDelta} {rankDelta === -1 ? 'puesto' : 'puestos'}
+                            </span>
+                          )}
+                          {isNewInTop5 && (
+                            <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.5 rounded-md animate-pulse">
+                              🔥 ¡Entró al TOP 5!
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-white/60 flex items-center gap-1.5 mt-0.5">
                           <span>{p.correctAnswers !== undefined ? `${p.correctAnswers} correctas` : 'Participante'}</span>
                           {p.stealCount ? <span className="text-amber-300 font-semibold">· {p.stealCount} robos</span> : null}
                         </div>
@@ -2015,6 +2257,21 @@ export default function SessionPage() {
                 );
               })}
             </div>
+
+            {/* Aviso visual de participantes que perdieron puntos y cayeron del Top 5 */}
+            {liveParticipants
+              .map((p, idx) => ({ ...p, rankNow: idx + 1, oldRank: prevRanksRef.current.get(p.id) ?? 99 }))
+              .filter((p) => p.oldRank <= 5 && p.rankNow > 5)
+              .slice(0, 2)
+              .map((fallen) => (
+                <div key={fallen.id} className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-[11px] text-rose-300 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>📉</span>
+                    <span><strong>{fallen.nickname}</strong> bajó al puesto #{fallen.rankNow} tras perder puntos o por tiempo agotado</span>
+                  </div>
+                  <span className="font-extrabold text-white/70">{fallen.score} pts</span>
+                </div>
+              ))}
 
             <div className="pt-2 flex justify-end gap-2">
               <button
@@ -2088,6 +2345,125 @@ export default function SessionPage() {
             >
               Cerrar Vista Ampliada
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL DE DIAGNÓSTICO PEDAGÓGICO INDIVIDUAL (ERRORES Y ACIERTOS) ── */}
+      {selectedStudentForReport && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in"
+          onClick={() => setSelectedStudentForReport(null)}
+        >
+          <div
+            className="card max-w-2xl w-full max-h-[85vh] flex flex-col p-6 border-purple-500/40 shadow-2xl bg-slate-900 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Cabecera */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-3">
+                <img
+                  src={selectedStudentForReport.avatar}
+                  alt={selectedStudentForReport.nickname}
+                  className="w-11 h-11 rounded-2xl bg-slate-800 border border-white/15 p-0.5"
+                />
+                <div>
+                  <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    <span>{selectedStudentForReport.nickname}</span>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-yellow-400/20 text-yellow-300 border border-yellow-400/30 font-extrabold">
+                      {selectedStudentForReport.score.toLocaleString()} pts
+                    </span>
+                  </h3>
+                  <p className="text-xs text-white/50">
+                    Diagnóstico pedagógico: preguntas acertadas y respuestas en las que se equivocó
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedStudentForReport(null)}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Lista detallada de preguntas y respuestas */}
+            <div className="space-y-3 overflow-y-auto flex-1 pr-1">
+              {questions.map((q, qIdx) => {
+                const history = studentAnswersHistory[selectedStudentForReport.id] || [];
+                const ans = history.find((h) => h.questionIndex === qIdx);
+                const isCorrect = ans ? ans.isCorrect : false;
+                const isTimeout = ans ? ans.isTimeout : true;
+                const selectedText = ans ? ans.selectedText : '⏰ Tiempo Agotado (No respondió)';
+                const correctText = q.options?.find((o) => o.isCorrect)?.text || String(q.correctAnswer);
+
+                return (
+                  <div
+                    key={q.id || qIdx}
+                    className={`p-4 rounded-xl border ${
+                      isCorrect
+                        ? 'border-emerald-500/30 bg-emerald-950/20'
+                        : 'border-rose-500/40 bg-rose-950/20'
+                    } space-y-2`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs font-black text-white/90">
+                        Pregunta {qIdx + 1}: {q.content}
+                      </span>
+                      <span
+                        className={`text-[10px] font-black px-2 py-0.5 rounded-md shrink-0 ${
+                          isCorrect
+                            ? 'bg-emerald-500/30 text-emerald-300'
+                            : isTimeout
+                            ? 'bg-amber-500/30 text-amber-300'
+                            : 'bg-rose-500/30 text-rose-300'
+                        }`}
+                      >
+                        {isCorrect ? '✅ ACERTÓ' : isTimeout ? '⏰ TIEMPO AGOTADO' : '❌ SE EQUIVOCÓ'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
+                      <div
+                        className={`p-2.5 rounded-lg border ${
+                          isCorrect
+                            ? 'bg-emerald-900/30 border-emerald-500/40 text-emerald-200'
+                            : 'bg-rose-900/30 border-rose-500/40 text-rose-200'
+                        }`}
+                      >
+                        <span className="text-[10px] uppercase font-bold text-white/50 block">
+                          Marcó el estudiante:
+                        </span>
+                        <span className="font-semibold">{selectedText}</span>
+                      </div>
+                      {!isCorrect && (
+                        <div className="p-2.5 rounded-lg border bg-emerald-900/30 border-emerald-500/40 text-emerald-200">
+                          <span className="text-[10px] uppercase font-bold text-emerald-400 block">
+                            Respuesta Correcta:
+                          </span>
+                          <span className="font-semibold">{correctText}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {q.explanation && (
+                      <div className="p-2.5 rounded-lg bg-white/5 text-[11px] text-purple-200 border border-white/5">
+                        💡 <strong>Explicación docente:</strong> {q.explanation}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 border-t border-white/10 flex justify-end">
+              <button
+                onClick={() => setSelectedStudentForReport(null)}
+                className="btn-secondary py-2 px-5 rounded-xl text-xs font-bold"
+              >
+                Cerrar Diagnóstico
+              </button>
+            </div>
           </div>
         </div>
       )}

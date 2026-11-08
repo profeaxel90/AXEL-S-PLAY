@@ -79,164 +79,168 @@ class MusicSynthesizer {
     }
   }
 
-  // ── Primitivas de Sonido Sintético Estilo Kahoot (Marimba, Woodblock, Pluck) ──
-  // 1. Marimba de Kahoot: madera percusiva limpia, staccato y cálida
-  private playMarimba(freq: number, time: number, duration = 0.11, vol = 0.16) {
-    if (!this.ctx || !this.masterMusicGain) return;
-    // Tono fundamental senoidal limpio
-    const osc1 = this.ctx.createOscillator();
-    const gain1 = this.ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(freq, time);
-    gain1.gain.setValueAtTime(vol, time);
-    gain1.gain.exponentialRampToValueAtTime(0.0001, time + duration);
-    osc1.connect(gain1);
-    gain1.connect(this.masterMusicGain);
-    osc1.start(time);
-    osc1.stop(time + duration + 0.02);
-
-    // Armónico suave de octava que da el timbre auténtico a lámina de madera
-    const osc2 = this.ctx.createOscillator();
-    const gain2 = this.ctx.createGain();
-    osc2.type = 'triangle';
-    osc2.frequency.setValueAtTime(freq * 2, time);
-    gain2.gain.setValueAtTime(vol * 0.35, time);
-    gain2.gain.exponentialRampToValueAtTime(0.0001, time + duration * 0.55);
-    osc2.connect(gain2);
-    gain2.connect(this.masterMusicGain);
-    osc2.start(time);
-    osc2.stop(time + duration * 0.55 + 0.02);
-  }
-
-  // 2. Woodblock de Kahoot: el clásico "clac" de bloque de madera o reloj tictac
-  private playWoodblock(time: number, pitch = 1050, vol = 0.065) {
+  // ── Primitivas de Sonido Acústico Natural Estilo Kahoot (Marimba de Madera, Silencios y Pizzicato Cálido) ──
+  // 1. Marimba Acústica Natural: Barra de madera de palisandro con resonador cálido (suave, nada chillón)
+  private playMarimba(freq: number, time: number, duration = 0.16, vol = 0.085) {
     if (!this.ctx || !this.masterMusicGain) return;
     const osc = this.ctx.createOscillator();
     const filter = this.ctx.createBiquadFilter();
     const gain = this.ctx.createGain();
+
+    // Senoide pura filtrada para eliminar asperezas digitales
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(pitch, time);
-    osc.frequency.exponentialRampToValueAtTime(pitch * 0.5, time + 0.025);
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(pitch, time);
-    filter.Q.setValueAtTime(4.5, time);
-    gain.gain.setValueAtTime(vol, time);
-    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.028);
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.masterMusicGain);
-    osc.start(time);
-    osc.stop(time + 0.032);
-  }
-
-  // 3. Bajo Pizzicato elástico y juguetón (slap suave estilo Kahoot, sin tambores pesados)
-  private playPizzicatoBass(freq: number, time: number, duration = 0.16, vol = 0.18) {
-    if (!this.ctx || !this.masterMusicGain) return;
-    const osc = this.ctx.createOscillator();
-    const filter = this.ctx.createBiquadFilter();
-    const gain = this.ctx.createGain();
-    osc.type = 'triangle';
     osc.frequency.setValueAtTime(freq, time);
+
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(420, time);
-    filter.frequency.exponentialRampToValueAtTime(110, time + duration);
-    gain.gain.setValueAtTime(vol, time);
+    filter.frequency.setValueAtTime(850, time);
+    filter.frequency.exponentialRampToValueAtTime(350, time + duration);
+
+    // Envolvente de baqueta de fieltro sobre madera: ataque suave (4ms) y decaimiento natural
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.exponentialRampToValueAtTime(vol, time + 0.004);
     gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(this.masterMusicGain);
+
     osc.start(time);
     osc.stop(time + duration + 0.02);
   }
 
-  // ── Secuenciadores de Música Procedural Fiel a Kahoot ──
-  // 1. Lobby: 120 BPM, marimba saltarina, woodblock sutil, bajo pizzicato (¡CERO TAMBORES!)
+  // 2. Toque de Madera Orgánico Suave (espaciado, solo para marcar el pulso del aula)
+  private playWoodblock(time: number, pitch = 920, vol = 0.035) {
+    if (!this.ctx || !this.masterMusicGain) return;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(pitch, time);
+    osc.frequency.exponentialRampToValueAtTime(pitch * 0.45, time + 0.022);
+
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(pitch, time);
+    filter.Q.setValueAtTime(3.0, time);
+
+    gain.gain.setValueAtTime(vol, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.025);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterMusicGain);
+
+    osc.start(time);
+    osc.stop(time + 0.028);
+  }
+
+  // 3. Bajo Acústico Pizzicato Cálido (cuerdas de contrabajo suaves, sin retumbes)
+  private playPizzicatoBass(freq: number, time: number, duration = 0.22, vol = 0.12) {
+    if (!this.ctx || !this.masterMusicGain) return;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, time);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(320, time);
+    filter.frequency.exponentialRampToValueAtTime(90, time + duration);
+
+    gain.gain.setValueAtTime(vol, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterMusicGain);
+
+    osc.start(time);
+    osc.stop(time + duration + 0.02);
+  }
+
+  // ── Secuenciadores Musicales Anti-Fatiga (Frases Espaciadas con Silencios de Respiración) ──
+  // 1. Lobby Theme: 116 BPM, relajado, alegre, marimba dulce con pausas amplias
   private tickLobby(time: number, step: number) {
     const beat16 = step % 16;
-    const phrase32 = step % 32;
+    const bar64 = step % 64; // Ciclo amplio de 4 compases
 
-    // Tictac de woodblock suave en los pulsos del reloj
+    // Pulso muy sutil de madera únicamente en tiempos 2 y 4 (sin machacar)
     if (beat16 === 4 || beat16 === 12) {
-      this.playWoodblock(time, 1150, 0.06);
-    } else if (beat16 === 8 || beat16 === 14) {
-      this.playWoodblock(time, 920, 0.04);
+      this.playWoodblock(time, 950, 0.03);
     }
 
-    // Melodía clásica de marimba inspirada en el Lobby Theme de Kahoot
-    // Notas: C4 (261.63), D4 (293.66), F4 (349.23), G4 (392.0), A4 (440.0), C5 (523.25)
-    const melodyPattern: Record<number, number> = {
-      0: 261.63,  // C4
-      2: 293.66,  // D4
-      4: 293.66,  // D4
-      6: 261.63,  // C4
-      8: 293.66,  // D4
-      10: 392.00, // G4
-      12: 440.00, // A4
-      14: 349.23, // F4
-      16: 293.66, // D4
-      18: 349.23, // F4
-      20: 392.00, // G4
-      22: 293.66, // D4
-      24: 261.63, // C4
-      26: 293.66, // D4
-      28: 392.00, // G4
-      30: 523.25, // C5
+    // Melodía con silencios amplios (respiración musical que no fatiga el oído)
+    // Compás 1: Frase inicial alegre
+    // Compás 2: Silencio de reposo con solo bajo suave
+    // Compás 3: Respuesta melódica
+    // Compás 4: Cierre con arpegio suave
+    const lobbyNotes: Record<number, number> = {
+      // Compás 1: Frase A (D - F - E - D)
+      0: 293.66,  // D4
+      3: 349.23,  // F4
+      6: 329.63,  // E4
+      9: 293.66,  // D4
+      // Compás 2: Silencio melódico (deja respirar)
+      // Compás 3: Frase B (C - D - G - A)
+      32: 261.63, // C4
+      35: 293.66, // D4
+      38: 392.00, // G4
+      42: 440.00, // A4
+      // Compás 4: Cierre suave
+      48: 392.00, // G4
+      54: 523.25, // C5
     };
 
-    if (melodyPattern[phrase32]) {
-      this.playMarimba(melodyPattern[phrase32], time, 0.12, 0.17);
+    if (lobbyNotes[bar64]) {
+      this.playMarimba(lobbyNotes[bar64], time, 0.16, 0.08);
     }
 
-    // Bajo pizzicato ligero en los tiempos fuertes
+    // Bajo cálido únicamente en el primer tiempo de cada compás (beat16 === 0)
     if (beat16 === 0) {
-      this.playPizzicatoBass(146.83, time, 0.22, 0.22); // D3
-    } else if (beat16 === 8) {
-      this.playPizzicatoBass(130.81, time, 0.2, 0.18);  // C3
-    } else if (beat16 === 12) {
-      this.playPizzicatoBass(174.61, time, 0.18, 0.16); // F3
+      const bassProg = [146.83, 116.54, 130.81, 146.83]; // D3, Bb2, C3, D3
+      const cIdx = Math.floor(bar64 / 16);
+      this.playPizzicatoBass(bassProg[cIdx], time, 0.28, 0.13);
     }
   }
 
-  // 2. Question: 124 BPM, cuenta regresiva estilo Kahoot con tictac de madera y marimba en staccato
+  // 2. Question Theme: 120 BPM, cuenta regresiva lúdica con frases de marimba espaciadas
   private tickQuestion(time: number, step: number) {
     const beat16 = step % 16;
-    const phrase16 = step % 32;
+    const bar64 = step % 64;
 
-    // Tictac de woodblock continuo marcando la urgencia del tiempo sin tambores retumbantes
-    if (beat16 % 2 === 0) {
-      const isDownbeat = beat16 % 4 === 0;
-      this.playWoodblock(time, isDownbeat ? 1200 : 960, isDownbeat ? 0.08 : 0.045);
+    // Reloj suave únicamente en negras (tiempos 0, 4, 8, 12), volumen ultra bajo no invasivo
+    if (beat16 % 4 === 0) {
+      this.playWoodblock(time, 1020, 0.025);
     }
 
-    // Motivo de marimba staccato de Kahoot: D - F - E - D, Eb - D - Eb
-    const questionMelody: Record<number, number> = {
+    // Melodía de marimba con espacio para pensar:
+    // Toca 3 notas, luego pausa de 2 tiempos, luego respuesta
+    const questionPhrases: Record<number, number> = {
+      // Compás 1
       0: 587.33,  // D5
-      2: 698.46,  // F5
-      4: 659.25,  // E5
-      6: 587.33,  // D5
-      8: 622.25,  // Eb5 (el salto cromático característico)
-      10: 587.33, // D5
-      12: 622.25, // Eb5
-      14: 698.46, // F5
-      16: 587.33, // D5
-      18: 523.25, // C5
+      4: 698.46,  // F5
+      8: 659.25,  // E5
+      // Compás 2: Salto característico de Kahoot
+      16: 622.25, // Eb5
       20: 587.33, // D5
-      22: 783.99, // G5
-      24: 880.00, // A5
-      26: 783.99, // G5
-      28: 698.46, // F5
-      30: 587.33, // D5
+      24: 622.25, // Eb5
+      // Compás 3: Pausa reflexiva
+      // Compás 4: Arpegio ascendente ágil
+      48: 523.25, // C5
+      52: 587.33, // D5
+      56: 698.46, // F5
+      60: 783.99, // G5
     };
 
-    if (questionMelody[phrase16]) {
-      this.playMarimba(questionMelody[phrase16], time, 0.09, 0.18);
+    if (questionPhrases[bar64]) {
+      this.playMarimba(questionPhrases[bar64], time, 0.14, 0.085);
     }
 
-    // Bajo de soporte ligero en contratiempo
-    if (beat16 === 2 || beat16 === 10) {
-      this.playPizzicatoBass(146.83, time, 0.14, 0.15); // D3
-    } else if (beat16 === 6 || beat16 === 14) {
-      this.playPizzicatoBass(116.54, time, 0.14, 0.14); // Bb2
+    // Bajo discreto en tiempos 0 y 8
+    if (beat16 === 0 || beat16 === 8) {
+      const qBass = bar64 < 32 ? 146.83 : 130.81; // D3 o C3
+      this.playPizzicatoBass(qBass, time, 0.2, 0.11);
     }
   }
 
@@ -815,54 +819,9 @@ class AudioEngine {
     this.synth.startMusic('podium');
   }
 
-  // ── Síntesis de Voz "AXEL'S PLAY" en Inglés Nativo Alegre (Web Speech API) ──
+  // ── Síntesis de Voz Desactivada a Petición del Docente ──
   public speakAxelsPlay() {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    try {
-      window.speechSynthesis.cancel();
-      // Texto con entonación de show en inglés nativo
-      const utterance = new SpeechSynthesisUtterance("Axel's Play!");
-      utterance.pitch = 1.15;
-      utterance.rate = 0.95;
-      utterance.volume = 1;
-      utterance.lang = 'en-US';
-
-      const findBestEnglishVoice = () => {
-        const voices = window.speechSynthesis.getVoices();
-        if (!voices || voices.length === 0) return null;
-        // Priorizar voces naturales en inglés (US / GB)
-        return (
-          voices.find((v) => v.lang === 'en-US' && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Jenny'))) ||
-          voices.find((v) => v.lang === 'en-US') ||
-          voices.find((v) => v.lang.startsWith('en')) ||
-          voices[0]
-        );
-      };
-
-      const selectedVoice = findBestEnglishVoice();
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-        utterance.lang = selectedVoice.lang;
-        window.speechSynthesis.speak(utterance);
-      } else {
-        window.speechSynthesis.onvoiceschanged = () => {
-          window.speechSynthesis.onvoiceschanged = null;
-          const voice = findBestEnglishVoice();
-          if (voice) {
-            utterance.voice = voice;
-            utterance.lang = voice.lang;
-          }
-          window.speechSynthesis.speak(utterance);
-        };
-        setTimeout(() => {
-          if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-            window.speechSynthesis.speak(utterance);
-          }
-        }, 400);
-      }
-    } catch {
-      // Ignorar si Web Speech API no está soportada en el navegador
-    }
+    // Desactivado: el usuario prefirió la experiencia limpia sin voz sintética
   }
 
   public setContext(context: AudioSceneContext | 'intro' | 'suspense') {
