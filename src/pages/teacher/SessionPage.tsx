@@ -616,29 +616,61 @@ export default function SessionPage() {
     audioEngine.playEffect('sfx_join');
   };
 
-  // ── Simulación hiperrealista de estudiantes (bots ganan y pierden puntos para mover la tabla) ──
+  // ── Simulación psicológica de aula (estudiantes apurados, nerviosos, y a los que se les acaba el tiempo) ──
   useEffect(() => {
     if (gamePhase !== 'question' || isAnswerRevealed || isPaused) return;
     const bots = liveParticipants.filter((p) => p.id.startsWith('bot-'));
     if (bots.length === 0) return;
 
     const timeouts: ReturnType<typeof setTimeout>[] = [];
+    const questionDuration = currentQ.timeLimit || 20;
 
     bots.forEach((bot, bIdx) => {
-      // Tiempo de respuesta escalonado entre 1.5s y 11s simulando velocidad de estudiantes reales
-      const delay = Math.floor(1400 + Math.random() * 7000 + (bIdx % 4) * 800);
+      // Perfiles psicológicos de aula:
+      // 1. Al que se le acaba el tiempo por dudar (aprox 20% de los bots)
+      const willTimeout = (bIdx % 5 === 2) || (Math.random() < 0.18);
+      if (willTimeout) {
+        // Este estudiante no alcanza a responder antes de que el reloj llegue a 0
+        return;
+      }
+
+      // 2. El precipitado por el impulso inicial (1.2s - 2.8s)
+      const isImpulsive = (bIdx % 4 === 0) && Math.random() < 0.7;
+      // 3. El presionado por el reloj que responde en los últimos segundos (12s - 18s)
+      const isPanic = (bIdx % 4 === 3) || Math.random() < 0.35;
+
+      let delay: number;
+      let accuracy: number;
+
+      if (isImpulsive) {
+        // Responde rapidísimo pero se equivoca frecuentemente por apurado
+        delay = Math.floor(1200 + Math.random() * 1600);
+        accuracy = 0.52; // 48% de error por leer apurado
+      } else if (isPanic) {
+        // Responde con el reloj casi en cero bajo pánico
+        delay = Math.floor((questionDuration - 4.5) * 1000 + Math.random() * 3200);
+        delay = Math.min(delay, (questionDuration - 0.8) * 1000); // antes del corte
+        accuracy = 0.38; // 62% de error por cliquear a la loca con el tiempo encima
+      } else {
+        // Concentrado normal
+        delay = Math.floor(3200 + Math.random() * 5500);
+        accuracy = 0.82; // Más reflexivo
+      }
 
       const t = setTimeout(() => {
-        // Probabilidad de acierto variada: unos bots son más aplicados que otros
-        const accuracy = 0.55 + ((bIdx * 19) % 35) / 100; // entre 55% y 90%
         const isCorrect = Math.random() < accuracy;
 
-        // Si acierta gana puntos por velocidad (600 a 960 pts). Si falla, 0 pts (o pierde 50 si tenía racha)
+        // Cálculo de puntos por velocidad o penalización de racha
         let ptsDelta = 0;
+        let roundReason: 'correct' | 'panic_error' | 'timeout' = 'correct';
+
         if (isCorrect) {
-          ptsDelta = Math.floor(620 + Math.random() * 340);
-        } else if (bot.score > 200 && Math.random() < 0.3) {
-          ptsDelta = -50; // Penalización por racha rota para hacer oscilar la tabla
+          const speedFactor = Math.max(0.3, (questionDuration * 1000 - delay) / (questionDuration * 1000));
+          ptsDelta = Math.floor(550 + speedFactor * 420);
+          roundReason = 'correct';
+        } else {
+          ptsDelta = 0;
+          roundReason = 'panic_error';
         }
 
         setLiveParticipants((prev) =>
@@ -1971,8 +2003,8 @@ export default function SessionPage() {
                           {gained}
                         </span>
                       ) : (
-                        <span className="text-[11px] font-bold text-white/40 px-1">
-                          +0
+                        <span className="text-[10px] font-bold text-amber-300/80 bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded-md" title="No sumó puntos por error de respuesta o tiempo agotado">
+                          +0 (Error/⏰)
                         </span>
                       )}
                       <div className="text-base md:text-lg font-black text-yellow-400 min-w-24">

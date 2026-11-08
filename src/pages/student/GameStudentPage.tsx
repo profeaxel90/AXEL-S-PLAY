@@ -541,6 +541,26 @@ export default function GameStudentPage() {
           })}
         </div>
 
+        {/* ── Feedback cuando se acaba el tiempo sin responder ── */}
+        {!isAnswerSubmitted && (timeLeft <= 0 || Boolean(revealedCorrectId)) && (
+          <div className="mt-3 text-center animate-bounce-in">
+            <div className="p-3.5 rounded-2xl bg-amber-500/20 border border-amber-500/50 text-amber-200">
+              <div className="flex items-center justify-center gap-2 font-black text-sm text-amber-300">
+                <span className="text-xl">⏰</span>
+                <span>¡SE ACABÓ EL TIEMPO!</span>
+              </div>
+              <p className="text-[11px] text-amber-100/80 mt-1">
+                La presión del reloj te ganó en esta pregunta (+0 pts). ¡Concéntrate para la siguiente!
+              </p>
+            </div>
+            {explanationText && (
+              <div className="mt-2 p-2.5 rounded-xl bg-purple-900/40 border border-purple-500/30 text-[11px] text-purple-200 text-left">
+                💡 <strong>Explicación:</strong> {explanationText}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Feedback de Respuesta Enviada ── */}
         {isAnswerSubmitted && (
           <div className="mt-3 text-center animate-bounce-in">
