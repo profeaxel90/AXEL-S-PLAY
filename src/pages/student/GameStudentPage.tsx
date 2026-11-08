@@ -4,7 +4,8 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
 import { getOrCreateGameClientSync, type GameEventMessage } from '../../lib/gameSync';
 import {
-  Clock, CheckCircle2, XCircle, Zap, Sparkles, Award, Volume2, VolumeX
+  Clock, CheckCircle2, XCircle, Zap, Sparkles, Award, Volume2, VolumeX,
+  Shield, ShieldCheck, Flame, Star
 } from 'lucide-react';
 import type { Question, PowerUp, ParticipantRank } from '../../types';
 
@@ -73,6 +74,13 @@ export default function GameStudentPage() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [isStealAuthorized, setIsStealAuthorized] = useState(false);
 
+  // Nuevas Funciones de Gamificación: Rachas, Ronda Dorada, Escudo Protector y Emojis
+  const [streakCount, setStreakCount] = useState(0);
+  const [isGoldenRound, setIsGoldenRound] = useState(false);
+  const [shieldAvailable, setShieldAvailable] = useState(true); // 1 escudo por partida
+  const [isShieldActive, setIsShieldActive] = useState(false);
+  const [lastSentEmoji, setLastSentEmoji] = useState<string | null>(null);
+
   // Escuchar mensajes en tiempo real vía GameClientSync (SSE + P2P)
   useEffect(() => {
     if (!sessionId) return;
@@ -95,9 +103,13 @@ export default function GameStudentPage() {
         setStealResult(null);
         setShowLeaderboard(false);
         setIsStealAuthorized(false);
+        setIsShieldActive(false); // El escudo se reinicia para la nueva ronda
         setTimeLeft(msg.timeLimit || 20);
         setQuestionNum((msg.index || 0) + 1);
         setTotalQuestions(msg.total || 5);
+        if (msg.isGoldenRound !== undefined) {
+          setIsGoldenRound(msg.isGoldenRound);
+        }
         // Sin música en dispositivos de alumnos — solo beep de inicio
         audioEngine.playEffect('sfx_tick');
 
@@ -108,6 +120,12 @@ export default function GameStudentPage() {
             .map((p: any) => ({ id: p.id, nickname: p.nickname, score: p.score }));
           setAvailablePlayers(others);
         }
+      } else if (msg.type === 'GOLDEN_ROUND') {
+        const active = msg.isGoldenRound || false;
+        setIsGoldenRound(active);
+        if (active) {
+          audioEngine.playEffect('sfx_golden_round');
+        }
       } else if (msg.type === 'ANSWER_ACK') {
         if (!currentParticipant || msg.participantId === currentParticipant.id) {
           setFeedback(msg.isCorrect ? 'correct' : 'incorrect');
@@ -116,8 +134,17 @@ export default function GameStudentPage() {
             setCurrentScore(msg.newScore);
           }
           if (msg.isCorrect) {
-            audioEngine.playEffect('sfx_correct');
+            setStreakCount((prev) => {
+              const next = prev + 1;
+              if (next >= 2) {
+                audioEngine.playEffect('sfx_streak');
+              } else {
+                audioEngine.playEffect('sfx_correct');
+              }
+              return next;
+            });
           } else {
+            setStreakCount(0);
             audioEngine.playEffect('sfx_wrong');
           }
         }
@@ -261,12 +288,17 @@ export default function GameStudentPage() {
     const basePoints = activeQuestion.points || 1000;
     const timeBonus = Math.floor((timeLeft / (activeQuestion.timeLimit || 20)) * 500);
 
-    // Multiplicador de Super Poder + Multiplicador de Pregunta (Doble / Triple)
+    // Multiplicador de Super Poder + Ronda Dorada (2X) + Multiplicador de Pregunta
     const questionMultiplier = activeQuestion.pointsMultiplier || 1;
     const powerMultiplier = activePower?.type === 'double_points' ? 2 : 1;
-    const totalMultiplier = questionMultiplier * powerMultiplier;
+    const goldenMultiplier = isGoldenRound ? 2 : 1;
 
-    const earned = isCorrect ? (basePoints + timeBonus) * totalMultiplier : 0;
+    // Multiplicador de Racha de Fuego (+15%, +30%, +50%)
+    const nextStreak = isCorrect ? streakCount + 1 : 0;
+    const streakMultiplier = nextStreak >= 4 ? 1.5 : nextStreak === 3 ? 1.3 : nextStreak === 2 ? 1.15 : 1.0;
+
+    const totalMultiplier = questionMultiplier * powerMultiplier * goldenMultiplier * streakMultiplier;
+    const earned = isCorrect ? Math.floor((basePoints + timeBonus) * totalMultiplier) : 0;
     const nextScore = currentScore + earned;
 
     // Enviar al servidor local y P2P
@@ -289,10 +321,50 @@ export default function GameStudentPage() {
     setPointsGained(earned);
     if (isCorrect) {
       setCurrentScore((prev) => prev + earned);
-      audioEngine.playEffect('sfx_correct');
+      setStreakCount(nextStreak);
+      if (nextStreak >= 2) {
+        audioEngine.playEffect('sfx_streak');
+      } else {
+        audioEngine.playEffect('sfx_correct');
+      }
     } else {
+      setStreakCount(0);
       audioEngine.playEffect('sfx_wrong');
     }
+  };
+
+  // Activar Escudo Protector Anti-Robo (1 uso por partida)
+  const handleActivateShield = () => {
+    if (!shieldAvailable || isShieldActive || !sessionId || !currentParticipant) return;
+    setShieldAvailable(false);
+    setIsShieldActive(true);
+    audioEngine.playEffect('sfx_shield_activate');
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([40, 80, 40]);
+    }
+    const sync = getOrCreateGameClientSync(sessionId);
+    sync.send({
+      type: 'ACTIVATE_SHIELD',
+      participantId: currentParticipant.id,
+      nickname: currentParticipant.nickname,
+    });
+  };
+
+  // Enviar Reacción de Emoji Flotante en Vivo
+  const handleSendEmoji = (emoji: string) => {
+    if (!sessionId) return;
+    audioEngine.playEffect('sfx_emoji_pop');
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(30);
+    }
+    setLastSentEmoji(emoji);
+    setTimeout(() => setLastSentEmoji(null), 1000);
+    const sync = getOrCreateGameClientSync(sessionId);
+    sync.send({
+      type: 'LIVE_EMOJI',
+      emoji,
+      nickname: currentParticipant?.nickname || 'Estudiante',
+    });
   };
 
   // Manejo del nuevo sistema de Robo de Puntos (máx 2 robos, 50 pts por robo)
@@ -368,7 +440,7 @@ export default function GameStudentPage() {
       {/* ── Top Bar con HUD del Jugador ── */}
       <header className="flex items-center justify-between max-w-lg mx-auto w-full pt-1 pb-2 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-purple-600/30 border border-purple-500/40 p-1 shadow-md">
+          <div className="w-10 h-10 rounded-xl bg-purple-600/30 border border-purple-500/40 p-1 shadow-md shrink-0">
             <img
               src={currentParticipant?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=ProfeAxel'}
               alt="Avatar"
@@ -376,7 +448,21 @@ export default function GameStudentPage() {
             />
           </div>
           <div>
-            <div className="font-bold text-xs leading-none">{currentParticipant?.nickname || 'Jugador'}</div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-bold text-xs leading-none">{currentParticipant?.nickname || 'Jugador'}</span>
+              {streakCount >= 2 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-red-600 to-amber-500 text-white flex items-center gap-0.5 shadow-md shadow-red-500/30 animate-pulse">
+                  <Flame className="w-3 h-3 fill-yellow-300 text-yellow-300" />
+                  <span>x{streakCount}</span>
+                </span>
+              )}
+              {isShieldActive && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 flex items-center gap-0.5 animate-pulse">
+                  <ShieldCheck className="w-3 h-3 text-cyan-400" />
+                  <span>Blindado</span>
+                </span>
+              )}
+            </div>
             <div className="text-[11px] text-yellow-400 font-extrabold mt-0.5">
               {currentScore.toLocaleString()} pts
             </div>
@@ -460,6 +546,16 @@ export default function GameStudentPage() {
             <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px] uppercase">
               Activo
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Banner de Ronda Dorada 2X ── */}
+      {isGoldenRound && (
+        <div className="max-w-lg mx-auto w-full mb-2 animate-bounce-in">
+          <div className="p-2.5 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 text-slate-950 text-xs font-black text-center flex items-center justify-center gap-2 shadow-xl shadow-yellow-400/30 animate-pulse border-2 border-yellow-200">
+            <Sparkles className="w-4 h-4 fill-slate-950" />
+            <span>⭐ ¡RONDA DORADA! ESTA PREGUNTA VALE EL DOBLE DE PUNTOS (2X) ⭐</span>
           </div>
         </div>
       )}
@@ -630,6 +726,47 @@ export default function GameStudentPage() {
               </span>
             </button>
           )}
+          {/* ── BOTÓN ESCUDO PROTECTOR ANTI-ROBO (1 uso por partida) ── */}
+          <div className="mt-2.5">
+            {isShieldActive ? (
+              <div className="w-full py-2.5 px-3 rounded-2xl bg-cyan-500/20 border border-cyan-400/60 text-cyan-300 font-black text-xs text-center flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/10 animate-pulse">
+                <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                <span>🛡️ ¡ESCUDO ACTIVO! Tus puntos están blindados contra robos en esta ronda</span>
+              </div>
+            ) : shieldAvailable ? (
+              <button
+                type="button"
+                onClick={handleActivateShield}
+                className="w-full py-2.5 px-3 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black text-xs uppercase flex items-center justify-center gap-2 shadow-lg shadow-cyan-600/30 border border-cyan-300 hover:scale-[1.02] active:scale-95 transition-all"
+                title="Protege tus puntos contra cualquier intento de robo de tus compañeros durante esta ronda"
+              >
+                <Shield className="w-4 h-4 fill-white" />
+                <span>🛡️ Activar Escudo Protector (1 uso por partida)</span>
+              </button>
+            ) : (
+              <div className="w-full py-1.5 px-3 rounded-xl bg-white/5 text-white/40 text-[10px] text-center">
+                🛡️ Escudo Protector utilizado
+              </div>
+            )}
+          </div>
+
+          {/* ── BARRA DE REACCIONES DE EMOJIS EN VIVO (ESTILO KAHOOT) ── */}
+          <div className="mt-4 pt-2 border-t border-white/10 flex items-center justify-center gap-2">
+            <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest mr-1">Reaccionar:</span>
+            {['❤️', '🔥', '😂', '👏', '🤯', '🎉'].map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => handleSendEmoji(emoji)}
+                className={`w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 active:scale-125 text-lg flex items-center justify-center transition-transform shadow-sm ${
+                  lastSentEmoji === emoji ? 'scale-125 ring-2 ring-yellow-400 bg-yellow-400/20' : ''
+                }`}
+                title={`Enviar reacción ${emoji}`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
         </div>
       </main>
 

@@ -30,6 +30,9 @@ export interface GameEventMessage {
     | 'SCORE_UPDATE'
     | 'PAUSE'
     | 'RESUME'
+    | 'LIVE_EMOJI'
+    | 'ACTIVATE_SHIELD'
+    | 'GOLDEN_ROUND'
     | 'GAME_OVER'
     | 'RESET';
   participant?: Participant;
@@ -65,6 +68,10 @@ export interface GameEventMessage {
   error?: string;
   introTitle?: string;
   introDescription?: string;
+  emoji?: string;
+  isGoldenRound?: boolean;
+  streak?: number;
+  blockedByShield?: boolean;
   _msgId?: string;
 }
 
@@ -512,6 +519,10 @@ export class GameClientSync {
       ...data,
     });
     return { success: true };
+  }
+
+  public send(msg: GameEventMessage): void {
+    this.publishEvent(msg);
   }
 
   public destroy() {

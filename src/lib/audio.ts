@@ -554,6 +554,45 @@ class MusicSynthesizer {
     const chord = [392, 523.25, 659.25, 783.99];
     chord.forEach((f) => this.playEffectTone(f, 'triangle', 0.6, 0.3));
   }
+
+  // ── Nuevos Efectos de Gamificación AXEL'S PLAY ──
+  public playStreak() {
+    // Sonido ascendente de racha de fuego estilo Kahoot
+    const tones = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+    tones.forEach((freq, idx) => {
+      setTimeout(() => this.playEffectTone(freq, 'triangle', 0.12, 0.32), idx * 45);
+    });
+  }
+
+  public playGoldenRound() {
+    // Fanfarria resplandeciente de Ronda Dorada 2X
+    const goldenNotes = [587.33, 739.99, 880.00, 1174.66, 1479.98];
+    goldenNotes.forEach((f, idx) => {
+      setTimeout(() => {
+        this.playEffectTone(f, 'triangle', 0.2, 0.35);
+        this.playEffectTone(f * 1.5, 'sine', 0.15, 0.2);
+      }, idx * 60);
+    });
+  }
+
+  public playShieldActivate() {
+    // Tono futurista de activación de escudo protector
+    this.playEffectTone(440, 'sine', 0.22, 0.28);
+    setTimeout(() => this.playEffectTone(880, 'sine', 0.3, 0.32), 70);
+    setTimeout(() => this.playEffectTone(1760, 'triangle', 0.38, 0.22), 140);
+  }
+
+  public playShieldBlock() {
+    // Rebote metálico exitoso de defensa anti-robo
+    this.playEffectTone(650, 'square', 0.08, 0.35);
+    setTimeout(() => this.playEffectTone(1300, 'triangle', 0.2, 0.4), 30);
+    setTimeout(() => this.playEffectTone(980, 'sine', 0.3, 0.3), 90);
+  }
+
+  public playEmojiPop() {
+    // Pop sutil de burbuja para emojis flotantes
+    this.playEffectTone(820 + Math.random() * 380, 'sine', 0.06, 0.16);
+  }
 }
 
 // ── Música de Podio épica/celebratoria (diferente al lobby) ──
@@ -883,6 +922,21 @@ class AudioEngine {
       case 'sfx_time_up':
       case 'sfx_buzzer':
         this.synth.playTimeUp();
+        break;
+      case 'sfx_streak':
+        this.synth.playStreak();
+        break;
+      case 'sfx_golden_round':
+        this.synth.playGoldenRound();
+        break;
+      case 'sfx_shield_activate':
+        this.synth.playShieldActivate();
+        break;
+      case 'sfx_shield_block':
+        this.synth.playShieldBlock();
+        break;
+      case 'sfx_emoji_pop':
+        this.synth.playEmojiPop();
         break;
       default:
         this.synth.playTick();

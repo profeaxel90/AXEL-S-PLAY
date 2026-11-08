@@ -13,7 +13,7 @@ import {
   ArrowLeft, CheckCircle2, Sparkles, BarChart3,
   Clock, Eye, Wifi, Globe, Sliders, Music, Radio,
   Volume2, VolumeX, ShieldAlert, Award, Image as ImageIcon,
-  Maximize2, Minimize2, X
+  Maximize2, Minimize2, X, ShieldCheck, Flame, Shield
 } from 'lucide-react';
 
 const OPTION_STYLES = [
@@ -157,6 +157,11 @@ export default function SessionPage() {
   const [stealBanner, setStealBanner] = useState<string | null>(null);
   const [stealWinnerBanner, setStealWinnerBanner] = useState<string | null>(null);
   const [isStealAuthorized, setIsStealAuthorized] = useState(false);
+  const [shieldBlockBanner, setShieldBlockBanner] = useState<string | null>(null);
+
+  // Nuevas Funciones de Gamificación: Ronda Dorada y Reacciones de Emojis en Vivo
+  const [isGoldenRound, setIsGoldenRound] = useState(false);
+  const [floatingEmojis, setFloatingEmojis] = useState<Array<{ id: string; emoji: string; left: number; nickname?: string }>>([]);
 
   // Estados visuales mejorados: QR ampliado, secuencia intro y música lobby
   const [qrExpanded, setQrExpanded] = useState(false);
@@ -249,35 +254,82 @@ export default function SessionPage() {
           return nextCount;
         });
 
-        // Actualizar puntaje del estudiante real asegurando concordancia por ID o Nickname
+        // Actualizar puntaje y racha del estudiante real asegurando concordancia por ID o Nickname
         setLiveParticipants((prev) =>
           prev.map((p) => {
             const isMatch = (msg.participantId && p.id === msg.participantId) ||
                             (msg.nickname && p.nickname === msg.nickname);
             if (!isMatch) return p;
 
-            const updatedScore = msg.newScore !== undefined
-              ? msg.newScore
-              : (p.score + (msg.pointsEarned || 0));
-
             const isCorrect = msg.isCorrect !== undefined
               ? msg.isCorrect
               : ((msg.pointsEarned || 0) > 0);
 
+            const nextStreak = isCorrect ? (p.streak || 0) + 1 : 0;
+            if (nextStreak >= 2 && isCorrect) {
+              audioEngine.playEffect('sfx_streak');
+            }
+
+            // Aplicar multiplicador por Ronda Dorada y Racha si se calculó en local
+            const updatedScore = msg.newScore !== undefined
+              ? msg.newScore
+              : (p.score + (msg.pointsEarned || 0));
+
             return {
               ...p,
               score: updatedScore,
+              streak: nextStreak,
               correctAnswers: isCorrect ? (p.correctAnswers || 0) + 1 : (p.correctAnswers || 0),
             };
           })
         );
 
         audioEngine.playEffect('sfx_tick');
+      } else if (msg.type === 'LIVE_EMOJI') {
+        if (msg.emoji) {
+          const id = `${Date.now()}-${Math.random()}`;
+          const left = 8 + Math.random() * 84;
+          setFloatingEmojis((prev) => [...prev.slice(-18), { id, emoji: msg.emoji!, left, nickname: msg.nickname }]);
+          audioEngine.playEffect('sfx_emoji_pop');
+          setTimeout(() => {
+            setFloatingEmojis((prev) => prev.filter((e) => e.id !== id));
+          }, 3200);
+        }
+      } else if (msg.type === 'ACTIVATE_SHIELD') {
+        if (msg.participantId || msg.nickname) {
+          setLiveParticipants((prev) =>
+            prev.map((p) => {
+              if (p.id === msg.participantId || p.nickname === msg.nickname) {
+                return { ...p, hasShield: true, shieldAvailable: false };
+              }
+              return p;
+            })
+          );
+          audioEngine.playEffect('sfx_shield_activate');
+        }
       } else if (msg.type === 'STEAL_RESULT') {
         if (msg.success) {
           const amt = msg.amount || 50;
           const from = msg.fromNickname || 'Estudiante';
           const to = msg.toNickname || 'Estudiante';
+
+          // Verificar si la víctima tenía Escudo Protector activo
+          const victim = liveParticipants.find((p) => p.nickname === to || p.id === msg.toId);
+          if (victim && victim.hasShield) {
+            const blockMsg = `🛡️ ¡El Escudo Protector de ${victim.nickname} BLOQUEÓ el robo de ${from}!`;
+            setShieldBlockBanner(blockMsg);
+            audioEngine.playEffect('sfx_shield_block');
+            setTimeout(() => setShieldBlockBanner(null), 6000);
+            hostSyncRef.current?.broadcast('STEAL_RESULT', {
+              success: false,
+              fromNickname: from,
+              toNickname: victim.nickname,
+              blockedByShield: true,
+              error: `🛡️ ${victim.nickname} tenía un Escudo Protector. ¡Robo bloqueado!`,
+            });
+            return;
+          }
+
           const bannerMsg = `🗡️ ¡${from} le robó ${amt} puntos a ${to}!`;
           setStealWinnerBanner(bannerMsg);
           setLatestStealEvent({ from, to, amount: amt });
@@ -511,6 +563,9 @@ export default function SessionPage() {
   const handleNextQuestion = () => {
     setShowLeaderboard(false);
     setIsStealAuthorized(false);
+    // Reiniciar escudos protectores para la nueva ronda
+    setLiveParticipants((prev) => prev.map((p) => ({ ...p, hasShield: false })));
+
     const nextIdx = currentQIndex + 1;
     if (nextIdx >= questions.length) {
       handleEndGame();
@@ -528,14 +583,27 @@ export default function SessionPage() {
     prevRanksRef.current = new Map(prevSorted.map((p, idx) => [p.id, idx + 1]));
     roundStartScoresRef.current = new Map(liveParticipants.map((p) => [p.id, p.score]));
 
-    // Iniciar la música repetitiva de la siguiente pregunta
+    // Iniciar la música de la siguiente pregunta
     audioEngine.playQuestionMusic();
 
+    // Transmitir nueva pregunta a los celulares
     hostSyncRef.current?.broadcast('QUESTION', {
       question: nextQ,
       index: nextIdx,
       total: questions.length,
       timeLimit: nextQ.timeLimit || 20,
+      isGoldenRound,
+    });
+  };
+
+  const handleToggleGoldenRound = () => {
+    setIsGoldenRound((prev) => {
+      const next = !prev;
+      if (next) {
+        audioEngine.playEffect('sfx_golden_round');
+      }
+      hostSyncRef.current?.broadcast('GOLDEN_ROUND', { isGoldenRound: next });
+      return next;
     });
   };
 
@@ -777,7 +845,11 @@ export default function SessionPage() {
 
         if (isCorrect) {
           const speedFactor = Math.max(0.3, (questionDuration * 1000 - delay) / (questionDuration * 1000));
-          ptsDelta = Math.floor(550 + speedFactor * 420);
+          const basePts = Math.floor(550 + speedFactor * 420);
+          const currentStreak = bot.streak || 0;
+          const nextStreak = currentStreak + 1;
+          const streakMultiplier = nextStreak >= 4 ? 1.5 : nextStreak === 3 ? 1.3 : nextStreak === 2 ? 1.15 : 1.0;
+          ptsDelta = Math.floor(basePts * (isGoldenRound ? 2 : 1) * streakMultiplier);
           roundReason = 'correct';
         } else {
           ptsDelta = 0;
@@ -806,9 +878,11 @@ export default function SessionPage() {
         setLiveParticipants((prev) =>
           prev.map((p) => {
             if (p.id !== bot.id) return p;
+            const nextStreak = isCorrect ? (p.streak || 0) + 1 : 0;
             return {
               ...p,
               score: Math.max(0, p.score + ptsDelta),
+              streak: nextStreak,
               correctAnswers: isCorrect ? (p.correctAnswers || 0) + 1 : (p.correctAnswers || 0),
             };
           })
@@ -1669,7 +1743,13 @@ export default function SessionPage() {
                     <span className="px-3 py-1 rounded-full bg-purple-600/30 border border-purple-400 text-purple-200 font-black text-xs uppercase tracking-wider">
                       Pregunta {currentQIndex + 1} de {questions.length}
                     </span>
-                    {currentQ.pointsMultiplier && currentQ.pointsMultiplier > 1 && (
+                    {isGoldenRound && (
+                      <span className="px-3.5 py-1 rounded-full bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-xl shadow-yellow-400/40 animate-bounce">
+                        <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
+                        <span>⭐ ¡RONDA DORADA: PUNTOS DOBLES (2X)! ⭐</span>
+                      </span>
+                    )}
+                    {currentQ.pointsMultiplier && currentQ.pointsMultiplier > 1 && !isGoldenRound && (
                       <span className="px-3 py-1 rounded-full bg-yellow-400 text-slate-950 font-black text-xs flex items-center gap-1 shadow-lg shadow-yellow-400/30 animate-bounce">
                         <Zap className="w-3.5 h-3.5 fill-slate-950" />
                         <span>¡PUNTOS {currentQ.pointsMultiplier === 2 ? 'DOBLES (2×)' : 'TRIPLES (3×)'}!</span>
@@ -1699,6 +1779,21 @@ export default function SessionPage() {
 
               {/* Controles del Docente durante la Pregunta */}
               <div className="flex items-center gap-2 flex-wrap justify-end">
+                {/* Botón Toggle de Ronda Dorada 2X */}
+                <button
+                  type="button"
+                  onClick={handleToggleGoldenRound}
+                  className={`py-3 px-3.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                    isGoldenRound
+                      ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 ring-2 ring-yellow-400 shadow-xl shadow-yellow-400/50 scale-105 animate-pulse'
+                      : 'bg-white/10 hover:bg-white/15 text-yellow-300 border border-yellow-400/30'
+                  }`}
+                  title="Activa o desactiva la Ronda Dorada con puntos dobles (2X) para esta pregunta"
+                >
+                  <Sparkles className={`w-4 h-4 ${isGoldenRound ? 'fill-slate-950 text-slate-950' : 'fill-yellow-400 text-yellow-400'}`} />
+                  <span>{isGoldenRound ? '⭐ Ronda Dorada (2X ACTIVA)' : '⭐ Ronda Dorada (2X)'}</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleAuthorizeStealPower}
@@ -2134,9 +2229,47 @@ export default function SessionPage() {
         </div>
       )}
 
+      {/* ── EMOJIS FLOTANTES EN VIVO (REACCIONES DE ALUMNOS EN TIEMPO REAL) ── */}
+      <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+        {floatingEmojis.map((e) => (
+          <div
+            key={e.id}
+            style={{
+              left: `${e.left}%`,
+              bottom: '30px',
+              animation: 'floatEmoji 3.2s ease-out forwards',
+            }}
+            className="absolute flex flex-col items-center pointer-events-none select-none drop-shadow-2xl"
+          >
+            <span className="text-4xl sm:text-5xl filter drop-shadow-md">{e.emoji}</span>
+            {e.nickname && (
+              <span className="text-[10px] font-black bg-black/70 text-white px-2 py-0.5 rounded-full mt-1 border border-white/20">
+                {e.nickname}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* ── BANNER VISUAL DE ESCUDO PROTECTOR BLOQUEANDO ATAQUE ── */}
+      {shieldBlockBanner && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 animate-bounce-in max-w-lg w-full px-4">
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 text-white shadow-2xl border-2 border-cyan-300 flex items-center justify-between gap-3 shadow-cyan-500/50">
+            <ShieldCheck className="w-8 h-8 text-cyan-200 animate-pulse" />
+            <span className="font-black text-sm text-center flex-1">{shieldBlockBanner}</span>
+            <button
+              onClick={() => setShieldBlockBanner(null)}
+              className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-white/80"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── BANNER VISUAL DE ROBO DE PUNTOS EN PANTALLA PRINCIPAL ── */}
       {stealWinnerBanner && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 animate-bounce-in max-w-lg w-full px-4">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-bounce-in max-w-lg w-full px-4">
           <div className="p-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white shadow-2xl border-2 border-yellow-300 flex items-center justify-between gap-3">
             <span className="text-2xl animate-spin">🗡️</span>
             <span className="font-black text-sm text-center flex-1">{stealWinnerBanner}</span>
@@ -2237,9 +2370,21 @@ export default function SessionPage() {
                         className="w-8 h-8 rounded-lg object-contain bg-slate-800 p-0.5 border border-white/15 shrink-0"
                       />
                       <div className="text-left truncate">
-                        <span className="font-extrabold text-xs sm:text-sm text-white truncate block max-w-[130px] sm:max-w-[170px]">
-                          {p.nickname}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-extrabold text-xs sm:text-sm text-white truncate max-w-[110px] sm:max-w-[150px]">
+                            {p.nickname}
+                          </span>
+                          {p.streak && p.streak >= 2 ? (
+                            <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 border border-amber-400/40 px-1.5 py-0.2 rounded-md flex items-center gap-0.5 animate-pulse shadow-sm">
+                              🔥 {p.streak}
+                            </span>
+                          ) : null}
+                          {p.hasShield && (
+                            <span className="text-[10px] font-black text-cyan-300 bg-cyan-500/20 border border-cyan-400/40 px-1 py-0.2 rounded-md flex items-center">
+                              🛡️
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[10px] text-white/50 flex items-center gap-1">
                           <span>{p.correctAnswers !== undefined ? `${p.correctAnswers} aciertos` : 'Participante'}</span>
                           {p.stealCount ? <span className="text-amber-300">· ⚡{p.stealCount}</span> : null}

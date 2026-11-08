@@ -147,3 +147,17 @@
 @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
 @keyframes scorePop { 0%{transform:scale(1)} 40%{transform:scale(1.4)} 70%{transform:scale(0.9)} 100%{transform:scale(1)} }
 @keyframes progress7s { 0%{width:0%} 100%{width:100%} }
+@keyframes floatEmoji {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  15% { transform: translateY(-40px) scale(1.2); opacity: 1; }
+  80% { transform: translateY(-280px) scale(1); opacity: 0.9; }
+  100% { transform: translateY(-380px) scale(0.8); opacity: 0; }
+}
+@keyframes goldenGlow {
+  0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.4), inset 0 0 15px rgba(245, 158, 11, 0.2); }
+  50% { box-shadow: 0 0 35px rgba(251, 191, 36, 0.8), inset 0 0 25px rgba(251, 191, 36, 0.4); }
+}
+@keyframes flameFlicker {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.7)); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 0 16px rgba(245, 158, 11, 0.9)); }
+}

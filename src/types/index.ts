@@ -218,6 +218,9 @@ export interface Participant {
   avgTimePerAnswer?: number;
   activePower?: PowerUp;
   stealCount?: number;
+  streak?: number;           // Racha actual de respuestas correctas (🔥 Streak Multiplier)
+  hasShield?: boolean;        // Si tiene el Escudo Protector activo en la ronda actual
+  shieldAvailable?: boolean;  // Si aún tiene disponible su escudo anti-robo (1 por partida)
 }
 
 // ============================================================
