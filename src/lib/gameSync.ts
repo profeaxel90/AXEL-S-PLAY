@@ -22,6 +22,7 @@ export interface GameEventMessage {
     | 'STEAL_POINTS_CLAIMED'
     | 'STEAL_REQUEST'
     | 'STEAL_RESULT'
+    | 'STEAL_POWER_AUTHORIZED'
     | 'LEADERBOARD'
     | 'SCORE_UPDATE'
     | 'PAUSE'
@@ -35,6 +36,7 @@ export interface GameEventMessage {
   total?: number;
   timeLimit?: number;
   participantId?: string;
+  nickname?: string;
   optionId?: string;
   timeTaken?: number;
   isCorrect?: boolean;
@@ -243,10 +245,12 @@ export class GameClientSync {
 
   public async submitAnswer(data: {
     participantId: string;
+    nickname?: string;
     optionId: string;
     timeTaken: number;
     isCorrect: boolean;
     pointsEarned: number;
+    newScore?: number;
   }): Promise<{ isCorrect: boolean; pointsEarned: number; newScore: number }> {
     const base = getApiBaseUrl();
 
@@ -271,15 +275,19 @@ export class GameClientSync {
       this.p2pClient.send({
         type: 'ANSWER',
         participantId: data.participantId,
+        nickname: data.nickname,
         optionId: data.optionId,
         timeTaken: data.timeTaken,
+        isCorrect: data.isCorrect,
+        pointsEarned: data.pointsEarned,
+        newScore: data.newScore,
       });
     }
 
     return {
       isCorrect: data.isCorrect,
       pointsEarned: data.pointsEarned,
-      newScore: data.pointsEarned,
+      newScore: data.newScore ?? data.pointsEarned,
     };
   }
 

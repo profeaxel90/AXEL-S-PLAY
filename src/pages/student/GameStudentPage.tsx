@@ -71,6 +71,7 @@ export default function GameStudentPage() {
   const [availablePlayers, setAvailablePlayers] = useState<{id: string, nickname: string, score: number}[]>([]);
   const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [isStealAuthorized, setIsStealAuthorized] = useState(false);
 
   // Escuchar mensajes en tiempo real vía GameClientSync (SSE + P2P)
   useEffect(() => {
@@ -93,6 +94,7 @@ export default function GameStudentPage() {
         setShowStealConfirm(false);
         setStealResult(null);
         setShowLeaderboard(false);
+        setIsStealAuthorized(false);
         setTimeLeft(msg.timeLimit || 20);
         setQuestionNum((msg.index || 0) + 1);
         setTotalQuestions(msg.total || 5);
@@ -127,11 +129,21 @@ export default function GameStudentPage() {
             .map((p: any) => ({ id: p.id, nickname: p.nickname, score: p.score }));
           setAvailablePlayers(others);
         }
+      } else if (msg.type === 'STEAL_POWER_AUTHORIZED') {
+        setIsStealAuthorized(true);
+        audioEngine.playEffect('sfx_power_up');
       } else if (msg.type === 'REVEAL_ANSWER') {
+        audioEngine.playEffect('sfx_time_up');
         if (msg.correctOptionId) {
           setRevealedCorrectId(msg.correctOptionId);
         }
         if (msg.explanation) setExplanationText(msg.explanation);
+        if (msg.rankings) {
+          setLeaderboardData(msg.rankings);
+          setShowLeaderboard(true);
+          audioEngine.playEffect('sfx_digital_coins');
+          setTimeout(() => setShowLeaderboard(false), 7000);
+        }
       } else if (msg.type === 'STEAL_RESULT') {
         if (msg.fromId === currentParticipant?.id) {
           // Fui yo quien robó
@@ -164,6 +176,7 @@ export default function GameStudentPage() {
       } else if (msg.type === 'LEADERBOARD') {
         setLeaderboardData(msg.rankings || []);
         setShowLeaderboard(true);
+        audioEngine.playEffect('sfx_digital_coins');
         setTimeout(() => setShowLeaderboard(false), 7000);
       } else if (msg.type === 'POWER') {
         if (!msg.targetId || (currentParticipant && msg.targetId === currentParticipant.id)) {
@@ -254,17 +267,21 @@ export default function GameStudentPage() {
     const totalMultiplier = questionMultiplier * powerMultiplier;
 
     const earned = isCorrect ? (basePoints + timeBonus) * totalMultiplier : 0;
+    const nextScore = currentScore + earned;
 
     // Enviar al servidor local y P2P
     if (sessionId) {
       const sync = getOrCreateGameClientSync(sessionId);
       const participantId = currentParticipant?.id || 'p-self';
+      const nickname = currentParticipant?.nickname || 'Estudiante';
       sync.submitAnswer({
         participantId,
+        nickname,
         optionId,
         timeTaken,
         isCorrect,
         pointsEarned: earned,
+        newScore: nextScore,
       });
     }
 
@@ -562,26 +579,36 @@ export default function GameStudentPage() {
           </div>
         )}
 
-        {/* ── BOTÓN ROBO DE PUNTOS CON CONTADOR (Máx 2 robos, 50 pts) ── */}
+        {/* ── BOTÓN ROBO DE PUNTOS CON CONTADOR (Máx 2 robos, 50 pts, Autorizado por Docente) ── */}
         <div className="mt-3">
-          {stealCount < 2 ? (
-            <button
-              type="button"
-              onClick={handleOpenStealModal}
-              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-600/30 border border-yellow-300 flex items-center justify-between transition-transform active:scale-95"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-base">🗡️</span>
-                <span>ROBAR PUNTOS (50 pts)</span>
-              </div>
-              <span className="bg-black/30 px-2 py-0.5 rounded-full text-[10px] text-yellow-300 font-bold">
-                {2 - stealCount} {2 - stealCount === 1 ? 'disponible' : 'disponibles'}
-              </span>
-            </button>
-          ) : (
+          {stealCount >= 2 ? (
             <div className="w-full py-2.5 px-4 rounded-2xl bg-white/5 border border-white/10 text-white/40 text-xs font-bold text-center flex items-center justify-center gap-2">
               <span>🗡️ Robos de puntos agotados (2/2 usados)</span>
             </div>
+          ) : !isStealAuthorized ? (
+            <div className="w-full py-2.5 px-4 rounded-2xl bg-white/5 border border-white/10 text-white/50 text-xs font-bold flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span>🔒</span>
+                <span>Robo de Puntos</span>
+              </div>
+              <span className="text-[10px] text-yellow-400/80 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20">
+                Esperando autorización del Profe
+              </span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleOpenStealModal}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-600/40 border-2 border-yellow-300 flex items-center justify-between transition-transform active:scale-95 animate-pulse"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">⚡🗡️</span>
+                <span>¡ROBAR PUNTOS! (50 pts)</span>
+              </div>
+              <span className="bg-black/30 px-2.5 py-1 rounded-full text-[10px] text-yellow-300 font-bold border border-white/20">
+                {2 - stealCount} {2 - stealCount === 1 ? 'disponible' : 'disponibles'}
+              </span>
+            </button>
           )}
         </div>
       </main>

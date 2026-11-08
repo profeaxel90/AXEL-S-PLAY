@@ -12,7 +12,7 @@ export type P2PMessage =
   | { type: 'START_INTRO'; introTitle?: string; introDescription?: string }
   | { type: 'START_GAME' }
   | { type: 'QUESTION'; question: Question; index: number; total: number; timeLimit: number }
-  | { type: 'ANSWER'; participantId: string; optionId: string; timeTaken: number }
+  | { type: 'ANSWER'; participantId: string; nickname?: string; optionId: string; timeTaken: number; isCorrect?: boolean; pointsEarned?: number; newScore?: number }
   | { type: 'ANSWER_ACK'; participantId: string; isCorrect: boolean; pointsEarned: number; newScore: number }
   | { type: 'REVEAL_ANSWER'; correctOptionId: string; explanation?: string }
   | { type: 'POWER'; power: PowerUp; targetId?: string } // targetId undefined = para TODOS

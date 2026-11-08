@@ -3,10 +3,12 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   Save, ArrowLeft, Plus, Trash2, Copy, Eye, Clock,
   Award, Sparkles, CheckCircle2, Image as ImageIcon,
-  HelpCircle, Settings, Layers, ListOrdered
+  HelpCircle, Settings, Layers, ListOrdered, FileText
 } from 'lucide-react';
 import { SUBJECTS } from '../../types';
 import type { QuestionType, Difficulty, GameMode, GradeLevel } from '../../types';
+import DocumentQuestionImporterModal from '../../components/teacher/DocumentQuestionImporterModal';
+import type { ExtractedQuestion } from '../../lib/documentQuestionExtractor';
 
 interface QuestionDraft {
   id: string;
@@ -72,8 +74,25 @@ export default function GameEditorPage() {
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [showPreview, setShowPreview] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isDocModalOpen, setIsDocModalOpen] = useState(false);
 
   const activeQuestion = questions[activeQuestionIndex] || questions[0];
+
+  const handleImportExtractedQuestions = (extracted: ExtractedQuestion[]) => {
+    const newDrafts: QuestionDraft[] = extracted.map((eq) => ({
+      id: eq.id,
+      type: eq.type,
+      content: eq.content,
+      timeLimit: eq.timeLimit || 20,
+      points: eq.points || 1000,
+      pointsMultiplier: 1,
+      difficulty: 'medium',
+      explanation: eq.explanation || '',
+      options: eq.options,
+    }));
+    setQuestions((prev) => [...prev, ...newDrafts]);
+    setActiveQuestionIndex(questions.length); // seleccionar la primera pregunta nueva
+  };
 
   const handleAddQuestion = () => {
     const newQ: QuestionDraft = {
@@ -282,13 +301,24 @@ export default function GameEditorPage() {
             <span className="text-xs font-bold uppercase tracking-wider text-white/60">
               Preguntas ({questions.length})
             </span>
-            <button
-              onClick={handleAddQuestion}
-              className="btn-primary py-1.5 px-3 rounded-lg text-xs font-bold flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Añadir</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsDocModalOpen(true)}
+                className="btn-secondary py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center gap-1 text-purple-300 border-purple-500/30 hover:bg-purple-500/10"
+                title="Cargar documento Word o PDF para extraer preguntas"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Word / PDF</span>
+              </button>
+              <button
+                onClick={handleAddQuestion}
+                className="btn-primary py-1.5 px-3 rounded-lg text-xs font-bold flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Añadir</span>
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
@@ -561,6 +591,13 @@ export default function GameEditorPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal de Importación desde Word o PDF */}
+      <DocumentQuestionImporterModal
+        isOpen={isDocModalOpen}
+        onClose={() => setIsDocModalOpen(false)}
+        onImport={handleImportExtractedQuestions}
+      />
     </div>
   );
 }

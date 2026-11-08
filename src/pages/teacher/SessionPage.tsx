@@ -12,7 +12,8 @@ import {
   Zap, Share2, RefreshCw, Trophy, Medal, Crown,
   ArrowLeft, CheckCircle2, Sparkles, BarChart3,
   Clock, Eye, Wifi, Globe, Sliders, Music, Radio,
-  Volume2, VolumeX, ShieldAlert, Award, Image as ImageIcon
+  Volume2, VolumeX, ShieldAlert, Award, Image as ImageIcon,
+  Maximize2, Minimize2, X
 } from 'lucide-react';
 
 const OPTION_STYLES = [
@@ -125,9 +126,16 @@ export default function SessionPage() {
   const [podiumStep, setPodiumStep] = useState(0);
   const [podiumConfetti, setPodiumConfetti] = useState(false);
 
-  // Robo de Puntos
+  // Robo de Puntos y Autorización
   const [stealBanner, setStealBanner] = useState<string | null>(null);
   const [stealWinnerBanner, setStealWinnerBanner] = useState<string | null>(null);
+  const [isStealAuthorized, setIsStealAuthorized] = useState(false);
+
+  // Estados visuales mejorados: QR ampliado, secuencia intro y música lobby
+  const [qrExpanded, setQrExpanded] = useState(false);
+  const [introStep, setIntroStep] = useState<1 | 2 | 3 | 4>(1); // 1: 1-2-3, 2: Tema, 3: AXEL'S PLAY ZOOM, 4: A jugar
+  const [introCountNum, setIntroCountNum] = useState<1 | 2 | 3>(1);
+  const [isLobbyMusicPlaying, setIsLobbyMusicPlaying] = useState(false);
 
   const hostSyncRef = useRef<GameHostSync | null>(null);
   const currentQ = questions[currentQIndex] || questions[0];
@@ -160,9 +168,12 @@ export default function SessionPage() {
           // REVELACIÓN AUTOMÁTICA CUANDO TODOS RESPONDEN
           setLiveParticipants((currParticipants) => {
             if (currParticipants.length > 0 && nextCount >= currParticipants.length) {
+              // Detiene la música de la pregunta y suena el bit indicador de fin de tiempo
+              audioEngine.stopQuestionMusic();
+              audioEngine.playEffect('sfx_time_up');
               setTimeout(() => {
                 handleRevealAnswer();
-              }, 300);
+              }, 400);
             }
             return currParticipants;
           });
@@ -170,12 +181,28 @@ export default function SessionPage() {
           return nextCount;
         });
 
-        // Actualizar puntaje del estudiante real
-        if (msg.participantId) {
-          setLiveParticipants((prev) =>
-            prev.map((p) => (p.id === msg.participantId ? { ...p, score: msg.newScore || p.score } : p))
-          );
-        }
+        // Actualizar puntaje del estudiante real asegurando concordancia por ID o Nickname
+        setLiveParticipants((prev) =>
+          prev.map((p) => {
+            const isMatch = (msg.participantId && p.id === msg.participantId) ||
+                            (msg.nickname && p.nickname === msg.nickname);
+            if (!isMatch) return p;
+
+            const updatedScore = msg.newScore !== undefined
+              ? msg.newScore
+              : (p.score + (msg.pointsEarned || 0));
+
+            const isCorrect = msg.isCorrect !== undefined
+              ? msg.isCorrect
+              : ((msg.pointsEarned || 0) > 0);
+
+            return {
+              ...p,
+              score: updatedScore,
+              correctAnswers: isCorrect ? (p.correctAnswers || 0) + 1 : (p.correctAnswers || 0),
+            };
+          })
+        );
 
         audioEngine.playEffect('sfx_tick');
       } else if (msg.type === 'STEAL_RESULT') {
@@ -313,14 +340,58 @@ export default function SessionPage() {
   const handleStartIntro = () => {
     if (liveParticipants.length === 0) return;
 
-    setGamePhase('intro');
-    audioEngine.setContext('intro');
+    // Detener música de sala de espera si estaba activa
+    audioEngine.stopLobbyMusic();
+    setIsLobbyMusicPlaying(false);
 
-    // Transmitir a todos los celulares la pantalla de bienvenida
+    setGamePhase('intro');
+    setIntroStep(1);
+    setIntroCountNum(1);
+    audioEngine.playEffect('sfx_tick');
+
+    // Transmitir a todos los celulares la secuencia de inicio
     hostSyncRef.current?.broadcast('START_INTRO', {
+      introStep: 1,
+      introCount: 1,
       introTitle: gameData?.title || 'Seguridad Vial y Normas de Tránsito',
       introDescription: gameData?.description || 'Evaluación interactiva y gamificada con retos en tiempo real.',
     });
+
+    // Secuencia de Cuenta Regresiva: 1, 2, 3
+    const t2 = setTimeout(() => {
+      setIntroCountNum(2);
+      audioEngine.playEffect('sfx_tick');
+    }, 1100);
+
+    const t3 = setTimeout(() => {
+      setIntroCountNum(3);
+      audioEngine.playEffect('sfx_tick');
+    }, 2200);
+
+    // Paso 2: Mostrar TEMA DE LA PARTIDA (3.3s)
+    const tTema = setTimeout(() => {
+      setIntroStep(2);
+      audioEngine.playEffect('sfx_power_up');
+      hostSyncRef.current?.broadcast('START_INTRO', {
+        introStep: 2,
+        introTitle: gameData?.title || 'Seguridad Vial y Normas de Tránsito',
+      });
+    }, 3300);
+
+    // Paso 3: AXEL'S PLAY EN ZOOM CINEMATOGRÁFICO (5.6s)
+    const tZoom = setTimeout(() => {
+      setIntroStep(3);
+      audioEngine.playEffect('sfx_intro');
+      hostSyncRef.current?.broadcast('START_INTRO', {
+        introStep: 3,
+        introTitle: "AXEL'S PLAY",
+      });
+    }, 5600);
+
+    // Paso 4: ¡EMPIEZA EL JUEGO! (8.2s)
+    const tStart = setTimeout(() => {
+      handleStartQuestions();
+    }, 8200);
   };
 
   const handleStartQuestions = () => {
@@ -328,10 +399,12 @@ export default function SessionPage() {
     setCurrentQIndex(0);
     setIsAnswerRevealed(false);
     setAnsweredCount(0);
+    setIsStealAuthorized(false);
     const firstQ = questions[0];
     setTimerLeft(firstQ.timeLimit || 20);
 
-    audioEngine.setContext('game_start');
+    // Iniciar la música repetitiva de la pregunta (se detiene cuando todos responden)
+    audioEngine.playQuestionMusic();
 
     // Transmitir primera pregunta a todos los celulares
     hostSyncRef.current?.broadcast('START_GAME');
@@ -345,6 +418,7 @@ export default function SessionPage() {
 
   const handleNextQuestion = () => {
     setShowLeaderboard(false);
+    setIsStealAuthorized(false);
     const nextIdx = currentQIndex + 1;
     if (nextIdx >= questions.length) {
       handleEndGame();
@@ -357,7 +431,8 @@ export default function SessionPage() {
     setAnsweredCount(0);
     setTimerLeft(nextQ.timeLimit || 20);
 
-    audioEngine.playEffect('sfx_round_change');
+    // Iniciar la música repetitiva de la siguiente pregunta
+    audioEngine.playQuestionMusic();
 
     hostSyncRef.current?.broadcast('QUESTION', {
       question: nextQ,
@@ -369,26 +444,58 @@ export default function SessionPage() {
 
   const handleRevealAnswer = () => {
     setIsAnswerRevealed(true);
-    audioEngine.playEffect('sfx_correct');
+    // Detener la música de la pregunta y sonar bit indicador de tiempo acabado
+    audioEngine.stopQuestionMusic();
+    audioEngine.playEffect('sfx_time_up');
 
-    const top7 = [...liveParticipants]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 7)
-      .map((p, idx) => ({
-        id: p.id,
-        nickname: p.nickname,
-        avatar: p.avatar,
-        score: p.score,
-        rank: idx + 1,
-        correctAnswers: p.correctAnswers || 0,
-        stealCount: p.stealCount || 0,
-      }));
-    setLeaderboardData(top7);
-    setShowLeaderboard(true);
+    // Reproducir sonido de monedas digitales cayendo para la tabla de clasificación
+    setTimeout(() => {
+      audioEngine.playEffect('sfx_digital_coins');
+    }, 300);
 
-    hostSyncRef.current?.broadcast('REVEAL_ANSWER', {
-      correctOptionId: currentQ.correctAnswer as string,
-      explanation: currentQ.explanation,
+    // Calcular el ranking Top 7 con los puntajes más actualizados
+    setLiveParticipants((latest) => {
+      const top7 = [...latest]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 7)
+        .map((p, idx) => ({
+          id: p.id,
+          nickname: p.nickname,
+          avatar: p.avatar,
+          score: p.score,
+          rank: idx + 1,
+          correctAnswers: p.correctAnswers || 0,
+          stealCount: p.stealCount || 0,
+        }));
+
+      setLeaderboardData(top7);
+      setShowLeaderboard(true);
+
+      // Sincronizar tabla de clasificación con todos los participantes
+      hostSyncRef.current?.broadcast('LEADERBOARD', {
+        rankings: top7,
+      });
+
+      hostSyncRef.current?.broadcast('REVEAL_ANSWER', {
+        correctOptionId: currentQ.correctAnswer as string,
+        explanation: currentQ.explanation,
+        rankings: top7,
+      });
+
+      return latest;
+    });
+  };
+
+  // Autorización de Robo de Puntos como Poder por el Docente
+  const handleAuthorizeStealPower = () => {
+    setIsStealAuthorized(true);
+    audioEngine.playEffect('sfx_power_up');
+    setStealBanner('🗡️ ¡PODER ACTIVADO! Has autorizado el Robo de Puntos (50 pts) para los estudiantes.');
+    setTimeout(() => setStealBanner(null), 6000);
+
+    hostSyncRef.current?.broadcast('STEAL_POWER_AUTHORIZED', {
+      authorized: true,
+      amount: 50,
     });
   };
 
@@ -840,32 +947,95 @@ export default function SessionPage() {
 
       {/* ── FASE 1: SALA DE ESPERA CON CÓDIGO QR GIGANTE Y CONEXIÓN MULTI-RED ── */}
       {gamePhase === 'waiting' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Columna Izquierda: QR Grande Proyectable y Selector de Red */}
-          <div className="card p-6 border-purple-500/30 bg-gradient-to-b from-purple-950/40 to-slate-900 text-center flex flex-col items-center justify-between shadow-2xl">
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-bold mb-2">
-                <QrCode className="w-4 h-4 text-yellow-400" />
-                <span>ACCESO CON CÁMARA DESDE CUALQUIER RED</span>
+        <div className="space-y-4">
+          {/* Barra de Música de la Sala de Espera (Exclusiva en PC Docente) */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/60 to-slate-900 border border-purple-500/30 flex items-center justify-between gap-4 shadow-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-purple-300">
+                <Music className="w-5 h-5 animate-pulse" />
               </div>
-              <h2 className="text-xl font-black text-white mb-1">
-                Escanea con tu celular para unirte
-              </h2>
-              <p className="text-white/60 text-xs mb-3">
-                Funciona desde <strong className="text-purple-300">Datos Móviles (4G/5G)</strong> o Wi-Fi.
-              </p>
+              <div>
+                <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                  <span>Música de la Sala de Espera</span>
+                  <span className="text-[10px] text-yellow-300 font-extrabold bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20">
+                    Solo en tu PC
+                  </span>
+                </h3>
+                <p className="text-xs text-purple-300">
+                  {isLobbyMusicPlaying
+                    ? '🎵 Sonando en tu computador mientras se unen los participantes'
+                    : 'Activa la música ambiental mientras tus alumnos escanean el código QR'}
+                </p>
+              </div>
             </div>
 
-            {/* Canvas QR */}
-            <div className="p-4 bg-white rounded-3xl shadow-2xl shadow-purple-600/40 border-4 border-purple-500/60 my-1">
-              <QRCodeSVG
-                value={qrUrl}
-                size={220}
-                level="H"
-                includeMargin={false}
-                fgColor="#1e1b4b"
-              />
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (isLobbyMusicPlaying) {
+                  audioEngine.stopLobbyMusic();
+                  setIsLobbyMusicPlaying(false);
+                } else {
+                  audioEngine.playLobbyMusic();
+                  setIsLobbyMusicPlaying(true);
+                }
+              }}
+              className={`py-2 px-4 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shadow-md ${
+                isLobbyMusicPlaying
+                  ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                  : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30'
+              }`}
+            >
+              {isLobbyMusicPlaying ? (
+                <>
+                  <Pause className="w-3.5 h-3.5" />
+                  <span>Pausar Música</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5" />
+                  <span>▶ Iniciar Música de Espera</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Columna Izquierda: QR Grande Proyectable y Selector de Red */}
+            <div className="card p-6 border-purple-500/30 bg-gradient-to-b from-purple-950/40 to-slate-900 text-center flex flex-col items-center justify-between shadow-2xl">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-bold mb-2">
+                  <QrCode className="w-4 h-4 text-yellow-400" />
+                  <span>ACCESO CON CÁMARA DESDE CUALQUIER RED</span>
+                </div>
+                <h2 className="text-xl font-black text-white mb-1">
+                  Escanea con tu celular para unirte
+                </h2>
+                <p className="text-white/60 text-xs mb-3">
+                  Funciona desde <strong className="text-purple-300">Datos Móviles (4G/5G)</strong> o Wi-Fi.
+                </p>
+              </div>
+
+              {/* Canvas QR - Clic para Expandir a Pantalla Completa */}
+              <div
+                onClick={() => setQrExpanded(true)}
+                className="p-4 bg-white rounded-3xl shadow-2xl shadow-purple-600/40 border-4 border-purple-500/60 my-1 cursor-pointer hover:scale-105 transition-all group relative"
+                title="Haz clic para ver el código QR en tamaño gigante"
+              >
+                <QRCodeSVG
+                  value={qrUrl}
+                  size={220}
+                  level="H"
+                  includeMargin={false}
+                  fgColor="#1e1b4b"
+                />
+                <div className="absolute inset-0 bg-purple-950/30 opacity-0 group-hover:opacity-100 rounded-3xl flex items-center justify-center transition-opacity">
+                  <span className="bg-purple-900 text-white font-bold text-xs px-3 py-1.5 rounded-full shadow-xl border border-purple-400 flex items-center gap-1.5 animate-bounce">
+                    <Maximize2 className="w-3.5 h-3.5 text-yellow-400" />
+                    <span>Clic para Ampliar QR</span>
+                  </span>
+                </div>
+              </div>
 
             <div className="w-full mt-3 space-y-3">
               {/* Selector de Modo de Red (4G/5G vs Wi-Fi Local) */}
@@ -1064,65 +1234,72 @@ export default function SessionPage() {
             )}
           </div>
         </div>
+        </div>
       )}
 
-      {/* ── FASE INTRO: PANTALLA DE BIENVENIDA ANTES DEL JUEGO ── */}
+      {/* ── FASE INTRO: SECUENCIA CINEMATOGRÁFICA (1, 2, 3 -> TEMA -> AXEL'S PLAY EN ZOOM) ── */}
       {gamePhase === 'intro' && (
-        <div className="card p-8 md:p-12 border-purple-500/40 bg-gradient-to-b from-purple-950/60 via-slate-950 to-slate-950 text-center shadow-2xl relative overflow-hidden animate-bounce-in">
-          {/* Badge superior */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-black uppercase tracking-widest mb-4">
-            <Sparkles className="w-4 h-4 text-yellow-400 animate-spin" />
-            <span>PARTIDA EN VIVO • AXEL'S PLAY</span>
-          </div>
+        <div className="card p-8 md:p-14 border-purple-500/50 bg-gradient-to-b from-purple-950/70 via-slate-950 to-slate-950 text-center shadow-2xl relative overflow-hidden min-h-[500px] flex flex-col items-center justify-center">
+          {/* PASO 1: CONTEO ANIMADO 1, 2, 3 */}
+          {introStep === 1 && (
+            <div className="flex flex-col items-center justify-center space-y-6 animate-fade-in">
+              <span className="text-xs font-black uppercase tracking-widest text-purple-300 bg-purple-500/20 px-4 py-1.5 rounded-full border border-purple-500/40">
+                ¡PREPARADOS EN SUS CELULARES!
+              </span>
+              <div
+                key={introCountNum}
+                className="w-48 h-48 sm:w-56 sm:h-56 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-500 flex items-center justify-center shadow-[0_0_60px_rgba(168,85,247,0.6)] border-4 border-yellow-300 animate-bounce-in"
+              >
+                <span className="text-8xl sm:text-9xl font-black text-white tracking-tighter drop-shadow-2xl">
+                  {introCountNum}
+                </span>
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-yellow-300 tracking-wider animate-pulse">
+                {introCountNum === 1 ? '¡Uno!' : introCountNum === 2 ? '¡Dos!' : '¡Tres!'}
+              </p>
+            </div>
+          )}
 
-          {/* Título de la Plataforma */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-yellow-300 to-pink-300 tracking-tight mb-3">
-            AXEL'S PLAY
-          </h1>
+          {/* PASO 2: NOMBRE DEL TEMA */}
+          {introStep === 2 && (
+            <div className="flex flex-col items-center justify-center space-y-6 animate-fade-in max-w-4xl mx-auto p-4">
+              <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-yellow-400/20 border border-yellow-400/50 text-yellow-300 text-xs font-black uppercase tracking-widest shadow-lg animate-pulse">
+                <Sparkles className="w-4 h-4 text-yellow-400 animate-spin" />
+                <span>TEMA DE LA ACTIVIDAD</span>
+              </div>
+              <h1 className="text-4xl sm:text-6xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-white to-amber-300 leading-tight drop-shadow-[0_10px_35px_rgba(234,179,8,0.4)] animate-bounce-in">
+                {gameData?.title || 'Seguridad Vial y Normas de Tránsito'}
+              </h1>
+              <p className="text-white/70 text-sm sm:text-base max-w-2xl mx-auto">
+                {gameData?.description || 'Responde con rapidez y precisión para acumular la mayor cantidad de puntos.'}
+              </p>
+            </div>
+          )}
 
-          {/* Título del Juego */}
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-4 max-w-3xl mx-auto">
-            {gameData?.title || 'Seguridad Vial y Señales de Tránsito'}
-          </h2>
+          {/* PASO 3: AXEL'S PLAY EN ZOOM CINEMATOGRÁFICO */}
+          {introStep === 3 && (
+            <div className="flex flex-col items-center justify-center space-y-6 animate-fade-in relative">
+              <div className="absolute -inset-16 bg-gradient-to-r from-purple-600 via-pink-600 to-yellow-400 rounded-full blur-3xl opacity-50 animate-pulse pointer-events-none" />
+              <div className="relative animate-zoom-in">
+                <h1 className="text-6xl sm:text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-yellow-300 to-pink-300 tracking-tighter drop-shadow-[0_15px_50px_rgba(168,85,247,0.8)] scale-110 sm:scale-125 transition-transform">
+                  AXEL'S PLAY
+                </h1>
+              </div>
+              <div className="flex items-center gap-2 text-yellow-300 font-black text-xl sm:text-3xl tracking-widest animate-bounce pt-6">
+                <Zap className="w-6 h-6 fill-yellow-400 text-yellow-400" />
+                <span>¡A JUGAR AHORA!</span>
+                <Zap className="w-6 h-6 fill-yellow-400 text-yellow-400" />
+              </div>
+            </div>
+          )}
 
-          <p className="text-white/70 text-sm md:text-base max-w-2xl mx-auto mb-8">
-            {gameData?.description || 'Evaluación interactiva y gamificada. Prepárate para responder en tu teléfono móvil con rapidez y precisión.'}
-          </p>
-
-          {/* Tarjeta de Instrucciones Pedagógicas */}
-          <div className="max-w-2xl mx-auto p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md mb-8 text-left space-y-3 shadow-xl">
-            <h3 className="text-sm font-black text-yellow-400 uppercase tracking-wider flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-yellow-400" />
-              <span>¿CÓMO SE JUEGA?</span>
-            </h3>
-            <ul className="space-y-2 text-xs md:text-sm text-white/80">
-              <li className="flex items-start gap-2.5">
-                <span className="w-6 h-6 rounded-lg bg-red-600/30 border border-red-500/50 flex items-center justify-center text-red-300 font-black shrink-0">1</span>
-                <span>Lee la pregunta y observa la imagen en esta pantalla principal proyectada.</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="w-6 h-6 rounded-lg bg-blue-600/30 border border-blue-500/50 flex items-center justify-center text-blue-300 font-black shrink-0">2</span>
-                <span>En tu celular, presiona la figura geométrica y el color correspondiente a tu respuesta.</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="w-6 h-6 rounded-lg bg-amber-500/30 border border-amber-500/50 flex items-center justify-center text-amber-300 font-black shrink-0">3</span>
-                <span>Cuanto más rápido respondas correctamente, ¡más puntos sumas!</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="w-6 h-6 rounded-lg bg-emerald-600/30 border border-emerald-500/50 flex items-center justify-center text-emerald-300 font-black shrink-0">4</span>
-                <span>⚡ ¡Atento! En cualquier momento el profe activará el <strong>ROBO DE PUNTOS</strong>. Quien toque primero el botón rojo se los lleva.</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Botón de inicio rápido con cuenta regresiva */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          {/* Botón de Salto Rápido para el Docente */}
+          <div className="mt-8 pt-4">
             <button
               onClick={handleStartQuestions}
-              className="py-4 px-8 rounded-2xl text-base font-black flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-slate-950 shadow-2xl shadow-green-500/40 hover:scale-105 active:scale-95 transition-all"
+              className="py-2.5 px-6 rounded-xl text-xs font-bold text-white/60 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
             >
-              <Play className="w-5 h-5 fill-current" />
-              <span>¡A JUGAR AHORA! ({introCountdown}s)</span>
+              Iniciar Pregunta 1 Inmediatamente →
             </button>
           </div>
         </div>
@@ -1133,35 +1310,92 @@ export default function SessionPage() {
         <div className="space-y-6">
           {/* Header de Pregunta en Proyector */}
           <div className="card p-6 border-purple-500/30 bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-purple-950/40 text-center relative overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <span className="px-3.5 py-1 rounded-full bg-purple-600/30 border border-purple-500/40 text-purple-300 font-black text-xs uppercase tracking-wider">
-                  Pregunta {currentQIndex + 1} de {questions.length}
-                </span>
-
-                {/* Badge de Multiplicador de Puntos (Doble o Triple) */}
-                {currentQ.pointsMultiplier && currentQ.pointsMultiplier > 1 && (
-                  <span className="px-3 py-1 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600 text-slate-950 font-black text-xs flex items-center gap-1 shadow-lg shadow-yellow-500/30 animate-bounce">
-                    <Zap className="w-3.5 h-3.5 fill-slate-950" />
-                    <span>¡PUNTOS {currentQ.pointsMultiplier === 2 ? 'DOBLES (2×)' : 'TRIPLES (3×)'}!</span>
+            {/* ── CONTADOR REGRESIVO GIGANTE Y BARRA SUPERIOR ── */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-5 rounded-2xl bg-slate-950/70 border border-purple-500/40 shadow-inner mb-4">
+              {/* RELOJ GIGANTESCO */}
+              <div className="flex items-center gap-4">
+                <div
+                  className={`w-28 h-28 sm:w-36 sm:h-36 rounded-3xl flex flex-col items-center justify-center border-4 transition-all duration-300 shadow-2xl ${
+                    timerLeft <= 5
+                      ? 'bg-red-950/90 border-red-500 text-red-400 shadow-red-600/60 animate-pulse scale-105'
+                      : 'bg-purple-950/70 border-purple-400/70 text-yellow-300 shadow-purple-600/40'
+                  }`}
+                >
+                  <span className="text-6xl sm:text-7xl md:text-8xl font-black tracking-tighter leading-none">
+                    {timerLeft}
                   </span>
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-white/70 mt-1">
+                    SEGUNDOS
+                  </span>
+                </div>
+
+                <div className="text-left space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-3 py-1 rounded-full bg-purple-600/30 border border-purple-400 text-purple-200 font-black text-xs uppercase tracking-wider">
+                      Pregunta {currentQIndex + 1} de {questions.length}
+                    </span>
+                    {currentQ.pointsMultiplier && currentQ.pointsMultiplier > 1 && (
+                      <span className="px-3 py-1 rounded-full bg-yellow-400 text-slate-950 font-black text-xs flex items-center gap-1 shadow-lg shadow-yellow-400/30 animate-bounce">
+                        <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                        <span>¡PUNTOS {currentQ.pointsMultiplier === 2 ? 'DOBLES (2×)' : 'TRIPLES (3×)'}!</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-white font-bold text-sm sm:text-base">
+                    <Users className="w-5 h-5 text-purple-400" />
+                    <span>
+                      Respuestas Recibidas:{' '}
+                      <strong className="text-yellow-400 text-xl font-black">{answeredCount}</strong> / {liveParticipants.length}
+                    </span>
+                  </div>
+
+                  {isStealAuthorized ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-black text-green-300 bg-green-500/20 px-3 py-1 rounded-full border border-green-500/40 animate-pulse">
+                      ⚡ Poder de Robo de Puntos AUTORIZADO
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-white/50 bg-white/5 px-2.5 py-0.5 rounded-full border border-white/10">
+                      🔒 Robo de Puntos esperando tu activación
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Controles del Docente durante la Pregunta */}
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                <button
+                  type="button"
+                  onClick={handleAuthorizeStealPower}
+                  disabled={isStealAuthorized}
+                  className={`py-3 px-4 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${
+                    isStealAuthorized
+                      ? 'bg-yellow-400/20 text-yellow-300 border border-yellow-400/50 cursor-default'
+                      : 'bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-rose-500 text-white shadow-xl shadow-red-600/30 hover:scale-105 active:scale-95 animate-pulse'
+                  }`}
+                  title="Autoriza a los estudiantes para que puedan usar el botón de robo de puntos en su celular"
+                >
+                  <Zap className={`w-4 h-4 ${isStealAuthorized ? 'fill-yellow-400 text-yellow-400' : 'fill-white text-white'}`} />
+                  <span>{isStealAuthorized ? '✓ Robo de Puntos Autorizado' : '⚡ Autorizar Robo de Puntos'}</span>
+                </button>
+
+                {!isAnswerRevealed ? (
+                  <button
+                    onClick={handleRevealAnswer}
+                    className="py-3 px-5 rounded-xl text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-xl shadow-purple-600/30 hover:scale-105 transition-all flex items-center gap-2"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>Revelar Respuesta</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleNextQuestion}
+                    className="py-3 px-5 rounded-xl text-xs font-black bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-slate-950 shadow-xl shadow-green-500/40 hover:scale-105 transition-all flex items-center gap-2"
+                  >
+                    <span>Siguiente Pregunta</span>
+                    <SkipForward className="w-4 h-4 fill-slate-950" />
+                  </button>
                 )}
-              </div>
-
-              {/* Contador de Respuestas Reales Recibidas */}
-              <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-bold text-white">
-                <Users className="w-4 h-4 text-purple-400" />
-                <span>Respuestas: {answeredCount} / {liveParticipants.length}</span>
-              </div>
-
-              {/* Timer Circular / Badge */}
-              <div className={`px-4 py-1.5 rounded-full border font-black text-sm flex items-center gap-2 ${
-                timerLeft <= 5
-                  ? 'bg-red-500/20 border-red-500 text-red-400 animate-pulse'
-                  : 'bg-white/10 border-white/20 text-white'
-              }`}>
-                <Clock className="w-4 h-4" />
-                <span>{timerLeft} segundos</span>
               </div>
             </div>
 
@@ -1573,6 +1807,66 @@ export default function SessionPage() {
                 <SkipForward className="w-4 h-4" />
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL QR GIGANTE EXPANDIDO PARA PROYECTAR A TODA LA CLASE ── */}
+      {qrExpanded && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-fade-in"
+          onClick={() => setQrExpanded(false)}
+        >
+          <div
+            className="card max-w-lg w-full p-8 border-purple-500/60 bg-slate-900 shadow-2xl text-center space-y-6 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setQrExpanded(false)}
+              className="absolute top-4 right-4 p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors"
+              title="Cerrar"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div>
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-black uppercase tracking-widest mb-2">
+                <Sparkles className="w-4 h-4 text-yellow-400" />
+                <span>CÓDIGO QR GIGANTE • AXEL'S PLAY</span>
+              </div>
+              <h2 className="text-2xl font-black text-white">Escanea para Entrar a la Partida</h2>
+              <p className="text-white/60 text-xs mt-1">
+                Apunta la cámara de tu celular a este código para unirte inmediatamente
+              </p>
+            </div>
+
+            {/* Código QR Gigante */}
+            <div className="p-6 bg-white rounded-3xl shadow-2xl border-4 border-purple-500 inline-block mx-auto">
+              <QRCodeSVG
+                value={qrUrl}
+                size={320}
+                level="H"
+                includeMargin={false}
+                fgColor="#1e1b4b"
+              />
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1.5 text-center">
+              <span className="text-xs text-white/60 font-semibold block uppercase tracking-wider">
+                Código PIN de la Partida:
+              </span>
+              <div className="text-4xl font-black tracking-widest text-yellow-400 font-mono">
+                {token}
+              </div>
+              <p className="text-[11px] text-white/40 truncate">{qrUrl}</p>
+            </div>
+
+            <button
+              onClick={() => setQrExpanded(false)}
+              className="w-full btn-primary py-3 rounded-xl text-sm font-bold shadow-lg shadow-purple-600/30"
+            >
+              Cerrar Vista Ampliada
+            </button>
           </div>
         </div>
       )}

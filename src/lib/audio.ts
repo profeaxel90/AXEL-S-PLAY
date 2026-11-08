@@ -386,6 +386,33 @@ class MusicSynthesizer {
     this.playEffectTone(200, 'sine', 0.25, 0.25);
   }
 
+  // Cascada de monedas digitales para la tabla de clasificación
+  public playDigitalCoins() {
+    const coinTones = [
+      { freq: 987.77, delay: 0 },    // B5
+      { freq: 1318.51, delay: 65 },  // E6
+      { freq: 1046.50, delay: 130 }, // C6
+      { freq: 1567.98, delay: 195 }, // G6
+      { freq: 1318.51, delay: 260 }, // E6
+      { freq: 1760.00, delay: 325 }, // A6
+      { freq: 1975.53, delay: 390 }, // B6
+      { freq: 2093.00, delay: 455 }, // C7
+      { freq: 2637.02, delay: 520 }, // E7
+    ];
+    coinTones.forEach(({ freq, delay }) => {
+      setTimeout(() => {
+        this.playEffectTone(freq, 'sine', 0.15, 0.32);
+        this.playEffectTone(freq * 1.5, 'triangle', 0.08, 0.15);
+      }, delay);
+    });
+  }
+
+  // Sonido bit / chicharra electrónica que indica fin de tiempo o que todos respondieron
+  public playTimeUp() {
+    this.playEffectTone(349.23, 'sawtooth', 0.18, 0.35); // F4
+    setTimeout(() => this.playEffectTone(261.63, 'sawtooth', 0.28, 0.4), 140); // C4
+  }
+
   public playIntroFanfare() {
     const chord = [392, 523.25, 659.25, 783.99];
     chord.forEach((f) => this.playEffectTone(f, 'triangle', 0.6, 0.3));
@@ -604,12 +631,49 @@ class AudioEngine {
       case 'sfx_steal_lost':
         this.synth.playStealLost();
         break;
+      case 'sfx_digital_coins':
+      case 'sfx_coins':
+        this.synth.playDigitalCoins();
+        break;
       case 'sfx_intro':
         this.synth.playIntroFanfare();
+        break;
+      case 'sfx_time_up':
+      case 'sfx_buzzer':
+        this.synth.playTimeUp();
         break;
       default:
         this.synth.playTick();
         break;
+    }
+  }
+
+  // Métodos específicos para música de preguntas y lobby
+  public playQuestionMusic() {
+    if (!this.settings.musicEnabled) return;
+    this.synth.startMusic('question');
+  }
+
+  public stopQuestionMusic() {
+    if (this.synth.getTrack() === 'question') {
+      this.synth.stopMusic();
+    }
+  }
+
+  public playLobbyMusic() {
+    if (!this.settings.musicEnabled) return;
+    if (this.customAudio) {
+      this.customAudio.play().catch(() => {});
+      this.customPlaying = true;
+    } else {
+      this.synth.startMusic('lobby');
+    }
+  }
+
+  public stopLobbyMusic() {
+    this.stopCustomAudio();
+    if (this.synth.getTrack() === 'lobby') {
+      this.synth.stopMusic();
     }
   }
 
