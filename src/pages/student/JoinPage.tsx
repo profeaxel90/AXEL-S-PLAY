@@ -23,6 +23,7 @@ export default function JoinPage() {
   const navigate = useNavigate();
   const { setCurrentParticipant, clearError } = useSessionStore();
 
+  const [enteredPin, setEnteredPin] = useState(token || '');
   const [nickname, setNickname] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_SEEDS[0]);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -30,8 +31,8 @@ export default function JoinPage() {
 
   useEffect(() => {
     clearError();
-    // No iniciar música en dispositivos de alumnos
-  }, [clearError]);
+    if (token) setEnteredPin(token);
+  }, [clearError, token]);
 
   const handleRandomizeNickname = () => {
     const random = RANDOM_NICKNAMES[Math.floor(Math.random() * RANDOM_NICKNAMES.length)];
@@ -50,8 +51,10 @@ export default function JoinPage() {
     e.preventDefault();
     setLocalError(null);
 
-    if (!token) {
-      setLocalError('No se encontró el código QR de la partida. Escanéalo nuevamente.');
+    const activeSessionPin = (token || enteredPin).trim();
+
+    if (!activeSessionPin) {
+      setLocalError('Por favor ingresa el código PIN de la partida (ej: 482915).');
       return;
     }
 
@@ -73,7 +76,7 @@ export default function JoinPage() {
 
       const newParticipant = {
         id: participantId,
-        sessionId: token,
+        sessionId: activeSessionPin,
         nickname: nickname.trim(),
         avatar: avatarUrl,
         score: 0,
@@ -85,12 +88,12 @@ export default function JoinPage() {
       // Guardar en el store local
       setCurrentParticipant(newParticipant);
 
-      // Conectar con el sincronizador híbrido (Servidor Local + P2P)
-      const sync = getOrCreateGameClientSync(token);
+      // Conectar con el sincronizador en tiempo real (MQTT Cloud + BroadcastChannel + P2P)
+      const sync = getOrCreateGameClientSync(activeSessionPin);
       await sync.join(newParticipant);
 
       audioEngine.playEffect('sfx_join');
-      navigate(`/waiting/${token}`);
+      navigate(`/waiting/${activeSessionPin}`);
     } catch (err: unknown) {
       setLocalError(err instanceof Error ? err.message : 'Error al ingresar a la partida.');
     } finally {
@@ -98,22 +101,7 @@ export default function JoinPage() {
     }
   };
 
-  if (!token) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 text-center">
-        <div className="card max-w-md p-8 border-purple-500/30">
-          <QrCode className="w-16 h-16 text-purple-400 mx-auto mb-4 animate-pulse" />
-          <h2 className="text-2xl font-black text-white mb-2">Escaneo Requerido</h2>
-          <p className="text-white/60 text-sm mb-6">
-            Para unirte a una partida en AXEL'S PLAY debes escanear con la cámara de tu celular el código QR proyectado por tu docente.
-          </p>
-          <div className="p-3 bg-purple-950/40 rounded-xl border border-purple-500/30 text-xs text-purple-300">
-            Apunta la cámara de tu teléfono al código en pantalla gigante.
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const displayPin = token || enteredPin;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 text-white flex flex-col justify-between p-4 md:p-8">
@@ -129,9 +117,9 @@ export default function JoinPage() {
           </div>
         </div>
 
-        <div className="px-3 py-1 rounded-full bg-green-500/10 border border-green-500/30 text-green-400 text-xs font-bold flex items-center gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>QR Válido</span>
+        <div className="px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs font-bold flex items-center gap-1.5">
+          <ShieldCheck className="w-3.5 h-3.5 text-green-400" />
+          <span>PIN: {displayPin ? displayPin.toUpperCase() : 'PENDIENTE'}</span>
         </div>
       </div>
 
@@ -157,6 +145,23 @@ export default function JoinPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Si no venía token por URL, permitir ingresar el PIN manualmente estilo Kahoot */}
+          {!token && (
+            <div>
+              <label className="text-xs font-bold text-purple-300 block mb-1">
+                PIN del Juego (6 dígitos)
+              </label>
+              <input
+                type="text"
+                value={enteredPin}
+                onChange={(e) => setEnteredPin(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+                placeholder="Ej: 482915"
+                maxLength={10}
+                className="input text-center text-xl font-black tracking-widest uppercase border-purple-500/40 focus:border-purple-400"
+                required
+              />
+            </div>
+          )}
           {/* Avatar Selector */}
           <div>
             <div className="flex items-center justify-between mb-2">

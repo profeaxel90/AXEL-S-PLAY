@@ -70,7 +70,8 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
         </Route>
 
-        {/* ── Acceso QR Estudiante (sin auth) ── */}
+        {/* ── Acceso QR / PIN Estudiante (sin auth) ── */}
+        <Route path="/join" element={<JoinPage />} />
         <Route path="/join/:token" element={<JoinPage />} />
         <Route path="/waiting/:sessionId" element={<WaitingRoomPage />} />
         <Route path="/game/:sessionId" element={<GameStudentPage />} />

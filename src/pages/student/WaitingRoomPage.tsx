@@ -31,6 +31,10 @@ export default function WaitingRoomPage() {
     const sync = getOrCreateGameClientSync(sessionId);
     setIsLiveConnected(sync.isConnected);
 
+    if (currentParticipant) {
+      sync.join(currentParticipant);
+    }
+
     sync.onEvent = (msg: GameEventMessage) => {
       console.log('[WaitingRoom] Evento recibido:', msg.type);
 

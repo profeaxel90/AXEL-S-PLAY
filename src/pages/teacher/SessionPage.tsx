@@ -534,6 +534,61 @@ export default function SessionPage() {
     audioEngine.playEffect('sfx_tick');
   };
 
+  const handleAddTestBot = () => {
+    const botSeeds = ['Ninja', 'Dragon', 'Cyber', 'Wizard', 'Astro', 'Phoenix'];
+    const botSeed = botSeeds[Math.floor(Math.random() * botSeeds.length)];
+    const botNum = Math.floor(Math.random() * 90 + 10);
+    const newBot: Participant = {
+      id: `bot-${Date.now()}-${botNum}`,
+      sessionId: token,
+      nickname: `Bot_${botSeed}${botNum}`,
+      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${botSeed}${botNum}`,
+      score: 0,
+      rank: liveParticipants.length + 1,
+      isConnected: true,
+      joinedAt: new Date().toISOString(),
+    };
+    setLiveParticipants((prev) => {
+      const next = [...prev, newBot];
+      hostSyncRef.current?.broadcast('ROOM_UPDATE', { participants: next });
+      return next;
+    });
+    audioEngine.playEffect('sfx_join');
+  };
+
+  // Simulación de respuesta automática de bots para pruebas
+  useEffect(() => {
+    if (gamePhase !== 'question' || isAnswerRevealed || isPaused) return;
+    const bots = liveParticipants.filter((p) => p.id.startsWith('bot-'));
+    if (bots.length === 0) return;
+
+    const timer = setTimeout(() => {
+      setLiveParticipants((prev) =>
+        prev.map((p) => {
+          if (!p.id.startsWith('bot-')) return p;
+          const isCorrect = Math.random() > 0.25;
+          const pts = isCorrect ? Math.floor(700 + Math.random() * 300) : 0;
+          return {
+            ...p,
+            score: p.score + pts,
+            correctAnswers: isCorrect ? (p.correctAnswers || 0) + 1 : (p.correctAnswers || 0),
+          };
+        })
+      );
+      setAnsweredCount((prev) => {
+        const next = prev + bots.length;
+        if (next >= liveParticipants.length) {
+          audioEngine.stopQuestionMusic();
+          audioEngine.playEffect('sfx_time_up');
+          setTimeout(() => handleRevealAnswer(), 400);
+        }
+        return next;
+      });
+    }, 3800);
+
+    return () => clearTimeout(timer);
+  }, [gamePhase, currentQIndex, isAnswerRevealed, isPaused]);
+
   const handleShareLink = async () => {
     const shared = await shareSessionLink(qrUrl, "Únete a AXEL'S PLAY");
     if (shared) {
@@ -948,6 +1003,24 @@ export default function SessionPage() {
       {/* ── FASE 1: SALA DE ESPERA CON CÓDIGO QR GIGANTE Y CONEXIÓN MULTI-RED ── */}
       {gamePhase === 'waiting' && (
         <div className="space-y-4">
+          {/* Banner Principal Kahoot: URL + PIN GIGANTE */}
+          <div className="p-5 rounded-3xl bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 border-2 border-purple-500/50 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="text-center md:text-left">
+              <span className="text-xs uppercase font-extrabold tracking-widest text-purple-300 flex items-center justify-center md:justify-start gap-1.5">
+                <Sparkles className="w-4 h-4 text-yellow-400" />
+                Unirse a la partida desde cualquier celular o navegador:
+              </span>
+              <h2 className="text-2xl md:text-4xl font-black text-white mt-0.5">
+                axel-s-play.vercel.app/join
+              </h2>
+              <p className="text-xs text-white/60 mt-1">O escanea el código QR proyectado en pantalla gigante</p>
+            </div>
+            <div className="bg-slate-950 border-2 border-yellow-400 px-8 py-3 rounded-2xl shadow-2xl flex flex-col items-center">
+              <span className="text-xs font-black uppercase tracking-wider text-yellow-300">PIN DE JUEGO</span>
+              <span className="text-4xl md:text-6xl font-black tracking-widest text-yellow-300 font-mono">{token}</span>
+            </div>
+          </div>
+
           {/* Barra de Música de la Sala de Espera (Exclusiva en PC Docente) */}
           <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/60 to-slate-900 border border-purple-500/30 flex items-center justify-between gap-4 shadow-xl">
             <div className="flex items-center gap-3">
@@ -1158,7 +1231,7 @@ export default function SessionPage() {
 
           {/* Columna Derecha: Participantes Conectados REALES */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="card p-5 border-white/10 flex items-center justify-between">
+            <div className="card p-5 border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
                   <Users className="w-5 h-5" />
@@ -1169,11 +1242,21 @@ export default function SessionPage() {
                   </h3>
                   <p className="text-white/50 text-xs">
                     {liveParticipants.length === 0
-                      ? 'Nadie se ha unido aún. Los estudiantes aparecerán aquí conforme escaneen el QR.'
+                      ? 'Nadie se ha unido aún. Los estudiantes aparecerán aquí conforme escaneen el QR o ingresen el PIN.'
                       : 'Toca en cualquier alumno para darle un poder individual o dale a TODOS ⚡'}
                   </p>
                 </div>
               </div>
+
+              {/* Botón para probar la partida con bots */}
+              <button
+                type="button"
+                onClick={handleAddTestBot}
+                className="btn-secondary py-2 px-3 rounded-xl text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto border-purple-500/30 hover:bg-purple-500/20 text-purple-300"
+                title="Añadir un jugador simulado para probar la partida"
+              >
+                <span>🤖 +1 Jugador de Prueba</span>
+              </button>
             </div>
 
             {/* Grid de Participantes REALES */}

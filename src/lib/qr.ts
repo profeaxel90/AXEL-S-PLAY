@@ -20,13 +20,12 @@ export const DEFAULT_QR_OPTIONS: QROptions = {
 };
 
 /**
- * Genera un token aleatorio seguro (24 caracteres alfanuméricos)
- * para asociar unívocamente la partida a su código QR.
+ * Genera un PIN numérico de 6 dígitos estilo Kahoot (ej: 482915)
+ * para asociar unívocamente la partida tanto por Código QR como por ingreso manual.
  */
 export function generateSessionToken(): string {
-  const bytes = new Uint8Array(12);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const pin = Math.floor(100000 + Math.random() * 900000);
+  return pin.toString();
 }
 
 /**

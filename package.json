@@ -21,6 +21,7 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.9",
     "lucide-react": "^1.66.0",
+    "mqtt": "^5.16.1",
     "peerjs": "^1.5.5",
     "qrcode.react": "^4.2.0",
     "react": "^19.3.1",

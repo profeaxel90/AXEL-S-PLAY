@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Zap, Users, Trophy, Shield, Gamepad2, BookOpen,
@@ -73,6 +74,19 @@ const CONTEXTS = [
 ];
 
 export default function LandingPage() {
+  const navigate = useNavigate();
+  const [pinInput, setPinInput] = useState('');
+
+  const handleJoinByPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = pinInput.trim().replace(/[^a-zA-Z0-9]/g, '');
+    if (clean) {
+      navigate(`/join/${clean}`);
+    } else {
+      navigate('/join');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-white overflow-hidden">
 
@@ -138,6 +152,36 @@ export default function LandingPage() {
             acceso exclusivo por QR, poderes especiales del docente y analítica pedagógica en tiempo real.
             Diseñada para instituciones educativas, formación empresarial y aprendizaje autónomo.
           </motion.p>
+
+          {/* Kahoot-style PIN Join Box */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.4 }}
+            className="w-full max-w-md mx-auto mb-10 bg-gradient-to-r from-purple-900/70 via-indigo-900/60 to-slate-900/80 backdrop-blur-xl border-2 border-purple-500/50 p-6 rounded-3xl shadow-2xl shadow-purple-900/50 text-center"
+          >
+            <div className="flex items-center justify-center gap-2 mb-2 text-purple-300 font-black text-xs uppercase tracking-wider">
+              <Sparkles className="w-4 h-4 text-yellow-400" />
+              <span>¿Tienes un PIN de partida? ¡Únete ahora!</span>
+            </div>
+            <form onSubmit={handleJoinByPin} className="flex flex-col sm:flex-row gap-2 mt-3">
+              <input
+                type="text"
+                placeholder="PIN (ej: 482915)"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+                maxLength={8}
+                className="flex-1 text-center text-2xl font-black tracking-widest uppercase bg-slate-950/90 border border-purple-400/50 rounded-2xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 placeholder:text-white/30 placeholder:tracking-normal placeholder:text-base"
+              />
+              <button
+                type="submit"
+                className="btn-primary py-3 px-6 rounded-2xl font-black text-base bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 hover:opacity-95 shadow-lg shadow-purple-600/40 flex items-center justify-center gap-1.5"
+              >
+                <span>¡Jugar!</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+          </motion.div>
 
           {/* CTAs */}
           <motion.div

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   Save, ArrowLeft, Plus, Trash2, Copy, Eye, Clock,
   Award, Sparkles, CheckCircle2, Image as ImageIcon,
-  HelpCircle, Settings, Layers, ListOrdered, FileText
+  HelpCircle, Settings, Layers, ListOrdered, FileText, Upload
 } from 'lucide-react';
 import { SUBJECTS } from '../../types';
 import type { QuestionType, Difficulty, GameMode, GradeLevel } from '../../types';
@@ -94,6 +94,19 @@ export default function GameEditorPage() {
     setActiveQuestionIndex(questions.length); // seleccionar la primera pregunta nueva
   };
 
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('imported_questions');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          handleImportExtractedQuestions(parsed);
+          sessionStorage.removeItem('imported_questions');
+        }
+      }
+    } catch {}
+  }, []);
+
   const handleAddQuestion = () => {
     const newQ: QuestionDraft = {
       id: `q-${Date.now()}`,
@@ -175,7 +188,18 @@ export default function GameEditorPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsDocModalOpen(true)}
+            className="py-2.5 px-4 rounded-xl text-xs font-black flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-600/30 border border-purple-400/40 hover:scale-105 transition-all"
+            title="Importar preguntas automáticamente desde Word (.docx) o PDF (.pdf)"
+          >
+            <FileText className="w-4 h-4 text-yellow-300" />
+            <span>📄 Importar Word / PDF</span>
+            <span className="bg-yellow-400 text-slate-950 text-[10px] px-1.5 py-0.5 font-black rounded-full">NUEVO</span>
+          </button>
+
           <button
             onClick={() => setShowPreview(!showPreview)}
             className="btn-secondary py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center gap-2"
@@ -291,6 +315,34 @@ export default function GameEditorPage() {
             />
           </div>
         </div>
+      </div>
+
+      {/* Banner Destacado de Importación desde Documentos */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/70 via-indigo-950/60 to-slate-900 border border-purple-500/40 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-purple-600/30 border border-purple-400/50 flex items-center justify-center text-purple-300 shrink-0 shadow-lg shadow-purple-600/20">
+            <FileText className="w-6 h-6 text-yellow-300" />
+          </div>
+          <div>
+            <h3 className="font-bold text-white text-sm flex items-center gap-2">
+              <span>¿Tienes preguntas en un examen de Word (.docx) o PDF?</span>
+              <span className="text-[10px] font-black bg-yellow-400/20 text-yellow-300 border border-yellow-400/30 px-2 py-0.5 rounded-full">
+                Extracción Rápida
+              </span>
+            </h3>
+            <p className="text-xs text-white/60 mt-0.5">
+              Carga tu archivo o copia y pega el texto. AXEL'S PLAY detectará automáticamente las preguntas y opciones.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsDocModalOpen(true)}
+          className="btn-primary py-2.5 px-5 rounded-xl text-xs font-black shrink-0 flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-95 shadow-lg shadow-purple-600/30"
+        >
+          <Upload className="w-4 h-4" />
+          <span>Cargar Word / PDF</span>
+        </button>
       </div>
 
       {/* ── Editor de Preguntas y Navegación Lateral ── */}
