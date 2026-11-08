@@ -164,6 +164,7 @@ export default function SessionPage() {
   const [isLobbyMusicPlaying, setIsLobbyMusicPlaying] = useState(false);
 
   const hostSyncRef = useRef<GameHostSync | null>(null);
+  const roundStartScoresRef = useRef<Map<string, number>>(new Map());
   const currentQ = questions[currentQIndex] || questions[0];
 
   // ── Iniciar música de lobby automáticamente al montar ──
@@ -447,6 +448,9 @@ export default function SessionPage() {
     const firstQ = questions[0];
     setTimerLeft(firstQ.timeLimit || 20);
 
+    // Guardar puntajes iniciales de la ronda para la animación exacta del leaderboard
+    roundStartScoresRef.current = new Map(liveParticipants.map((p) => [p.id, p.score]));
+
     // Iniciar la música repetitiva de la pregunta (se detiene cuando todos responden)
     audioEngine.playQuestionMusic();
 
@@ -475,6 +479,9 @@ export default function SessionPage() {
     setAnsweredCount(0);
     setTimerLeft(nextQ.timeLimit || 20);
 
+    // Guardar puntajes iniciales de la ronda para la animación exacta del leaderboard
+    roundStartScoresRef.current = new Map(liveParticipants.map((p) => [p.id, p.score]));
+
     // Iniciar la música repetitiva de la siguiente pregunta
     audioEngine.playQuestionMusic();
 
@@ -502,16 +509,20 @@ export default function SessionPage() {
       const top5 = [...latest]
         .sort((a, b) => b.score - a.score)
         .slice(0, 5)
-        .map((p, idx) => ({
-          id: p.id,
-          nickname: p.nickname,
-          avatar: p.avatar,
-          score: p.score,
-          prevScore: Math.max(0, p.score - (p.correctAnswers ? 100 : 0)),
-          rank: idx + 1,
-          correctAnswers: p.correctAnswers || 0,
-          stealCount: p.stealCount || 0,
-        }));
+        .map((p, idx) => {
+          const prev = roundStartScoresRef.current.get(p.id) ?? p.score;
+          return {
+            id: p.id,
+            nickname: p.nickname,
+            avatar: p.avatar,
+            score: p.score,
+            prevScore: prev,
+            gained: p.score - prev,
+            rank: idx + 1,
+            correctAnswers: p.correctAnswers || 0,
+            stealCount: p.stealCount || 0,
+          };
+        });
 
       setLeaderboardData(top5);
       setShowLeaderboard(true);
@@ -580,14 +591,18 @@ export default function SessionPage() {
   };
 
   const handleAddTestBot = () => {
-    const botSeeds = ['Ninja', 'Dragon', 'Cyber', 'Wizard', 'Astro', 'Phoenix'];
-    const botSeed = botSeeds[Math.floor(Math.random() * botSeeds.length)];
-    const botNum = Math.floor(Math.random() * 90 + 10);
+    const studentNames = [
+      'Mateo 🚀', 'Sofía ✨', 'Lucas ⚡', 'Valeria 🌟',
+      'Santiago 🎯', 'Camila 💡', 'Alejandro 🧠', 'Isabella 🔥',
+      'Daniel 🎮', 'Mariana 🎨', 'Sebastián 🏆', 'Lucía 🦄'
+    ];
+    const existingCount = liveParticipants.filter((p) => p.id.startsWith('bot-')).length;
+    const nickname = studentNames[existingCount % studentNames.length] || `Estudiante_${existingCount + 1}`;
     const newBot: Participant = {
-      id: `bot-${Date.now()}-${botNum}`,
+      id: `bot-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       sessionId: token,
-      nickname: `Bot_${botSeed}${botNum}`,
-      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${botSeed}${botNum}`,
+      nickname,
+      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(nickname)}`,
       score: 0,
       rank: liveParticipants.length + 1,
       isConnected: true,
@@ -601,37 +616,66 @@ export default function SessionPage() {
     audioEngine.playEffect('sfx_join');
   };
 
-  // Simulación de respuesta automática de bots para pruebas
+  // ── Simulación hiperrealista de estudiantes (bots ganan y pierden puntos para mover la tabla) ──
   useEffect(() => {
     if (gamePhase !== 'question' || isAnswerRevealed || isPaused) return;
     const bots = liveParticipants.filter((p) => p.id.startsWith('bot-'));
     if (bots.length === 0) return;
 
-    const timer = setTimeout(() => {
-      setLiveParticipants((prev) =>
-        prev.map((p) => {
-          if (!p.id.startsWith('bot-')) return p;
-          const isCorrect = Math.random() > 0.25;
-          const pts = isCorrect ? Math.floor(700 + Math.random() * 300) : 0;
-          return {
-            ...p,
-            score: p.score + pts,
-            correctAnswers: isCorrect ? (p.correctAnswers || 0) + 1 : (p.correctAnswers || 0),
-          };
-        })
-      );
-      setAnsweredCount((prev) => {
-        const next = prev + bots.length;
-        if (next >= liveParticipants.length) {
-          audioEngine.stopQuestionMusic();
-          audioEngine.playEffect('sfx_time_up');
-          setTimeout(() => handleRevealAnswer(), 400);
-        }
-        return next;
-      });
-    }, 3800);
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
 
-    return () => clearTimeout(timer);
+    bots.forEach((bot, bIdx) => {
+      // Tiempo de respuesta escalonado entre 1.5s y 11s simulando velocidad de estudiantes reales
+      const delay = Math.floor(1400 + Math.random() * 7000 + (bIdx % 4) * 800);
+
+      const t = setTimeout(() => {
+        // Probabilidad de acierto variada: unos bots son más aplicados que otros
+        const accuracy = 0.55 + ((bIdx * 19) % 35) / 100; // entre 55% y 90%
+        const isCorrect = Math.random() < accuracy;
+
+        // Si acierta gana puntos por velocidad (600 a 960 pts). Si falla, 0 pts (o pierde 50 si tenía racha)
+        let ptsDelta = 0;
+        if (isCorrect) {
+          ptsDelta = Math.floor(620 + Math.random() * 340);
+        } else if (bot.score > 200 && Math.random() < 0.3) {
+          ptsDelta = -50; // Penalización por racha rota para hacer oscilar la tabla
+        }
+
+        setLiveParticipants((prev) =>
+          prev.map((p) => {
+            if (p.id !== bot.id) return p;
+            return {
+              ...p,
+              score: Math.max(0, p.score + ptsDelta),
+              correctAnswers: isCorrect ? (p.correctAnswers || 0) + 1 : (p.correctAnswers || 0),
+            };
+          })
+        );
+
+        audioEngine.playEffect('sfx_tick');
+
+        // Incrementar contador de respuestas
+        setAnsweredCount((prev) => {
+          const nextCount = prev + 1;
+          setLiveParticipants((currParticipants) => {
+            // Si todos respondieron (bots + humanos), detener música y sonar fin de tiempo
+            if (currParticipants.length > 0 && nextCount >= currParticipants.length) {
+              audioEngine.stopQuestionMusic();
+              audioEngine.playEffect('sfx_time_up');
+              setTimeout(() => handleRevealAnswer(), 400);
+            }
+            return currParticipants;
+          });
+          return nextCount;
+        });
+      }, delay);
+
+      timeouts.push(t);
+    });
+
+    return () => {
+      timeouts.forEach((t) => clearTimeout(t));
+    };
   }, [gamePhase, currentQIndex, isAnswerRevealed, isPaused]);
 
   const handleShareLink = async () => {
@@ -1918,9 +1962,17 @@ export default function SessionPage() {
                     </div>
 
                     <div className="text-right flex items-center gap-2">
-                      {gained > 0 && (
-                        <span className="text-xs font-black text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-lg animate-pulse">
+                      {gained > 0 ? (
+                        <span className="text-xs font-black text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-lg animate-pulse shadow-sm shadow-emerald-500/20">
                           +{gained}
+                        </span>
+                      ) : gained < 0 ? (
+                        <span className="text-xs font-black text-rose-400 bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 rounded-lg animate-pulse shadow-sm shadow-rose-500/20">
+                          {gained}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-white/40 px-1">
+                          +0
                         </span>
                       )}
                       <div className="text-base md:text-lg font-black text-yellow-400 min-w-24">
