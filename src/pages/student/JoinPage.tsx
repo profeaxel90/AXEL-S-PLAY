@@ -4,13 +4,10 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
 import { getOrCreateGameClientSync } from '../../lib/gameSync';
 import { Gamepad2, Sparkles, QrCode, AlertCircle, Shuffle, ArrowRight, ShieldCheck } from 'lucide-react';
+import MascotAvatar, { AVAILABLE_MASCOT_SEEDS } from '../../components/game/MascotAvatar';
 
-// Colección de Avatares divertidos
-const AVATAR_SEEDS = [
-  'Astro', 'Ninja', 'Cyber', 'Wizard', 'Dragon',
-  'Fox', 'Pixel', 'Rocket', 'Gamer', 'Phoenix',
-  'Shadow', 'Comet', 'Titan', 'Sparky', 'Blaze'
-];
+// Colección de Avatares divertidos 3D Cartoon
+const AVATAR_SEEDS = AVAILABLE_MASCOT_SEEDS;
 
 const RANDOM_NICKNAMES = [
   'SuperCerebro', 'VelocidadPura', 'MaestroGenio', 'LuzMental',
@@ -71,14 +68,14 @@ export default function JoinPage() {
     setIsSubmitting(true);
 
     try {
-      const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${selectedAvatar}`;
+      const avatarValue = selectedAvatar;
       const participantId = `p-${Date.now()}`;
 
       const newParticipant = {
         id: participantId,
         sessionId: activeSessionPin,
         nickname: nickname.trim(),
-        avatar: avatarUrl,
+        avatar: avatarValue,
         score: 0,
         rank: 1,
         isConnected: true,
@@ -176,22 +173,23 @@ export default function JoinPage() {
               </button>
             </div>
 
-            {/* Avatar Activo Grande */}
+            {/* Avatar Activo Grande 3D Cartoon */}
             <div className="flex justify-center mb-4">
               <div className="relative group">
                 <div className="w-24 h-24 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-500 p-1 shadow-xl shadow-purple-600/30">
                   <div className="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center overflow-hidden">
-                    <img
-                      src={`https://api.dicebear.com/7.x/bottts/svg?seed=${selectedAvatar}`}
-                      alt="Avatar"
-                      className="w-20 h-20 object-contain group-hover:scale-110 transition-transform"
+                    <MascotAvatar
+                      seed={selectedAvatar}
+                      emotion="happy"
+                      size="xl"
+                      className="group-hover:scale-110 transition-transform"
                     />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Carrusel de Avatares */}
+            {/* Carrusel de Mascotas 3D */}
             <div className="grid grid-cols-5 gap-2">
               {AVATAR_SEEDS.slice(0, 10).map((seed) => (
                 <button
@@ -201,17 +199,14 @@ export default function JoinPage() {
                     setSelectedAvatar(seed);
                     audioEngine.playEffect('sfx_tick');
                   }}
-                  className={`p-1.5 rounded-xl border transition-all ${
+                  className={`p-1.5 rounded-xl border flex items-center justify-center transition-all ${
                     selectedAvatar === seed
-                      ? 'border-yellow-400 bg-purple-600/30 scale-105 shadow-md shadow-yellow-500/20'
+                      ? 'border-yellow-400 bg-purple-600/30 scale-105 shadow-md shadow-yellow-500/20 ring-1 ring-yellow-400/50'
                       : 'border-white/10 hover:border-white/30 bg-white/5 opacity-70 hover:opacity-100'
                   }`}
+                  title={seed}
                 >
-                  <img
-                    src={`https://api.dicebear.com/7.x/bottts/svg?seed=${seed}`}
-                    alt={seed}
-                    className="w-8 h-8 mx-auto"
-                  />
+                  <MascotAvatar seed={seed} size="sm" />
                 </button>
               ))}
             </div>

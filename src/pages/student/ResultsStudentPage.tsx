@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useSessionStore } from '../../stores/sessionStore';
 import { Trophy, Medal, Crown, ArrowLeft, Star, Sparkles } from 'lucide-react';
 import type { ParticipantRank } from '../../types';
+import MascotAvatar from '../../components/game/MascotAvatar';
 
 export default function ResultsStudentPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -82,8 +83,8 @@ export default function ResultsStudentPage() {
             }`}>
               {second && (
                 <>
-                  <div className="w-13 h-13 rounded-2xl bg-slate-400/20 p-1 border border-slate-300/40 mb-1">
-                    <img src={second.avatar} alt={second.nickname} className="w-full h-full object-contain" />
+                  <div className="w-13 h-13 rounded-2xl bg-slate-400/20 p-1 border border-slate-300/40 mb-1 flex items-center justify-center">
+                    <MascotAvatar avatar={second.avatar} emotion="happy" size="md" />
                   </div>
                   <span className="font-bold text-xs text-white truncate max-w-full">{second.nickname}</span>
                   <span className="text-[10px] text-slate-300 font-semibold mb-1">{second.score.toLocaleString()} pts</span>
@@ -100,8 +101,8 @@ export default function ResultsStudentPage() {
             }`}>
               {first && (
                 <>
-                  <div className="w-16 h-16 rounded-3xl bg-yellow-400/30 p-1 border-2 border-yellow-400 shadow-xl shadow-yellow-500/40 mb-1 animate-float">
-                    <img src={first.avatar} alt={first.nickname} className="w-full h-full object-contain" />
+                  <div className="w-16 h-16 rounded-3xl bg-yellow-400/30 p-1 border-2 border-yellow-400 shadow-xl shadow-yellow-500/40 mb-1 animate-float flex items-center justify-center">
+                    <MascotAvatar avatar={first.avatar} emotion="victory" size="lg" />
                   </div>
                   <span className="font-black text-xs text-yellow-300 truncate max-w-full">{first.nickname}</span>
                   <span className="text-xs text-yellow-400 font-extrabold mb-1">{first.score.toLocaleString()} pts</span>
@@ -119,8 +120,8 @@ export default function ResultsStudentPage() {
             }`}>
               {third && (
                 <>
-                  <div className="w-13 h-13 rounded-2xl bg-amber-700/20 p-1 border border-amber-600/40 mb-1">
-                    <img src={third.avatar} alt={third.nickname} className="w-full h-full object-contain" />
+                  <div className="w-13 h-13 rounded-2xl bg-amber-700/20 p-1 border border-amber-600/40 mb-1 flex items-center justify-center">
+                    <MascotAvatar avatar={third.avatar} emotion="happy" size="md" />
                   </div>
                   <span className="font-bold text-xs text-white truncate max-w-full">{third.nickname}</span>
                   <span className="text-[10px] text-amber-400 font-semibold mb-1">{third.score.toLocaleString()} pts</span>

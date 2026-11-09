@@ -7,6 +7,7 @@ import { GameHostSync, type GameEventMessage } from '../../lib/gameSync';
 import { POWER_UPS } from '../../types';
 import type { PowerUpType, Participant, Question } from '../../types';
 import { SAMPLE_GAMES, SAMPLE_QUESTIONS_ROAD_SAFETY } from '../../data/mockGames';
+import MascotAvatar, { AVAILABLE_MASCOT_SEEDS } from '../../components/game/MascotAvatar';
 import {
   Play, Pause, SkipForward, Square, Users, QrCode,
   Zap, Share2, RefreshCw, Trophy, Medal, Crown,
@@ -781,7 +782,7 @@ export default function SessionPage() {
       id: `bot-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       sessionId: token,
       nickname,
-      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(nickname)}`,
+      avatar: AVAILABLE_MASCOT_SEEDS[existingCount % AVAILABLE_MASCOT_SEEDS.length],
       score: 0,
       rank: liveParticipants.length + 1,
       isConnected: true,
@@ -1594,8 +1595,8 @@ export default function SessionPage() {
                     }}
                     className="card p-3 border-white/10 hover:border-purple-500/50 bg-white/[0.04] hover:bg-purple-600/10 cursor-pointer transition-all duration-200 flex flex-col items-center text-center relative group animate-bounce-in"
                   >
-                    <div className="w-14 h-14 rounded-2xl bg-purple-600/20 border border-purple-500/40 p-1 mb-2 group-hover:scale-105 transition-transform">
-                      <img src={p.avatar} alt={p.nickname} className="w-full h-full object-contain" />
+                    <div className="w-14 h-14 rounded-2xl bg-purple-600/20 border border-purple-500/40 p-1 mb-2 group-hover:scale-105 transition-transform flex items-center justify-center">
+                      <MascotAvatar avatar={p.avatar} size="lg" emotion="idle" />
                     </div>
 
                     <div className="font-bold text-xs text-white truncate max-w-full">
@@ -1714,141 +1715,111 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* ── FASE 2: PREGUNTA EN PANTALLA GIGANTE (PROYECTOR ESTILO KAHOOT) ── */}
+      {/* ── FASE 2: PREGUNTA EN PANTALLA COMPLETA 100VH SIN SCROLL (ESTILO KAHOOT) ── */}
       {gamePhase === 'question' && (
-        <div className="space-y-6">
-          {/* Header de Pregunta en Proyector */}
-          <div className="card p-6 border-purple-500/30 bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-purple-950/40 text-center relative overflow-hidden shadow-2xl">
-            {/* ── CONTADOR REGRESIVO GIGANTE Y BARRA SUPERIOR ── */}
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-5 rounded-2xl bg-slate-950/70 border border-purple-500/40 shadow-inner mb-4">
-              {/* RELOJ GIGANTESCO */}
-              <div className="flex items-center gap-4">
-                <div
-                  className={`w-28 h-28 sm:w-36 sm:h-36 rounded-3xl flex flex-col items-center justify-center border-4 transition-all duration-300 shadow-2xl ${
-                    timerLeft <= 5
-                      ? 'bg-red-950/90 border-red-500 text-red-400 shadow-red-600/60 animate-pulse scale-105'
-                      : 'bg-purple-950/70 border-purple-400/70 text-yellow-300 shadow-purple-600/40'
-                  }`}
-                >
-                  <span className="text-6xl sm:text-7xl md:text-8xl font-black tracking-tighter leading-none">
-                    {timerLeft}
-                  </span>
-                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-white/70 mt-1">
-                    SEGUNDOS
-                  </span>
-                </div>
-
-                <div className="text-left space-y-1.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-3 py-1 rounded-full bg-purple-600/30 border border-purple-400 text-purple-200 font-black text-xs uppercase tracking-wider">
-                      Pregunta {currentQIndex + 1} de {questions.length}
-                    </span>
-                    {isGoldenRound && (
-                      <span className="px-3.5 py-1 rounded-full bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-xl shadow-yellow-400/40 animate-bounce">
-                        <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
-                        <span>⭐ ¡RONDA DORADA: PUNTOS DOBLES (2X)! ⭐</span>
-                      </span>
-                    )}
-                    {currentQ.pointsMultiplier && currentQ.pointsMultiplier > 1 && !isGoldenRound && (
-                      <span className="px-3 py-1 rounded-full bg-yellow-400 text-slate-950 font-black text-xs flex items-center gap-1 shadow-lg shadow-yellow-400/30 animate-bounce">
-                        <Zap className="w-3.5 h-3.5 fill-slate-950" />
-                        <span>¡PUNTOS {currentQ.pointsMultiplier === 2 ? 'DOBLES (2×)' : 'TRIPLES (3×)'}!</span>
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 text-white font-bold text-sm sm:text-base">
-                    <Users className="w-5 h-5 text-purple-400" />
-                    <span>
-                      Respuestas Recibidas:{' '}
-                      <strong className="text-yellow-400 text-xl font-black">{answeredCount}</strong> / {liveParticipants.length}
-                    </span>
-                  </div>
-
-                  {isStealAuthorized ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-black text-green-300 bg-green-500/20 px-3 py-1 rounded-full border border-green-500/40 animate-pulse">
-                      ⚡ Poder de Robo de Puntos AUTORIZADO
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-white/50 bg-white/5 px-2.5 py-0.5 rounded-full border border-white/10">
-                      🔒 Robo de Puntos esperando tu activación
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Controles del Docente durante la Pregunta */}
-              <div className="flex items-center gap-2 flex-wrap justify-end">
-                {/* Botón Toggle de Ronda Dorada 2X */}
-                <button
-                  type="button"
-                  onClick={handleToggleGoldenRound}
-                  className={`py-3 px-3.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
-                    isGoldenRound
-                      ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 ring-2 ring-yellow-400 shadow-xl shadow-yellow-400/50 scale-105 animate-pulse'
-                      : 'bg-white/10 hover:bg-white/15 text-yellow-300 border border-yellow-400/30'
-                  }`}
-                  title="Activa o desactiva la Ronda Dorada con puntos dobles (2X) para esta pregunta"
-                >
-                  <Sparkles className={`w-4 h-4 ${isGoldenRound ? 'fill-slate-950 text-slate-950' : 'fill-yellow-400 text-yellow-400'}`} />
-                  <span>{isGoldenRound ? '⭐ Ronda Dorada (2X ACTIVA)' : '⭐ Ronda Dorada (2X)'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleAuthorizeStealPower}
-                  disabled={isStealAuthorized}
-                  className={`py-3 px-4 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${
-                    isStealAuthorized
-                      ? 'bg-yellow-400/20 text-yellow-300 border border-yellow-400/50 cursor-default'
-                      : 'bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-rose-500 text-white shadow-xl shadow-red-600/30 hover:scale-105 active:scale-95 animate-pulse'
-                  }`}
-                  title="Autoriza a los estudiantes para que puedan usar el botón de robo de puntos en su celular"
-                >
-                  <Zap className={`w-4 h-4 ${isStealAuthorized ? 'fill-yellow-400 text-yellow-400' : 'fill-white text-white'}`} />
-                  <span>{isStealAuthorized ? '✓ Robo de Puntos Autorizado' : '⚡ Autorizar Robo de Puntos'}</span>
-                </button>
-
-                {!isAnswerRevealed ? (
-                  <button
-                    onClick={handleRevealAnswer}
-                    className="py-3 px-5 rounded-xl text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-xl shadow-purple-600/30 hover:scale-105 transition-all flex items-center gap-2"
-                  >
-                    <Eye className="w-4 h-4" />
-                    <span>Revelar Respuesta</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleNextQuestion}
-                    className="py-3 px-5 rounded-xl text-xs font-black bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-slate-950 shadow-xl shadow-green-500/40 hover:scale-105 transition-all flex items-center gap-2"
-                  >
-                    <span>Siguiente Pregunta</span>
-                    <SkipForward className="w-4 h-4 fill-slate-950" />
-                  </button>
-                )}
+        <div className="h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] flex flex-col justify-between overflow-hidden gap-2 sm:gap-3 select-none">
+          {/* Header Superior Compacto */}
+          <div className="card p-2.5 sm:p-3.5 border-purple-500/30 bg-slate-900/90 backdrop-blur-md flex items-center justify-between gap-3 shrink-0 rounded-2xl shadow-xl">
+            {/* Izquierda: Pregunta actual y contador de respuestas */}
+            <div className="flex items-center gap-3">
+              <span className="px-3 py-1 rounded-xl bg-purple-600/30 border border-purple-400 text-purple-200 font-black text-xs uppercase tracking-wider">
+                Pregunta {currentQIndex + 1} / {questions.length}
+              </span>
+              <div className="flex items-center gap-1.5 text-white/80 font-bold text-xs sm:text-sm">
+                <Users className="w-4 h-4 text-purple-400" />
+                <span>
+                  Respuestas: <strong className="text-yellow-400 text-base font-black">{answeredCount}</strong> / {liveParticipants.length}
+                </span>
               </div>
             </div>
 
-            {/* Imagen Opcional de la Pregunta */}
+            {/* Centro: Reloj Compacto Vibrante */}
+            <div className="flex items-center justify-center">
+              <div
+                className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border-2 transition-all duration-300 shadow-lg ${
+                  timerLeft <= 5
+                    ? 'bg-red-950/90 border-red-500 text-red-400 shadow-red-600/60 animate-pulse scale-105'
+                    : 'bg-purple-950/70 border-purple-400 text-yellow-300 shadow-purple-600/40'
+                }`}
+              >
+                <span className="text-2xl sm:text-3xl font-black tracking-tight leading-none">
+                  {timerLeft}
+                </span>
+              </div>
+            </div>
+
+            {/* Derecha: Botones de Acción (Ronda Dorada, Robo y Revelar/Siguiente) */}
+            <div className="flex items-center gap-2">
+              {/* Botón Toggle de Ronda Dorada 2X */}
+              <button
+                type="button"
+                onClick={handleToggleGoldenRound}
+                className={`py-2 px-3 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                  isGoldenRound
+                    ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 ring-2 ring-yellow-400 shadow-lg shadow-yellow-400/40 scale-105 animate-pulse'
+                    : 'bg-white/10 hover:bg-white/15 text-yellow-300 border border-yellow-400/30'
+                }`}
+                title="Ronda Dorada con puntos dobles (2X)"
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${isGoldenRound ? 'fill-slate-950 text-slate-950' : 'fill-yellow-400 text-yellow-400'}`} />
+                <span>{isGoldenRound ? '★ 2X ACTIVA' : '★ 2X'}</span>
+              </button>
+
+              {/* Botón de Robo de Puntos (integrado en el propio botón sin banners) */}
+              <button
+                type="button"
+                onClick={handleAuthorizeStealPower}
+                disabled={isStealAuthorized}
+                className={`py-2 px-3 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                  isStealAuthorized
+                    ? 'bg-yellow-400/20 text-yellow-300 border border-yellow-400/50 cursor-default'
+                    : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white shadow-md shadow-red-600/30 hover:scale-105 active:scale-95 animate-pulse'
+                }`}
+                title="Habilita el botón de robo en los celulares de los estudiantes"
+              >
+                <Zap className={`w-3.5 h-3.5 ${isStealAuthorized ? 'fill-yellow-400 text-yellow-400' : 'fill-white text-white'}`} />
+                <span>{isStealAuthorized ? 'Robo Autorizado' : 'Autorizar Robo'}</span>
+              </button>
+
+              {/* Botón Revelar Respuesta / Siguiente Pregunta */}
+              {!isAnswerRevealed ? (
+                <button
+                  onClick={handleRevealAnswer}
+                  className="py-2 px-4 rounded-xl text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-600/30 hover:scale-105 transition-all flex items-center gap-1.5"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span>Revelar</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleNextQuestion}
+                  className="py-2 px-4 rounded-xl text-xs font-black bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-green-500/40 hover:scale-105 transition-all flex items-center gap-1.5"
+                >
+                  <span>Siguiente</span>
+                  <SkipForward className="w-4 h-4 fill-slate-950" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Área Central: Imagen (si existe) y Pregunta Compacta */}
+          <div className="card p-3 sm:p-5 border-purple-500/30 bg-gradient-to-b from-purple-950/40 to-slate-900 flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[140px] shadow-xl rounded-2xl">
             {currentQ.imageUrl && (
-              <div className="my-3 flex justify-center">
-                <div className="rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl max-h-64 bg-slate-950">
-                  <img
-                    src={currentQ.imageUrl}
-                    alt="Imagen de apoyo"
-                    className="max-h-60 object-contain mx-auto rounded-xl"
-                  />
-                </div>
+              <div className="mb-2 max-h-28 sm:max-h-36 overflow-hidden rounded-xl border border-white/20">
+                <img
+                  src={currentQ.imageUrl}
+                  alt="Imagen de apoyo"
+                  className="max-h-28 sm:max-h-36 object-contain mx-auto"
+                />
               </div>
             )}
 
-            {/* Texto de la Pregunta en Tamaño Gigante */}
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white leading-tight max-w-4xl mx-auto py-2">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white leading-tight max-w-4xl px-2">
               {currentQ.content}
             </h2>
 
-            {/* Barra de progreso de tiempo */}
-            <div className="w-full bg-white/10 rounded-full h-2 mt-4 overflow-hidden">
+            {/* Barra de progreso de tiempo delgada */}
+            <div className="w-full bg-white/10 rounded-full h-1.5 mt-3 overflow-hidden max-w-2xl">
               <div
                 className={`h-full transition-all duration-1000 ${
                   timerLeft <= 5 ? 'bg-red-500' : 'bg-gradient-to-r from-purple-500 to-indigo-400'
@@ -1858,8 +1829,8 @@ export default function SessionPage() {
             </div>
           </div>
 
-          {/* 4 Opciones en Proyector Gigante */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Cuadrícula de 4 Opciones Compactas y Elegantes (Cero Scroll) */}
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 flex-1 max-h-[46vh]">
             {(currentQ.options || []).map((option, idx) => {
               const style = OPTION_STYLES[idx % OPTION_STYLES.length];
               const isCorrect = currentQ.correctAnswer === option.id;
@@ -1867,62 +1838,29 @@ export default function SessionPage() {
               return (
                 <div
                   key={option.id}
-                  className={`p-6 rounded-3xl border-3 transition-all flex items-center gap-4 relative shadow-xl ${
+                  className={`p-3 sm:p-4 rounded-2xl border-2 transition-all flex items-center gap-3 relative shadow-md select-none ${
                     isAnswerRevealed
                       ? isCorrect
-                        ? 'bg-emerald-600 border-yellow-400 text-white scale-[1.02] shadow-emerald-500/50 ring-4 ring-yellow-400'
-                        : 'opacity-30 bg-slate-900 border-white/10'
+                        ? 'bg-emerald-600 border-yellow-400 text-white scale-[1.01] shadow-emerald-500/40 ring-4 ring-yellow-400'
+                        : 'opacity-25 bg-slate-900 border-white/10'
                       : `${style.bg} ${style.border}`
                   }`}
                 >
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl shrink-0 ${style.symbolBg}`}>
+                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-black text-xl sm:text-2xl shrink-0 ${style.symbolBg}`}>
                     {style.icon}
                   </div>
 
-                  <span className="text-xl md:text-2xl font-black leading-snug flex-1">
+                  <span className="text-base sm:text-lg md:text-xl font-black leading-snug flex-1">
                     {option.text}
                   </span>
 
                   {isAnswerRevealed && isCorrect && (
-                    <CheckCircle2 className="w-8 h-8 text-yellow-300 shrink-0 animate-bounce" />
+                    <CheckCircle2 className="w-7 h-7 text-yellow-300 shrink-0 animate-bounce" />
                   )}
                 </div>
               );
             })}
           </div>
-
-          {/* Explicación pedagógica mostrada al revelar */}
-          {isAnswerRevealed && currentQ.explanation && (
-            <div className="card p-5 border-emerald-500/40 bg-emerald-950/20 text-emerald-200 text-sm flex items-start gap-3 animate-bounce-in">
-              <Sparkles className="w-6 h-6 text-yellow-400 shrink-0 mt-0.5" />
-              <div>
-                <strong className="text-white text-base block mb-0.5">Explicación Pedagógica:</strong>
-                <span>{currentQ.explanation}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Posiciones de los alumnos reales en vivo */}
-          {liveParticipants.length > 0 && (
-            <div className="card p-4 border-white/10">
-              <h4 className="text-xs font-bold text-white/60 uppercase tracking-wider mb-3">
-                Posiciones en Tiempo Real ({liveParticipants.length})
-              </h4>
-              <div className="flex items-center gap-3 overflow-x-auto pb-1">
-                {sortedParticipants.map((p, i) => (
-                  <div
-                    key={p.id}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 shrink-0"
-                  >
-                    <span className="font-black text-xs text-purple-400">#{i + 1}</span>
-                    <img src={p.avatar} alt={p.nickname} className="w-6 h-6" />
-                    <span className="text-xs font-bold text-white">{p.nickname}</span>
-                    <span className="text-xs font-extrabold text-yellow-400">{p.score} pts</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1960,8 +1898,8 @@ export default function SessionPage() {
                 }`}>
                   {secondPlace && (
                     <>
-                      <div className="w-20 h-20 rounded-3xl bg-slate-400/20 p-1.5 border-2 border-slate-300/40 mb-2 shadow-lg">
-                        <img src={secondPlace.avatar} alt={secondPlace.nickname} className="w-full h-full object-contain" />
+                      <div className="w-20 h-20 rounded-3xl bg-slate-400/20 p-1.5 border-2 border-slate-300/40 mb-2 shadow-lg flex items-center justify-center">
+                        <MascotAvatar avatar={secondPlace.avatar} emotion="happy" size="lg" />
                       </div>
                       <span className="font-bold text-sm text-white truncate max-w-full">{secondPlace.nickname}</span>
                       <span className="text-xs text-slate-300 font-extrabold mb-2">{secondPlace.score.toLocaleString()} pts</span>
@@ -1979,8 +1917,8 @@ export default function SessionPage() {
                 }`}>
                   {firstPlace && (
                     <>
-                      <div className="w-24 h-24 rounded-3xl bg-yellow-400/30 p-2 border-4 border-yellow-400 shadow-2xl shadow-yellow-500/50 mb-2 animate-float">
-                        <img src={firstPlace.avatar} alt={firstPlace.nickname} className="w-full h-full object-contain" />
+                      <div className="w-24 h-24 rounded-3xl bg-yellow-400/30 p-2 border-4 border-yellow-400 shadow-2xl shadow-yellow-500/50 mb-2 animate-float flex items-center justify-center">
+                        <MascotAvatar avatar={firstPlace.avatar} emotion="victory" size="xl" />
                       </div>
                       <span className="font-black text-base text-yellow-300 truncate max-w-full">{firstPlace.nickname}</span>
                       <span className="text-sm text-yellow-400 font-black mb-2">{firstPlace.score.toLocaleString()} pts</span>
@@ -1999,8 +1937,8 @@ export default function SessionPage() {
                 }`}>
                   {thirdPlace && (
                     <>
-                      <div className="w-20 h-20 rounded-3xl bg-amber-700/20 p-1.5 border-2 border-amber-600/40 mb-2 shadow-md">
-                        <img src={thirdPlace.avatar} alt={thirdPlace.nickname} className="w-full h-full object-contain" />
+                      <div className="w-20 h-20 rounded-3xl bg-amber-700/20 p-1.5 border-2 border-amber-600/40 mb-2 shadow-md flex items-center justify-center">
+                        <MascotAvatar avatar={thirdPlace.avatar} emotion="happy" size="lg" />
                       </div>
                       <span className="font-bold text-sm text-white truncate max-w-full">{thirdPlace.nickname}</span>
                       <span className="text-xs text-amber-400 font-extrabold mb-2">{thirdPlace.score.toLocaleString()} pts</span>
@@ -2076,7 +2014,7 @@ export default function SessionPage() {
                             {idx === 0 ? '🥇 1°' : idx === 1 ? '🥈 2°' : idx === 2 ? '🥉 3°' : `#${idx + 1}`}
                           </td>
                           <td className="py-3 px-4 font-bold text-white flex items-center gap-2.5">
-                            <img src={p.avatar} alt={p.nickname} className="w-7 h-7 rounded-lg bg-slate-800 border border-white/10" />
+                            <MascotAvatar avatar={p.avatar} size="xs" />
                             <span className="group-hover:text-yellow-300 underline-offset-2 group-hover:underline">
                               {p.nickname}
                             </span>
@@ -2267,26 +2205,10 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* ── BANNER VISUAL DE ROBO DE PUNTOS EN PANTALLA PRINCIPAL ── */}
-      {stealWinnerBanner && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-bounce-in max-w-lg w-full px-4">
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white shadow-2xl border-2 border-yellow-300 flex items-center justify-between gap-3">
-            <span className="text-2xl animate-spin">🗡️</span>
-            <span className="font-black text-sm text-center flex-1">{stealWinnerBanner}</span>
-            <button
-              onClick={() => setStealWinnerBanner(null)}
-              className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-white/80"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ── TABLA DE CLASIFICACIÓN TOP 5 COMPACTA Y ANIMADA FÍSICAMENTE ── */}
       {showLeaderboard && leaderboardData.length > 0 && gamePhase === 'question' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
-          <div className="card max-w-md w-full p-4 sm:p-5 border-purple-500/40 bg-slate-900/95 shadow-2xl text-center space-y-2.5 rounded-2xl max-h-[92vh] overflow-hidden flex flex-col justify-between">
+          <div className="card max-w-md w-full p-3 sm:p-4 border-purple-500/40 bg-slate-900/95 shadow-2xl text-center space-y-2 rounded-2xl max-h-[82vh] overflow-hidden flex flex-col justify-between">
             <div className="flex items-center justify-between border-b border-white/10 pb-2">
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-yellow-400" />
@@ -2364,11 +2286,13 @@ export default function SessionPage() {
                       >
                         {medal}
                       </span>
-                      <img
-                        src={p.avatar}
-                        alt={p.nickname}
-                        className="w-8 h-8 rounded-lg object-contain bg-slate-800 p-0.5 border border-white/15 shrink-0"
-                      />
+                      <div className="w-8 h-8 shrink-0 flex items-center justify-center">
+                        <MascotAvatar
+                          avatar={p.avatar}
+                          emotion={isTop1 ? 'victory' : isLeaderboardAnimated && rankDelta > 0 ? 'happy' : rankDelta < 0 ? 'sad' : 'idle'}
+                          size="sm"
+                        />
+                      </div>
                       <div className="text-left truncate">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-extrabold text-xs sm:text-sm text-white truncate max-w-[110px] sm:max-w-[150px]">
@@ -2503,11 +2427,7 @@ export default function SessionPage() {
             {/* Cabecera */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-3">
-                <img
-                  src={selectedStudentForReport.avatar}
-                  alt={selectedStudentForReport.nickname}
-                  className="w-11 h-11 rounded-2xl bg-slate-800 border border-white/15 p-0.5"
-                />
+                <MascotAvatar avatar={selectedStudentForReport.avatar} size="md" />
                 <div>
                   <h3 className="text-lg font-black text-white flex items-center gap-2">
                     <span>{selectedStudentForReport.nickname}</span>

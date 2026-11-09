@@ -8,6 +8,7 @@ import {
   Shield, ShieldCheck, Flame, Star
 } from 'lucide-react';
 import type { Question, PowerUp, ParticipantRank } from '../../types';
+import MascotAvatar from '../../components/game/MascotAvatar';
 
 // Colores y símbolos estilo Kahoot para los botones táctiles de respuesta
 const OPTION_STYLES = [
@@ -440,11 +441,11 @@ export default function GameStudentPage() {
       {/* ── Top Bar con HUD del Jugador ── */}
       <header className="flex items-center justify-between max-w-lg mx-auto w-full pt-1 pb-2 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-purple-600/30 border border-purple-500/40 p-1 shadow-md shrink-0">
-            <img
-              src={currentParticipant?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=ProfeAxel'}
-              alt="Avatar"
-              className="w-full h-full object-contain"
+          <div className="w-10 h-10 rounded-xl bg-purple-600/30 border border-purple-500/40 p-1 shadow-md shrink-0 flex items-center justify-center">
+            <MascotAvatar
+              avatar={currentParticipant?.avatar}
+              emotion={feedback === 'correct' ? 'happy' : feedback === 'incorrect' ? 'sad' : 'idle'}
+              size="sm"
             />
           </div>
           <div>
@@ -662,6 +663,9 @@ export default function GameStudentPage() {
           <div className="mt-3 text-center animate-bounce-in">
             {feedback === 'correct' ? (
               <div className="p-3 rounded-2xl bg-green-500/20 border border-green-500/40 text-green-300">
+                <div className="my-1.5 flex justify-center">
+                  <MascotAvatar avatar={currentParticipant?.avatar} emotion="celebrate" size="lg" />
+                </div>
                 <div className="flex items-center justify-center gap-1.5 font-black text-sm">
                   <CheckCircle2 className="w-5 h-5 text-green-400" />
                   <span>¡RESPUESTA CORRECTA! +{pointsGained} pts</span>
@@ -672,6 +676,9 @@ export default function GameStudentPage() {
               </div>
             ) : feedback === 'incorrect' ? (
               <div className="p-3 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-300">
+                <div className="my-1.5 flex justify-center">
+                  <MascotAvatar avatar={currentParticipant?.avatar} emotion="sad" size="lg" />
+                </div>
                 <div className="flex items-center justify-center gap-1.5 font-black text-sm">
                   <XCircle className="w-5 h-5 text-red-400" />
                   <span>¡Incorrecto! No te rindas</span>

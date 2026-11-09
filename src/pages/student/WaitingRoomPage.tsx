@@ -4,6 +4,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { audioEngine } from '../../lib/audio';
 import { getOrCreateGameClientSync, type GameEventMessage } from '../../lib/gameSync';
 import { Gamepad2, Users, Sparkles, Smile, ShieldCheck, Wifi, Volume2, VolumeX } from 'lucide-react';
+import MascotAvatar from '../../components/game/MascotAvatar';
 
 export default function WaitingRoomPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -195,14 +196,14 @@ export default function WaitingRoomPage() {
           </div>
         ) : (
           <>
-            {/* Animated Avatar */}
+            {/* Animated Mascot 3D Cartoon */}
             <div className="relative inline-block mb-6">
               <div className="w-32 h-32 md:w-36 md:h-36 rounded-3xl bg-gradient-to-tr from-purple-500 via-indigo-500 to-pink-500 p-1.5 shadow-2xl shadow-purple-600/40 animate-float">
                 <div className="w-full h-full bg-slate-900 rounded-[22px] flex items-center justify-center overflow-hidden border border-white/20">
-                  <img
-                    src={currentParticipant?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=ProfeAxel'}
-                    alt="Mi Avatar"
-                    className="w-24 h-24 md:w-28 md:h-28 object-contain"
+                  <MascotAvatar
+                    avatar={currentParticipant?.avatar}
+                    emotion={readyEmote ? 'celebrate' : 'happy'}
+                    size="2xl"
                   />
                 </div>
               </div>
