@@ -2,82 +2,24 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   FolderKanban, PlusCircle, Search, Filter, Play, Edit3,
-  Copy, Trash2, Sparkles, BookOpen, Clock, FileText
+  Copy, Trash2, Sparkles, BookOpen, Clock, FileText, Eye, Home
 } from 'lucide-react';
 import { SUBJECTS } from '../../types';
 import DocumentQuestionImporterModal from '../../components/teacher/DocumentQuestionImporterModal';
+import GamePreviewModal from '../../components/teacher/GamePreviewModal';
+import { useGameStore } from '../../stores/gameStore';
 import type { ExtractedQuestion } from '../../lib/documentQuestionExtractor';
-
-interface GameItem {
-  id: string;
-  title: string;
-  description: string;
-  subject: string;
-  topic: string;
-  gameMode: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  questionsCount: number;
-  timePerQuestion: number;
-  updatedAt: string;
-}
-
-const INITIAL_GAMES: GameItem[] = [
-  {
-    id: 'g-1',
-    title: 'Seguridad Vial y Señales de Tránsito',
-    description: 'Aprende a identificar señales reglamentarias, preventivas e informativas.',
-    subject: 'Educación Vial',
-    topic: 'Señales de Tránsito',
-    gameMode: 'Batalla en Vivo',
-    difficulty: 'medium',
-    questionsCount: 10,
-    timePerQuestion: 20,
-    updatedAt: '2026-11-01',
-  },
-  {
-    id: 'g-2',
-    title: 'Ecosistemas y Conservación Ambiental',
-    description: 'Cadena trófica, ciclos biogeoquímicos y preservación de especies.',
-    subject: 'Ciencias Naturales',
-    topic: 'Ecología',
-    gameMode: 'Supervivencia',
-    difficulty: 'easy',
-    questionsCount: 12,
-    timePerQuestion: 15,
-    updatedAt: '2026-10-30',
-  },
-  {
-    id: 'g-3',
-    title: 'Desafío de Lógica y Fracciones',
-    description: 'Resolución de problemas con números racionales y operaciones combinadas.',
-    subject: 'Matemáticas',
-    topic: 'Fracciones',
-    gameMode: 'Por Equipos',
-    difficulty: 'hard',
-    questionsCount: 8,
-    timePerQuestion: 30,
-    updatedAt: '2026-10-28',
-  },
-  {
-    id: 'g-4',
-    title: 'Comprensión Lectora e Inferencia',
-    description: 'Textos cortos, análisis de falacias y figuras literarias.',
-    subject: 'Lenguaje y Literatura',
-    topic: 'Comprensión',
-    gameMode: 'Escape Room',
-    difficulty: 'medium',
-    questionsCount: 6,
-    timePerQuestion: 25,
-    updatedAt: '2026-10-25',
-  },
-];
+import type { Game } from '../../types';
 
 export default function GamesPage() {
   const navigate = useNavigate();
-  const [games, setGames] = useState<GameItem[]>(INITIAL_GAMES);
+  const { games: gamesMap, getGamesList, deleteGame, duplicateGame } = useGameStore();
+  const games = getGamesList();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
+  const [previewGame, setPreviewGame] = useState<Game | null>(null);
 
   const handleImportExtracted = (extracted: ExtractedQuestion[]) => {
     try {
@@ -88,27 +30,20 @@ export default function GamesPage() {
   };
 
   const filteredGames = games.filter((g) => {
-    const matchesSearch = g.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          g.topic.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch =
+      g.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (g.topic || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSubject = selectedSubject === 'all' || g.subject === selectedSubject;
     return matchesSearch && matchesSubject;
   });
 
   const handleDuplicate = (id: string) => {
-    const original = games.find((g) => g.id === id);
-    if (!original) return;
-    const duplicated: GameItem = {
-      ...original,
-      id: `g-${Date.now()}`,
-      title: `${original.title} (Copia)`,
-      updatedAt: new Date().toISOString().split('T')[0],
-    };
-    setGames([duplicated, ...games]);
+    duplicateGame(id);
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('¿Estás seguro de eliminar este juego?')) {
-      setGames(games.filter((g) => g.id !== id));
+    if (confirm('¿Estás seguro de eliminar este juego definitivamente?')) {
+      deleteGame(id);
     }
   };
 
@@ -190,38 +125,60 @@ export default function GamesPage() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="badge-primary text-xs">{game.subject}</span>
-                  <span className="text-[11px] text-white/40">{game.updatedAt}</span>
+                  <span className="text-[11px] text-white/40">
+                    {game.updatedAt ? new Date(game.updatedAt).toLocaleDateString('es-CO') : 'Reciente'}
+                  </span>
                 </div>
 
                 <h3 className="text-lg font-black text-white mb-1.5">{game.title}</h3>
-                <p className="text-white/60 text-xs line-clamp-2 mb-4">{game.description}</p>
+                <p className="text-white/60 text-xs line-clamp-2 mb-4">{game.description || 'Sin descripción'}</p>
 
                 <div className="flex flex-wrap items-center gap-3 text-xs text-white/70 mb-5">
-                  <span className="flex items-center gap-1">
+                  <span className="flex items-center gap-1 font-semibold text-purple-300">
                     <BookOpen className="w-3.5 h-3.5 text-purple-400" />
-                    {game.questionsCount} preguntas
+                    {game.questionsCount || game.questions?.length || 0} preguntas
                   </span>
                   <span>•</span>
                   <span className="flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5 text-blue-400" />
-                    {game.timePerQuestion}s por turno
+                    {game.settings?.timePerQuestion || 20}s por turno
                   </span>
                   <span>•</span>
-                  <span className="badge-warning text-[10px]">{game.gameMode}</span>
+                  <span className="badge-warning text-[10px] uppercase font-bold">{game.gameMode}</span>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-between gap-2 pt-4 border-t border-white/10">
-                <Link
-                  to={`/teacher/games/${game.id}/session`}
-                  className="btn-primary py-2 px-4 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-purple-600/30"
-                >
-                  <Play className="w-4 h-4 fill-white" />
-                  <span>Lanzar Partida con QR</span>
-                </Link>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-white/10">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Link
+                    to={`/teacher/games/${game.id}/session`}
+                    className="btn-primary py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-purple-600/30"
+                  >
+                    <Play className="w-4 h-4 fill-white" />
+                    <span>Lanzar Partida</span>
+                  </Link>
+
+                  <Link
+                    to={`/teacher/homework?gameId=${game.id}`}
+                    className="py-2 px-3 rounded-xl text-xs font-bold flex items-center gap-1 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-colors"
+                    title="Asignar para responder en casa sin límite de tiempo"
+                  >
+                    <Home className="w-3.5 h-3.5" />
+                    <span>Asignar Casa</span>
+                  </Link>
+                </div>
 
                 <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewGame(game)}
+                    className="p-2 rounded-lg border border-white/10 hover:bg-white/10 text-white/70 hover:text-white"
+                    title="Vista Previa de Estudiante"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+
                   <Link
                     to={`/teacher/games/${game.id}/edit`}
                     className="p-2 rounded-lg border border-white/10 hover:bg-white/10 text-white/70 hover:text-white"
@@ -241,7 +198,7 @@ export default function GamesPage() {
                   <button
                     onClick={() => handleDelete(game.id)}
                     className="p-2 rounded-lg border border-white/10 hover:bg-red-500/10 text-red-400"
-                    title="Eliminar juego"
+                    title="Eliminar juego definitivamente"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -258,6 +215,33 @@ export default function GamesPage() {
         onClose={() => setIsDocModalOpen(false)}
         onImport={handleImportExtracted}
       />
+
+      {/* Modal de Vista Previa de Estudiante */}
+      {previewGame && (
+        <GamePreviewModal
+          isOpen={Boolean(previewGame)}
+          onClose={() => setPreviewGame(null)}
+          gameTitle={previewGame.title}
+          questions={(previewGame.questions || []).map((q, idx) => ({
+            id: q.id || `q-${idx}`,
+            type: q.type,
+            content: q.content,
+            timeLimit: q.timeLimit || previewGame.settings?.timePerQuestion || 20,
+            points: q.points || 1000,
+            pointsMultiplier: q.pointsMultiplier || 1,
+            explanation: q.explanation || '',
+            imageUrl: q.imageUrl,
+            options: (q.options || []).map((opt, oIdx) => ({
+              id: opt.id || `opt-${oIdx}`,
+              text: opt.text,
+              isCorrect:
+                opt.isCorrect !== undefined
+                  ? opt.isCorrect
+                  : opt.id === q.correctAnswer || (Array.isArray(q.correctAnswer) && (q.correctAnswer as unknown as string[]).includes(opt.id)),
+            })),
+          }))}
+        />
+      )}
     </div>
   );
 }

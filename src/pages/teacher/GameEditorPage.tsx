@@ -9,6 +9,9 @@ import { SUBJECTS } from '../../types';
 import type { QuestionType, Difficulty, GameMode, GradeLevel } from '../../types';
 import DocumentQuestionImporterModal from '../../components/teacher/DocumentQuestionImporterModal';
 import QuestionBankPickerModal from '../../components/teacher/QuestionBankPickerModal';
+import GamePreviewModal from '../../components/teacher/GamePreviewModal';
+import { useGameStore } from '../../stores/gameStore';
+import type { Question } from '../../types';
 import type { BankItem } from '../../data/questionBank';
 import type { ExtractedQuestion } from '../../lib/documentQuestionExtractor';
 
@@ -29,6 +32,7 @@ export default function GameEditorPage() {
   const navigate = useNavigate();
   const { gameId } = useParams<{ gameId: string }>();
   const isEditing = Boolean(gameId && gameId !== 'new');
+  const { getGame, saveGame } = useGameStore();
 
   // Metadatos del Juego
   const [title, setTitle] = useState(isEditing ? 'Seguridad Vial y Normas de Tránsito' : '');
@@ -49,6 +53,7 @@ export default function GameEditorPage() {
       content: '¿Cuál es el significado de una señal de tránsito octagonal con fondo rojo?',
       timeLimit: 20,
       points: 1000,
+      pointsMultiplier: 1,
       difficulty: 'easy',
       explanation: 'La señal octagonal roja indica siempre la obligación absoluta de DETENERSE por completo (PARE).',
       options: [
@@ -64,6 +69,7 @@ export default function GameEditorPage() {
       content: 'El uso del cinturón de seguridad es obligatorio únicamente en las sillas delanteras de un vehículo.',
       timeLimit: 15,
       points: 1000,
+      pointsMultiplier: 1,
       difficulty: 'medium',
       explanation: 'El cinturón es de uso obligatorio para todos los ocupantes del vehículo, incluidos los asientos traseros.',
       options: [
@@ -139,6 +145,65 @@ export default function GameEditorPage() {
     setActiveQuestionIndex(questions.length);
   };
 
+  // Cargar juego existente si estamos editando
+  useEffect(() => {
+    if (isEditing && gameId) {
+      const existingGame = getGame(gameId);
+      if (existingGame) {
+        setTitle(existingGame.title || '');
+        setDescription(existingGame.description || '');
+        if (existingGame.subject) setSubject(existingGame.subject);
+        if (existingGame.topic) setTopic(existingGame.topic);
+        if (existingGame.gradeLevel) setGradeLevel(existingGame.gradeLevel);
+        if (existingGame.difficulty) setDifficulty(existingGame.difficulty);
+        if (existingGame.gameMode) setGameMode(existingGame.gameMode);
+        if (existingGame.settings?.timePerQuestion) setTimePerQuestion(existingGame.settings.timePerQuestion);
+        if (existingGame.isPublic !== undefined) setIsPublic(existingGame.isPublic);
+
+        if (existingGame.questions && existingGame.questions.length > 0) {
+          const loadedQuestions: QuestionDraft[] = existingGame.questions.map((q, idx) => {
+            const rawOptions = q.options && q.options.length > 0 ? q.options : [
+              { id: 'opt-1', text: 'Opción 1', isCorrect: true },
+              { id: 'opt-2', text: 'Opción 2', isCorrect: false },
+            ];
+
+            const options = rawOptions.map((opt, oIdx) => {
+              const isCorr = opt.isCorrect !== undefined
+                ? opt.isCorrect
+                : opt.id === q.correctAnswer || (Array.isArray(q.correctAnswer) && (q.correctAnswer as unknown as string[]).includes(opt.id)) || (oIdx === 0 && !q.correctAnswer);
+              return {
+                id: opt.id || `opt-${idx}-${oIdx}`,
+                text: opt.text || '',
+                isCorrect: Boolean(isCorr),
+              };
+            });
+
+            // Asegurar que al menos una opción esté marcada como correcta
+            if (!options.some((o) => o.isCorrect) && options.length > 0) {
+              options[0].isCorrect = true;
+            }
+
+            return {
+              id: q.id || `q-${idx + 1}`,
+              type: q.type || 'single_choice',
+              content: q.content || '',
+              timeLimit: q.timeLimit || 20,
+              points: q.points || 1000,
+              pointsMultiplier: q.pointsMultiplier || 1,
+              difficulty: q.difficulty || 'medium',
+              explanation: q.explanation || '',
+              imageUrl: q.imageUrl,
+              options,
+            };
+          });
+
+          setQuestions(loadedQuestions);
+          setActiveQuestionIndex(0);
+        }
+      }
+    }
+  }, [isEditing, gameId, getGame]);
+
   useEffect(() => {
     try {
       const stored = sessionStorage.getItem('imported_questions');
@@ -154,11 +219,12 @@ export default function GameEditorPage() {
 
   const handleAddQuestion = () => {
     const newQ: QuestionDraft = {
-      id: `q-${Date.now()}`,
+      id: `q-${Date.now()}-${questions.length + 1}`,
       type: 'single_choice',
-      content: 'Nueva pregunta sin título...',
-      timeLimit: timePerQuestion,
+      content: `Nueva pregunta ${questions.length + 1}...`,
+      timeLimit: timePerQuestion || 20,
       points: 1000,
+      pointsMultiplier: 1,
       difficulty: 'medium',
       explanation: '',
       options: [
@@ -176,7 +242,7 @@ export default function GameEditorPage() {
     const orig = questions[idx];
     const duplicated: QuestionDraft = {
       ...orig,
-      id: `q-${Date.now()}`,
+      id: `q-${Date.now()}-${Math.random()}`,
       content: `${orig.content} (Copia)`,
       options: orig.options.map((o) => ({ ...o, id: `opt-${Date.now()}-${Math.random()}` })),
     };
@@ -207,11 +273,64 @@ export default function GameEditorPage() {
       alert('Por favor ingresa un título para el juego.');
       return;
     }
+
+    if (questions.length === 0) {
+      alert('El juego debe tener al menos una pregunta.');
+      return;
+    }
+
+    // Convertir y estructurar todas las preguntas para almacenamiento definitivo
+    const convertedQuestions: Question[] = questions.map((q, idx) => {
+      const correctOptions = q.options.filter((o) => o.isCorrect);
+      let correctAnswer: Question['correctAnswer'] = 'opt-1';
+
+      if (q.type === 'multiple_choice') {
+        correctAnswer = correctOptions.map((o) => o.id);
+      } else {
+        correctAnswer = correctOptions[0]?.id || q.options[0]?.id || 'opt-1';
+      }
+
+      return {
+        id: q.id || `q-${idx + 1}`,
+        teacherId: 'teacher-1',
+        type: q.type,
+        content: q.content.trim() || `Pregunta ${idx + 1}`,
+        timeLimit: q.timeLimit || timePerQuestion || 20,
+        points: q.points || 1000,
+        pointsMultiplier: q.pointsMultiplier || 1,
+        difficulty: q.difficulty || 'medium',
+        explanation: q.explanation || '',
+        imageUrl: q.imageUrl,
+        orderIndex: idx,
+        correctAnswer,
+        createdAt: new Date().toISOString(),
+        options: q.options.map((o) => ({
+          id: o.id,
+          text: o.text,
+          isCorrect: o.isCorrect,
+        })),
+      };
+    });
+
+    saveGame({
+      id: isEditing ? gameId : undefined,
+      title: title.trim(),
+      description: description.trim(),
+      subject,
+      topic,
+      gradeLevel,
+      difficulty,
+      gameMode,
+      timePerQuestion,
+      isPublic,
+      questions: convertedQuestions,
+    });
+
     setSavedSuccess(true);
     setTimeout(() => {
       setSavedSuccess(false);
       navigate('/teacher/games');
-    }, 1500);
+    }, 1000);
   };
 
   return (
@@ -721,6 +840,15 @@ export default function GameEditorPage() {
         isOpen={isBankModalOpen}
         onClose={() => setIsBankModalOpen(false)}
         onImport={handleImportFromBank}
+      />
+
+      {/* Modal de Vista Previa Estudiante (Interactivo y en tiempo real) */}
+      <GamePreviewModal
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        gameTitle={title}
+        questions={questions}
+        initialQuestionIndex={activeQuestionIndex}
       />
     </div>
   );

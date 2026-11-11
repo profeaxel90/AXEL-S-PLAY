@@ -18,6 +18,11 @@ import WaitingRoomPage from './pages/student/WaitingRoomPage';
 import GameStudentPage from './pages/student/GameStudentPage';
 import ResultsStudentPage from './pages/student/ResultsStudentPage';
 
+// ── Asignación de Deberes ──
+import HomeworkJoinPage from './pages/student/HomeworkJoinPage';
+import HomeworkPlayPage from './pages/student/HomeworkPlayPage';
+import HomeworkPage from './pages/teacher/HomeworkPage';
+
 // ── Panel docente ──
 import DashboardPage from './pages/teacher/DashboardPage';
 import GamesPage from './pages/teacher/GamesPage';
@@ -77,6 +82,11 @@ function App() {
         <Route path="/game/:sessionId" element={<GameStudentPage />} />
         <Route path="/results/:sessionId" element={<ResultsStudentPage />} />
 
+        {/* ── Asignación de Deberes (pública, sin auth) ── */}
+        <Route path="/homework" element={<HomeworkJoinPage />} />
+        <Route path="/homework/:pin" element={<HomeworkJoinPage />} />
+        <Route path="/homework/play/:pin" element={<HomeworkPlayPage />} />
+
         {/* ── Panel Docente (requiere autenticación) ── */}
         <Route element={<RequireAuth><TeacherLayout /></RequireAuth>}>
           <Route path="/teacher" element={<Navigate to="/teacher/dashboard" replace />} />
@@ -88,6 +98,7 @@ function App() {
           <Route path="/teacher/questions" element={<QuestionBankPage />} />
           <Route path="/teacher/analytics" element={<AnalyticsPage />} />
           <Route path="/teacher/history" element={<SessionHistoryPage />} />
+          <Route path="/teacher/homework" element={<HomeworkPage />} />
           <Route path="/teacher/settings" element={<SettingsPage />} />
           <Route path="/teacher/profile" element={<ProfilePage />} />
         </Route>

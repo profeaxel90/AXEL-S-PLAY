@@ -7,6 +7,7 @@ import { GameHostSync, type GameEventMessage } from '../../lib/gameSync';
 import { POWER_UPS } from '../../types';
 import type { PowerUpType, Participant, Question } from '../../types';
 import { SAMPLE_GAMES, SAMPLE_QUESTIONS_ROAD_SAFETY } from '../../data/mockGames';
+import { useGameStore } from '../../stores/gameStore';
 import MascotAvatar, { AVAILABLE_MASCOT_SEEDS } from '../../components/game/MascotAvatar';
 import {
   Play, Pause, SkipForward, Square, Users, QrCode,
@@ -106,9 +107,13 @@ export default function SessionPage() {
 
   const qrUrl = buildQRUrl(token, qrBaseUrl);
 
-  // Preguntas del juego seleccionado
-  const gameData = SAMPLE_GAMES[gameId || 'g-1'];
-  const questions: Question[] = gameData?.questions || SAMPLE_QUESTIONS_ROAD_SAFETY;
+  // Preguntas del juego seleccionado (obtenidas del almacenamiento persistente de juegos)
+  const savedGame = useGameStore((state) => state.getGame(gameId || 'g-1'));
+  const gameData = savedGame || SAMPLE_GAMES[gameId || 'g-1'];
+  const questions: Question[] =
+    gameData?.questions && gameData.questions.length > 0
+      ? gameData.questions
+      : SAMPLE_QUESTIONS_ROAD_SAFETY;
 
   // Estado del juego
   const [gamePhase, setGamePhase] = useState<'waiting' | 'intro' | 'question' | 'finished'>('waiting');
