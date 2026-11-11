@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BookOpen, Plus, Clipboard, CheckCircle2, XCircle,
@@ -54,13 +54,26 @@ interface NewAssignmentModalProps {
 }
 
 function NewAssignmentModal({ defaultGameId, onClose, onCreate }: NewAssignmentModalProps) {
-  const games = useGameStore((state) => state.getGamesList());
+  const gamesMap = useGameStore((state) => state.games);
+  const games = useMemo(() => Object.values(gamesMap), [gamesMap]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [gradeGroupTarget, setGradeGroupTarget] = useState('');
   const [gameId, setGameId] = useState(defaultGameId || (games[0]?.id ?? ''));
   const [dueDate, setDueDate] = useState('');
   const [maxCorrections, setMaxCorrections] = useState(3);
+
+  // Asegurar que si games carga o cambia defaultGameId, se seleccione un gameId válido
+  useEffect(() => {
+    if (defaultGameId && gamesMap[defaultGameId]) {
+      setGameId(defaultGameId);
+      if (!title) {
+        setTitle(`Tarea para Casa: ${gamesMap[defaultGameId].title}`);
+      }
+    } else if (!gameId && games.length > 0) {
+      setGameId(games[0].id);
+    }
+  }, [defaultGameId, gamesMap, games, gameId, title]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

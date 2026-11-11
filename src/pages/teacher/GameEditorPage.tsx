@@ -3,17 +3,15 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   Save, ArrowLeft, Plus, Trash2, Copy, Eye, Clock,
   Award, Sparkles, CheckCircle2, Image as ImageIcon,
-  HelpCircle, Settings, Layers, ListOrdered, FileText, Upload, Database
+  HelpCircle, Settings, Layers, ListOrdered, Upload, Database
 } from 'lucide-react';
 import { SUBJECTS } from '../../types';
 import type { QuestionType, Difficulty, GameMode, GradeLevel } from '../../types';
-import DocumentQuestionImporterModal from '../../components/teacher/DocumentQuestionImporterModal';
 import QuestionBankPickerModal from '../../components/teacher/QuestionBankPickerModal';
 import GamePreviewModal from '../../components/teacher/GamePreviewModal';
 import { useGameStore } from '../../stores/gameStore';
 import type { Question } from '../../types';
 import type { BankItem } from '../../data/questionBank';
-import type { ExtractedQuestion } from '../../lib/documentQuestionExtractor';
 
 interface QuestionDraft {
   id: string;
@@ -82,26 +80,9 @@ export default function GameEditorPage() {
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [showPreview, setShowPreview] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [isDocModalOpen, setIsDocModalOpen] = useState(false);
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
 
   const activeQuestion = questions[activeQuestionIndex] || questions[0];
-
-  const handleImportExtractedQuestions = (extracted: ExtractedQuestion[]) => {
-    const newDrafts: QuestionDraft[] = extracted.map((eq) => ({
-      id: eq.id,
-      type: eq.type,
-      content: eq.content,
-      timeLimit: eq.timeLimit || 20,
-      points: eq.points || 1000,
-      pointsMultiplier: 1,
-      difficulty: 'medium',
-      explanation: eq.explanation || '',
-      options: eq.options,
-    }));
-    setQuestions((prev) => [...prev, ...newDrafts]);
-    setActiveQuestionIndex(questions.length); // seleccionar la primera pregunta nueva
-  };
 
   const handleImportFromBank = (bankItems: BankItem[]) => {
     const newDrafts: QuestionDraft[] = bankItems.map((item, idx) => {
@@ -203,19 +184,6 @@ export default function GameEditorPage() {
       }
     }
   }, [isEditing, gameId, getGame]);
-
-  useEffect(() => {
-    try {
-      const stored = sessionStorage.getItem('imported_questions');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          handleImportExtractedQuestions(parsed);
-          sessionStorage.removeItem('imported_questions');
-        }
-      }
-    } catch {}
-  }, []);
 
   const handleAddQuestion = () => {
     const newQ: QuestionDraft = {
@@ -365,17 +333,6 @@ export default function GameEditorPage() {
           </button>
 
           <button
-            type="button"
-            onClick={() => setIsDocModalOpen(true)}
-            className="py-2.5 px-4 rounded-xl text-xs font-black flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-600/30 border border-purple-400/40 hover:scale-105 transition-all"
-            title="Importar preguntas automáticamente desde Word (.docx) o PDF (.pdf)"
-          >
-            <FileText className="w-4 h-4 text-yellow-300" />
-            <span>📄 Importar Word / PDF</span>
-            <span className="bg-yellow-400 text-slate-950 text-[10px] px-1.5 py-0.5 font-black rounded-full">NUEVO</span>
-          </button>
-
-          <button
             onClick={() => setShowPreview(!showPreview)}
             className="btn-secondary py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center gap-2"
           >
@@ -492,34 +449,6 @@ export default function GameEditorPage() {
         </div>
       </div>
 
-      {/* Banner Destacado de Importación desde Documentos */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/70 via-indigo-950/60 to-slate-900 border border-purple-500/40 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-purple-600/30 border border-purple-400/50 flex items-center justify-center text-purple-300 shrink-0 shadow-lg shadow-purple-600/20">
-            <FileText className="w-6 h-6 text-yellow-300" />
-          </div>
-          <div>
-            <h3 className="font-bold text-white text-sm flex items-center gap-2">
-              <span>¿Tienes preguntas en un examen de Word (.docx) o PDF?</span>
-              <span className="text-[10px] font-black bg-yellow-400/20 text-yellow-300 border border-yellow-400/30 px-2 py-0.5 rounded-full">
-                Extracción Rápida
-              </span>
-            </h3>
-            <p className="text-xs text-white/60 mt-0.5">
-              Carga tu archivo o copia y pega el texto. AXEL'S PLAY detectará automáticamente las preguntas y opciones.
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setIsDocModalOpen(true)}
-          className="btn-primary py-2.5 px-5 rounded-xl text-xs font-black shrink-0 flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-95 shadow-lg shadow-purple-600/30"
-        >
-          <Upload className="w-4 h-4" />
-          <span>Cargar Word / PDF</span>
-        </button>
-      </div>
-
       {/* ── Editor de Preguntas y Navegación Lateral ── */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Columna Izquierda: Lista de Preguntas */}
@@ -537,15 +466,6 @@ export default function GameEditorPage() {
               >
                 <Database className="w-3.5 h-3.5" />
                 <span>Banco</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsDocModalOpen(true)}
-                className="btn-secondary py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center gap-1 text-purple-300 border-purple-500/30 hover:bg-purple-500/10"
-                title="Cargar documento Word o PDF para extraer preguntas"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Word / PDF</span>
               </button>
               <button
                 onClick={handleAddQuestion}
@@ -827,13 +747,6 @@ export default function GameEditorPage() {
           </div>
         </div>
       </div>
-
-      {/* Modal de Importación desde Word o PDF */}
-      <DocumentQuestionImporterModal
-        isOpen={isDocModalOpen}
-        onClose={() => setIsDocModalOpen(false)}
-        onImport={handleImportExtractedQuestions}
-      />
 
       {/* Modal de Selección desde el Banco de Preguntas */}
       <QuestionBankPickerModal

@@ -1,49 +1,63 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
+import { useGameStore } from '../../stores/gameStore';
+import { useHomeworkStore } from '../../stores/homeworkStore';
 import {
   Gamepad2, Users, Trophy, Play, PlusCircle, FolderKanban,
-  Database, BarChart3, Clock, Sparkles, ChevronRight, CheckCircle2
+  Database, BarChart3, Clock, Sparkles, ChevronRight, CheckCircle2,
+  BookOpen, HelpCircle
 } from 'lucide-react';
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const gamesMap = useGameStore((state) => state.games);
+  const assignments = useHomeworkStore((state) => state.assignments);
+
+  const gamesList = useMemo(() => Object.values(gamesMap), [gamesMap]);
+
+  // Cálculos dinámicos en tiempo real
+  const totalGames = gamesList.length;
+  const totalQuestions = useMemo(() => {
+    return gamesList.reduce((acc, g) => acc + (g.questionsCount || g.questions?.length || 0), 0);
+  }, [gamesList]);
+
+  const totalSubmissions = useMemo(() => {
+    return assignments.reduce((acc, a) => acc + (a.submissions?.length || 0), 0);
+  }, [assignments]);
 
   const quickStats = [
-    { label: 'Juegos Creados', value: '4', icon: <FolderKanban className="w-5 h-5 text-purple-400" />, change: '+1 esta semana' },
-    { label: 'Partidas Jugadas', value: '18', icon: <Play className="w-5 h-5 text-green-400" />, change: '100% completadas' },
-    { label: 'Estudiantes Conectados', value: '142', icon: <Users className="w-5 h-5 text-blue-400" />, change: 'Sin registro previo' },
-    { label: 'Banco de Preguntas', value: '45', icon: <Database className="w-5 h-5 text-amber-400" />, change: 'Reutilizables' },
+    {
+      label: 'Juegos Creados',
+      value: String(totalGames),
+      icon: <FolderKanban className="w-5 h-5 text-purple-400" />,
+      change: 'Activos en biblioteca',
+    },
+    {
+      label: 'Preguntas Totales',
+      value: String(totalQuestions),
+      icon: <HelpCircle className="w-5 h-5 text-amber-400" />,
+      change: 'Calculadas en tiempo real',
+    },
+    {
+      label: 'Deberes para Casa',
+      value: String(assignments.length),
+      icon: <BookOpen className="w-5 h-5 text-emerald-400" />,
+      change: 'Asignaciones activas',
+    },
+    {
+      label: 'Entregas Recibidas',
+      value: String(totalSubmissions),
+      icon: <Users className="w-5 h-5 text-blue-400" />,
+      change: 'Alumnos evaluados',
+    },
   ];
 
-  const recentGames = [
-    {
-      id: 'g-vial-1',
-      title: 'Seguridad Vial y Normas de Tránsito',
-      subject: 'Educación Vial',
-      questionsCount: 10,
-      mode: 'Batalla en Vivo',
-      difficulty: 'Intermedio',
-      updatedAt: 'Hace 2 horas',
-    },
-    {
-      id: 'g-ciencias-1',
-      title: 'Ecosistemas y Biodiversidad',
-      subject: 'Ciencias Naturales',
-      questionsCount: 15,
-      mode: 'Supervivencia',
-      difficulty: 'Fácil',
-      updatedAt: 'Ayer',
-    },
-    {
-      id: 'g-mate-1',
-      title: 'Lógica Matemática y Fracciones',
-      subject: 'Matemáticas',
-      questionsCount: 12,
-      mode: 'Por Equipos',
-      difficulty: 'Avanzado',
-      updatedAt: 'Hace 3 días',
-    },
-  ];
+  const recentGames = useMemo(() => {
+    return [...gamesList]
+      .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
+      .slice(0, 3);
+  }, [gamesList]);
 
   return (
     <div className="space-y-8">
@@ -116,17 +130,19 @@ export default function DashboardPage() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="badge-primary text-[10px]">{game.subject}</span>
-                  <span className="text-white/40 text-[11px]">{game.updatedAt}</span>
+                  <span className="text-white/40 text-[11px]">
+                    {game.updatedAt ? new Date(game.updatedAt).toLocaleDateString('es-CO') : 'Reciente'}
+                  </span>
                 </div>
                 <h3 className="font-bold text-base text-white group-hover:text-purple-300 transition-colors mb-2">
                   {game.title}
                 </h3>
                 <div className="flex items-center gap-3 text-xs text-white/60 mb-4">
-                  <span>{game.questionsCount} preguntas</span>
+                  <span>{game.questionsCount || game.questions?.length || 0} preguntas</span>
                   <span>•</span>
-                  <span>{game.mode}</span>
+                  <span className="badge-warning text-[10px] uppercase font-bold">{game.gameMode}</span>
                   <span>•</span>
-                  <span className="text-purple-300">{game.difficulty}</span>
+                  <span className="text-purple-300 capitalize">{game.difficulty}</span>
                 </div>
               </div>
 

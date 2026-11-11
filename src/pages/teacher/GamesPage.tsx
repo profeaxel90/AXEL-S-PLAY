@@ -2,13 +2,11 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   FolderKanban, PlusCircle, Search, Filter, Play, Edit3,
-  Copy, Trash2, Sparkles, BookOpen, Clock, FileText, Eye, Home
+  Copy, Trash2, Sparkles, BookOpen, Clock, Eye, Home
 } from 'lucide-react';
 import { SUBJECTS } from '../../types';
-import DocumentQuestionImporterModal from '../../components/teacher/DocumentQuestionImporterModal';
 import GamePreviewModal from '../../components/teacher/GamePreviewModal';
 import { useGameStore } from '../../stores/gameStore';
-import type { ExtractedQuestion } from '../../lib/documentQuestionExtractor';
 import type { Game } from '../../types';
 
 export default function GamesPage() {
@@ -18,16 +16,7 @@ export default function GamesPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
-  const [isDocModalOpen, setIsDocModalOpen] = useState(false);
   const [previewGame, setPreviewGame] = useState<Game | null>(null);
-
-  const handleImportExtracted = (extracted: ExtractedQuestion[]) => {
-    try {
-      sessionStorage.setItem('imported_questions', JSON.stringify(extracted));
-    } catch {}
-    setIsDocModalOpen(false);
-    navigate('/teacher/games/new');
-  };
 
   const filteredGames = games.filter((g) => {
     const matchesSearch =
@@ -56,17 +45,6 @@ export default function GamesPage() {
           <p className="text-white/60 text-sm">Gestiona tus actividades interactivas y lanza partidas con QR</p>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
-          <button
-            type="button"
-            onClick={() => setIsDocModalOpen(true)}
-            className="py-3 px-5 rounded-xl text-sm font-black flex items-center gap-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:opacity-95 text-white shadow-lg shadow-purple-600/30 border border-purple-400/40 hover:scale-105 transition-all"
-            title="Importar preguntas desde Word (.docx), PDF (.pdf) o texto"
-          >
-            <FileText className="w-4 h-4 text-yellow-300" />
-            <span>📄 Importar Word / PDF</span>
-            <span className="bg-yellow-400 text-slate-950 text-[10px] px-1.5 py-0.5 font-black rounded-full">NUEVO</span>
-          </button>
-
           <Link
             to="/teacher/games/new"
             className="btn-primary py-3 px-5 rounded-xl text-sm font-bold flex items-center gap-2"
@@ -208,13 +186,6 @@ export default function GamesPage() {
           ))}
         </div>
       )}
-
-      {/* Modal de Importación de Preguntas desde Word / PDF */}
-      <DocumentQuestionImporterModal
-        isOpen={isDocModalOpen}
-        onClose={() => setIsDocModalOpen(false)}
-        onImport={handleImportExtracted}
-      />
 
       {/* Modal de Vista Previa de Estudiante */}
       {previewGame && (

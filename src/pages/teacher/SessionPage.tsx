@@ -170,6 +170,7 @@ export default function SessionPage() {
   const [floatingEmojis, setFloatingEmojis] = useState<Array<{ id: string; emoji: string; left: number; nickname?: string }>>([]);
 
   // Estados visuales mejorados: QR ampliado, secuencia intro y música lobby
+  const introTimeoutsRef = useRef<any[]>([]);
   const [qrExpanded, setQrExpanded] = useState(false);
   const [introStep, setIntroStep] = useState<1 | 2 | 3 | 4>(1); // 1: 1-2-3, 2: Tema, 3: AXEL'S PLAY ZOOM, 4: A jugar
   const [introCountNum, setIntroCountNum] = useState<1 | 2 | 3>(1);
@@ -382,19 +383,17 @@ export default function SessionPage() {
     };
   }, [token]);
 
-  // ── Temporizador de la fase Intro ──
+  // ── Temporizador de la fase Intro (Solo indicador visual de cuenta regresiva) ──
   useEffect(() => {
     if (gamePhase !== 'intro') return;
 
-    setIntroCountdown(6);
+    setIntroCountdown(12);
     const introTimer = setInterval(() => {
       setIntroCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(introTimer);
-          handleStartQuestions();
           return 0;
         }
-        audioEngine.playEffect('sfx_tick');
         return prev - 1;
       });
     }, 1000);
@@ -502,6 +501,10 @@ export default function SessionPage() {
       introDescription: gameData?.description || 'Evaluación interactiva y gamificada con retos en tiempo real.',
     });
 
+    // Limpiar timers anteriores si hubieran
+    introTimeoutsRef.current.forEach(clearTimeout);
+    introTimeoutsRef.current = [];
+
     // Secuencia de Cuenta Regresiva: 1, 2, 3
     const t2 = setTimeout(() => {
       setIntroCountNum(2);
@@ -523,7 +526,7 @@ export default function SessionPage() {
       });
     }, 3300);
 
-    // Paso 3: AXEL'S PLAY EN PRESENTACIÓN CINEMATOGRÁFICA LEGIBLE (5.6s - Fanfarria limpia sin voz)
+    // Paso 3: AXEL'S PLAY EN PRESENTACIÓN CINEMATOGRÁFICA LEGIBLE (5.6s - Se mantiene en pantalla hasta 12.6s = 7 segundos enteros)
     const tZoom = setTimeout(() => {
       setIntroStep(3);
       audioEngine.playEffect('sfx_intro');
@@ -533,13 +536,19 @@ export default function SessionPage() {
       });
     }, 5600);
 
-    // Paso 4: ¡EMPIEZA EL JUEGO! (12.6s — la pantalla AXEL'S PLAY dura 7s completos para máxima legibilidad)
+    // Paso 4: ¡EMPIEZA EL JUEGO! (12.6s)
     const tStart = setTimeout(() => {
       handleStartQuestions();
     }, 12600);
+
+    introTimeoutsRef.current = [t2, t3, tTema, tZoom, tStart];
   };
 
   const handleStartQuestions = () => {
+    // Cancelar cualquier temporizador de intro pendiente si el docente salta directo
+    introTimeoutsRef.current.forEach(clearTimeout);
+    introTimeoutsRef.current = [];
+
     setGamePhase('question');
     setCurrentQIndex(0);
     setIsAnswerRevealed(false);
@@ -1694,33 +1703,21 @@ export default function SessionPage() {
       {gamePhase === 'question' && (
         <div className="h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] flex flex-col justify-between overflow-hidden gap-2 sm:gap-3 select-none">
           {/* Header Superior Compacto */}
-          <div className="card p-2.5 sm:p-3.5 border-purple-500/30 bg-slate-900/90 backdrop-blur-md flex items-center justify-between gap-3 shrink-0 rounded-2xl shadow-xl">
-            {/* Izquierda: Pregunta actual y contador de respuestas */}
-            <div className="flex items-center gap-3">
-              <span className="px-3 py-1 rounded-xl bg-purple-600/30 border border-purple-400 text-purple-200 font-black text-xs uppercase tracking-wider">
+          <div className="card p-2.5 sm:p-3 border-purple-500/30 bg-slate-900/90 backdrop-blur-md flex items-center justify-between gap-3 shrink-0 rounded-2xl shadow-xl">
+            {/* Izquierda: Indicador de Pregunta y PIN */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <span className="px-3 py-1.5 rounded-xl bg-purple-600/30 border border-purple-400 text-purple-200 font-black text-xs uppercase tracking-wider">
                 Pregunta {currentQIndex + 1} / {questions.length}
               </span>
-              <div className="flex items-center gap-1.5 text-white/80 font-bold text-xs sm:text-sm">
-                <Users className="w-4 h-4 text-purple-400" />
-                <span>
-                  Respuestas: <strong className="text-yellow-400 text-base font-black">{answeredCount}</strong> / {liveParticipants.length}
-                </span>
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-white/70 text-xs font-mono font-bold">
+                <span>PIN:</span>
+                <span className="text-yellow-400 tracking-wider">{token}</span>
               </div>
             </div>
 
-            {/* Centro: Reloj Compacto Vibrante */}
-            <div className="flex items-center justify-center">
-              <div
-                className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border-2 transition-all duration-300 shadow-lg ${
-                  timerLeft <= 5
-                    ? 'bg-red-950/90 border-red-500 text-red-400 shadow-red-600/60 animate-pulse scale-105'
-                    : 'bg-purple-950/70 border-purple-400 text-yellow-300 shadow-purple-600/40'
-                }`}
-              >
-                <span className="text-2xl sm:text-3xl font-black tracking-tight leading-none">
-                  {timerLeft}
-                </span>
-              </div>
+            {/* Centro: Título sutil de la partida */}
+            <div className="hidden md:flex items-center gap-2 text-white/60 text-xs font-bold truncate max-w-xs">
+              <span className="truncate">{gameData?.title || "Partida en Vivo"}</span>
             </div>
 
             {/* Derecha: Botones de Acción (Ronda Dorada, Robo y Revelar/Siguiente) */}
@@ -1795,30 +1792,97 @@ export default function SessionPage() {
             </div>
           </div>
 
-          {/* Área Central: Imagen (si existe) y Pregunta Compacta */}
-          <div className="card p-3 sm:p-5 border-purple-500/30 bg-gradient-to-b from-purple-950/40 to-slate-900 flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[140px] shadow-xl rounded-2xl">
-            {currentQ.imageUrl && (
-              <div className="mb-2 max-h-28 sm:max-h-36 overflow-hidden rounded-xl border border-white/20">
-                <img
-                  src={currentQ.imageUrl}
-                  alt="Imagen de apoyo"
-                  className="max-h-28 sm:max-h-36 object-contain mx-auto"
+          {/* Área Central: Reloj Gigante de Impacto + Pregunta + Tarjeta Gigante de Respuestas */}
+          <div className="flex items-stretch justify-between gap-3 sm:gap-4 flex-1 min-h-[140px] max-h-[38vh]">
+            {/* RELOJ CIRCULAR GIGANTE DE ALTO IMPACTO (Estilo Kahoot) */}
+            <div className="shrink-0 flex items-center justify-center">
+              <div
+                className={`relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 rounded-full flex items-center justify-center transition-all duration-300 select-none ${
+                  timerLeft <= 5
+                    ? 'bg-red-600 shadow-[0_0_50px_rgba(239,68,68,0.9)] animate-pulse scale-105 ring-4 ring-yellow-400'
+                    : 'bg-slate-900/95 border-4 border-purple-500/50 shadow-2xl shadow-purple-900/50'
+                }`}
+              >
+                {/* SVG Radial Progress Ring */}
+                <svg className="absolute inset-0 w-full h-full -rotate-90 p-1" viewBox="0 0 100 100">
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="44"
+                    fill="none"
+                    stroke="rgba(255, 255, 255, 0.1)"
+                    strokeWidth="8"
+                  />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="44"
+                    fill="none"
+                    stroke={timerLeft <= 5 ? '#ffffff' : '#fbbf24'}
+                    strokeWidth="8"
+                    strokeDasharray="276"
+                    strokeDashoffset={`${((currentQ.timeLimit || 20) - timerLeft) / (currentQ.timeLimit || 20) * 276}`}
+                    strokeLinecap="round"
+                    className="transition-all duration-1000 ease-linear"
+                  />
+                </svg>
+
+                {/* Número Gigante de Tiempo */}
+                <div className="relative z-10 flex flex-col items-center justify-center">
+                  <span
+                    className={`text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tighter leading-none ${
+                      timerLeft <= 5 ? 'text-white' : 'text-yellow-300 drop-shadow-[0_2px_10px_rgba(250,204,21,0.5)]'
+                    }`}
+                  >
+                    {timerLeft}
+                  </span>
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-white/70 mt-0.5">
+                    SEG
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Centro: Imagen (si existe) y Pregunta */}
+            <div className="card p-3 sm:p-5 border-purple-500/30 bg-gradient-to-b from-purple-950/40 to-slate-900 flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden shadow-xl rounded-2xl">
+              {currentQ.imageUrl && (
+                <div className="mb-2 max-h-24 sm:max-h-32 overflow-hidden rounded-xl border border-white/20">
+                  <img
+                    src={currentQ.imageUrl}
+                    alt="Imagen de apoyo"
+                    className="max-h-24 sm:max-h-32 object-contain mx-auto"
+                  />
+                </div>
+              )}
+
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white leading-tight max-w-4xl px-2">
+                {currentQ.content}
+              </h2>
+
+              {/* Barra de progreso de tiempo delgada complementaria */}
+              <div className="w-full bg-white/10 rounded-full h-1.5 mt-3 overflow-hidden max-w-2xl">
+                <div
+                  className={`h-full transition-all duration-1000 ${
+                    timerLeft <= 5 ? 'bg-red-500' : 'bg-gradient-to-r from-purple-500 to-indigo-400'
+                  }`}
+                  style={{ width: `${(timerLeft / (currentQ.timeLimit || 20)) * 100}%` }}
                 />
               </div>
-            )}
+            </div>
 
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white leading-tight max-w-4xl px-2">
-              {currentQ.content}
-            </h2>
-
-            {/* Barra de progreso de tiempo delgada */}
-            <div className="w-full bg-white/10 rounded-full h-1.5 mt-3 overflow-hidden max-w-2xl">
-              <div
-                className={`h-full transition-all duration-1000 ${
-                  timerLeft <= 5 ? 'bg-red-500' : 'bg-gradient-to-r from-purple-500 to-indigo-400'
-                }`}
-                style={{ width: `${(timerLeft / (currentQ.timeLimit || 20)) * 100}%` }}
-              />
+            {/* TARJETA GIGANTE DE RESPUESTAS (Estilo Kahoot) */}
+            <div className="shrink-0 flex items-center justify-center">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 rounded-3xl bg-slate-900/95 border-4 border-indigo-500/50 shadow-2xl shadow-indigo-900/50 flex flex-col items-center justify-center select-none text-center p-2">
+                <span className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-indigo-300 tracking-tight leading-none">
+                  {answeredCount}
+                </span>
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-white/80 mt-1">
+                  Respuestas
+                </span>
+                <span className="text-[9px] sm:text-[10px] text-white/50 font-bold mt-0.5">
+                  de {liveParticipants.length}
+                </span>
+              </div>
             </div>
           </div>
 
