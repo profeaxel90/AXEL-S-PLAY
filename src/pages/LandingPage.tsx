@@ -181,6 +181,13 @@ export default function LandingPage() {
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>
+            <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-center gap-1.5 text-xs text-white/60">
+              <span>¿Tienes una actividad asignada para casa?</span>
+              <Link to="/homework" className="text-yellow-300 hover:text-yellow-200 font-bold underline flex items-center gap-1">
+                <span>Entrar a Tareas</span>
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
           </motion.div>
 
           {/* CTAs */}
