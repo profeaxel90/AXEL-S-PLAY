@@ -87,6 +87,16 @@ function App() {
         <Route path="/homework/:pin" element={<HomeworkJoinPage />} />
         <Route path="/homework/play/:pin" element={<HomeworkPlayPage />} />
 
+        {/* ── Sala de Partida en Vivo en Pantalla Completa (Sin Sidebar lateral para 100% de espacio) ── */}
+        <Route
+          path="/teacher/games/:gameId/session"
+          element={
+            <RequireAuth>
+              <SessionPage />
+            </RequireAuth>
+          }
+        />
+
         {/* ── Panel Docente (requiere autenticación) ── */}
         <Route element={<RequireAuth><TeacherLayout /></RequireAuth>}>
           <Route path="/teacher" element={<Navigate to="/teacher/dashboard" replace />} />
@@ -94,7 +104,6 @@ function App() {
           <Route path="/teacher/games" element={<GamesPage />} />
           <Route path="/teacher/games/new" element={<GameEditorPage />} />
           <Route path="/teacher/games/:gameId/edit" element={<GameEditorPage />} />
-          <Route path="/teacher/games/:gameId/session" element={<SessionPage />} />
           <Route path="/teacher/questions" element={<QuestionBankPage />} />
           <Route path="/teacher/analytics" element={<AnalyticsPage />} />
           <Route path="/teacher/history" element={<SessionHistoryPage />} />

@@ -3,12 +3,10 @@ import * as XLSX from 'xlsx';
 import {
   Database, Plus, Search, Filter, Download, Upload,
   Trash2, Edit3, CheckCircle2, AlertCircle, FileSpreadsheet,
-  Layers, Tag, FileText
+  Layers, Tag
 } from 'lucide-react';
 import { SUBJECTS } from '../../types';
 import type { QuestionType, Difficulty } from '../../types';
-import DocumentQuestionImporterModal from '../../components/teacher/DocumentQuestionImporterModal';
-import type { ExtractedQuestion } from '../../lib/documentQuestionExtractor';
 
 interface BankItem {
   id: string;
@@ -97,28 +95,7 @@ export default function QuestionBankPage() {
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
 
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const [isDocModalOpen, setIsDocModalOpen] = useState(false);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
-
-  const handleImportFromDoc = (extracted: ExtractedQuestion[]) => {
-    const newItems: BankItem[] = extracted.map((eq, idx) => {
-      const correctOpt = eq.options.find((o) => o.isCorrect)?.text || eq.options[0]?.text || '';
-      return {
-        id: `doc-${Date.now()}-${idx}`,
-        content: eq.content,
-        type: eq.type,
-        subject: selectedSubject !== 'all' ? selectedSubject : 'General',
-        topic: 'Importado de Documento',
-        difficulty: 'medium',
-        correctAnswer: correctOpt,
-        optionsCount: eq.options.length,
-      };
-    });
-    setQuestions((prev) => [...newItems, ...prev]);
-    setIsDocModalOpen(false);
-    setImportSuccess(`¡Se importaron ${newItems.length} preguntas exitosamente desde tu documento!`);
-    setTimeout(() => setImportSuccess(null), 4000);
-  };
 
   // Filtrado
   const filteredQuestions = questions.filter((q) => {
@@ -225,15 +202,6 @@ export default function QuestionBankPage() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            onClick={() => setIsDocModalOpen(true)}
-            className="py-2.5 px-4 rounded-xl text-xs font-black flex items-center gap-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:opacity-95 text-white shadow-lg shadow-purple-600/30 border border-purple-400/40 hover:scale-105 transition-all"
-          >
-            <FileText className="w-4 h-4 text-yellow-300" />
-            <span>📄 Importar Word / PDF</span>
-            <span className="bg-yellow-400 text-slate-950 text-[10px] px-1.5 py-0.5 font-black rounded-full">NUEVO</span>
-          </button>
-
           <button
             onClick={() => setImportModalOpen(true)}
             className="btn-secondary py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center gap-2"
@@ -395,12 +363,6 @@ export default function QuestionBankPage() {
           </div>
         </div>
       )}
-      {/* Modal de Importación desde Word o PDF */}
-      <DocumentQuestionImporterModal
-        isOpen={isDocModalOpen}
-        onClose={() => setIsDocModalOpen(false)}
-        onImport={handleImportFromDoc}
-      />
     </div>
   );
 }

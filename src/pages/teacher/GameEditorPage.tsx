@@ -677,56 +677,81 @@ export default function GameEditorPage() {
                 Opciones de Respuesta (Marca la casilla de la respuesta correcta)
               </label>
 
-              <div className="space-y-2.5">
-                {activeQuestion.options.map((opt, optIdx) => (
-                  <div
-                    key={opt.id}
-                    className={`p-3 rounded-xl border flex items-center gap-3 transition-colors ${
-                      opt.isCorrect
-                        ? 'border-green-500/60 bg-green-500/10'
-                        : 'border-white/10 bg-white/5'
-                    }`}
-                  >
-                    <input
-                      type={activeQuestion.type === 'multiple_choice' ? 'checkbox' : 'radio'}
-                      name={`correct-opt-${activeQuestion.id}`}
-                      checked={opt.isCorrect}
-                      onChange={() => {
-                        const updatedOptions = activeQuestion.options.map((o, idx) => ({
-                          ...o,
-                          isCorrect: activeQuestion.type === 'multiple_choice'
-                            ? idx === optIdx ? !o.isCorrect : o.isCorrect
-                            : idx === optIdx,
-                        }));
-                        updateActiveQuestion({ options: updatedOptions });
-                      }}
-                      className="w-5 h-5 accent-green-500 cursor-pointer"
-                    />
+              <div className="space-y-3">
+                {activeQuestion.options.map((opt, optIdx) => {
+                  const CREATION_COLORS = [
+                    { border: 'border-red-500/60 bg-red-950/25', badge: 'bg-red-600 text-white', symbol: '▲', name: 'Rojo' },
+                    { border: 'border-blue-500/60 bg-blue-950/25', badge: 'bg-blue-600 text-white', symbol: '◆', name: 'Azul' },
+                    { border: 'border-amber-500/60 bg-amber-950/25', badge: 'bg-amber-400 text-slate-950', symbol: '●', name: 'Amarillo' },
+                    { border: 'border-emerald-500/60 bg-emerald-950/25', badge: 'bg-emerald-600 text-white', symbol: '■', name: 'Verde' },
+                  ];
+                  const cStyle = CREATION_COLORS[optIdx % CREATION_COLORS.length];
 
-                    <span className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center font-bold text-xs text-white/60">
-                      {String.fromCharCode(65 + optIdx)}
-                    </span>
+                  return (
+                    <div
+                      key={opt.id}
+                      className={`p-3.5 rounded-2xl border-2 flex items-center gap-3 transition-all ${cStyle.border} ${
+                        opt.isCorrect ? 'ring-2 ring-yellow-400 shadow-lg shadow-yellow-500/20' : 'hover:border-white/40'
+                      }`}
+                    >
+                      <input
+                        type={activeQuestion.type === 'multiple_choice' ? 'checkbox' : 'radio'}
+                        name={`correct-opt-${activeQuestion.id}`}
+                        checked={opt.isCorrect}
+                        onChange={() => {
+                          const updatedOptions = activeQuestion.options.map((o, idx) => ({
+                            ...o,
+                            isCorrect: activeQuestion.type === 'multiple_choice'
+                              ? idx === optIdx ? !o.isCorrect : o.isCorrect
+                              : idx === optIdx,
+                          }));
+                          updateActiveQuestion({ options: updatedOptions });
+                        }}
+                        className="w-5 h-5 accent-yellow-400 cursor-pointer"
+                        title="Marcar como respuesta correcta"
+                      />
 
-                    <input
-                      type="text"
-                      value={opt.text}
-                      onChange={(e) => {
-                        const updatedOptions = activeQuestion.options.map((o, idx) =>
-                          idx === optIdx ? { ...o, text: e.target.value } : o
-                        );
-                        updateActiveQuestion({ options: updatedOptions });
-                      }}
-                      placeholder={`Texto de la opción ${optIdx + 1}...`}
-                      className="input py-2 text-sm flex-1 bg-transparent border-none focus:ring-0"
-                    />
+                      <div className={`w-8 h-8 rounded-xl ${cStyle.badge} flex items-center justify-center font-black text-xs shadow-md shrink-0 flex items-center gap-1 px-1.5`}>
+                        <span className="text-[10px]">{cStyle.symbol}</span>
+                        <span>{String.fromCharCode(65 + optIdx)}</span>
+                      </div>
 
-                    {opt.isCorrect && (
-                      <span className="badge-success text-[10px] flex-shrink-0">
-                        Correcta
-                      </span>
-                    )}
-                  </div>
-                ))}
+                      <input
+                        type="text"
+                        value={opt.text}
+                        onChange={(e) => {
+                          const updatedOptions = activeQuestion.options.map((o, idx) =>
+                            idx === optIdx ? { ...o, text: e.target.value } : o
+                          );
+                          updateActiveQuestion({ options: updatedOptions });
+                        }}
+                        placeholder={`Escribe el texto de la opción ${String.fromCharCode(65 + optIdx)} (${cStyle.name})...`}
+                        className="input py-2 text-sm flex-1 bg-slate-950/50 border border-white/10 focus:border-white/30 rounded-xl"
+                      />
+
+                      {opt.isCorrect ? (
+                        <span className="bg-yellow-400 text-slate-950 font-black text-xs px-2.5 py-1 rounded-full flex items-center gap-1 shrink-0 shadow-sm">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Correcta</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updatedOptions = activeQuestion.options.map((o, idx) => ({
+                              ...o,
+                              isCorrect: idx === optIdx,
+                            }));
+                            updateActiveQuestion({ options: updatedOptions });
+                          }}
+                          className="text-[11px] text-white/40 hover:text-white px-2 py-1 rounded-lg border border-white/10 hover:bg-white/5 transition-colors shrink-0"
+                        >
+                          Hacer Correcta
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

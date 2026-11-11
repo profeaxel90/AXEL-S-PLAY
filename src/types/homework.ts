@@ -26,6 +26,7 @@ export interface HomeworkSubmission {
   correctionsUsed: number;
   submittedAt: string;
   answers: HomeworkAnswerSubmission[];
+  studentPhotos?: string[]; // Fotos tomadas/subidas por el estudiante (procedimientos o cuaderno)
 }
 
 export interface HomeworkAssignment {
@@ -40,5 +41,11 @@ export interface HomeworkAssignment {
   maxCorrections: number; // Por defecto 3
   status: 'active' | 'closed';
   createdAt: string;
+  // Modalidades avanzadas de asignación
+  assignmentType?: 'quiz' | 'pdf_guide' | 'exam_review';
+  pdfUrl?: string; // Guía o taller en PDF adjunto por el docente
+  pdfName?: string; // Nombre del archivo PDF
+  allowPhotoUpload?: boolean; // Permite a los estudiantes subir fotos de su trabajo
+  allowRetries?: boolean; // Permite reintentar para mejorar nota (Modo Repaso)
   submissions: HomeworkSubmission[];
 }

@@ -94,6 +94,11 @@ interface HomeworkState {
     gameId: string;
     dueDate?: string;
     maxCorrections?: number;
+    assignmentType?: 'quiz' | 'pdf_guide' | 'exam_review';
+    pdfUrl?: string;
+    pdfName?: string;
+    allowPhotoUpload?: boolean;
+    allowRetries?: boolean;
   }) => HomeworkAssignment;
   getAssignmentByIdOrPin: (idOrPin: string) => HomeworkAssignment | undefined;
   submitHomework: (assignmentId: string, submission: Omit<HomeworkSubmission, 'id' | 'submittedAt'>) => HomeworkSubmission;
@@ -137,6 +142,11 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
         maxCorrections: data.maxCorrections ?? 3,
         status: 'active',
         createdAt: new Date().toISOString(),
+        assignmentType: data.assignmentType || (data.pdfUrl ? 'pdf_guide' : 'quiz'),
+        pdfUrl: data.pdfUrl,
+        pdfName: data.pdfName,
+        allowPhotoUpload: data.allowPhotoUpload ?? true,
+        allowRetries: data.allowRetries ?? false,
         submissions: [],
       };
 

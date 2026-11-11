@@ -15,7 +15,7 @@ import {
   ArrowLeft, CheckCircle2, Sparkles, BarChart3,
   Clock, Eye, Wifi, Globe, Sliders, Music, Radio,
   Volume2, VolumeX, ShieldAlert, Award, Image as ImageIcon,
-  Maximize2, Minimize2, X, ShieldCheck, Flame, Shield
+  Maximize2, Minimize2, X, ShieldCheck, Flame, Shield, HelpCircle
 } from 'lucide-react';
 
 const OPTION_STYLES = [
@@ -490,58 +490,25 @@ export default function SessionPage() {
 
     setGamePhase('intro');
     setIntroStep(1);
-    setIntroCountNum(1);
-    audioEngine.playEffect('sfx_tick');
+    audioEngine.playEffect('sfx_intro');
 
-    // Transmitir a todos los celulares la secuencia de inicio
+    // Transmitir a todos los celulares la secuencia de inicio rápida
     hostSyncRef.current?.broadcast('START_INTRO', {
       introStep: 1,
-      introCount: 1,
-      introTitle: gameData?.title || 'Seguridad Vial y Normas de Tránsito',
-      introDescription: gameData?.description || 'Evaluación interactiva y gamificada con retos en tiempo real.',
+      introTitle: "AXEL'S PLAY",
+      introDescription: 'Plataforma de gamificación',
     });
 
     // Limpiar timers anteriores si hubieran
     introTimeoutsRef.current.forEach(clearTimeout);
     introTimeoutsRef.current = [];
 
-    // Secuencia de Cuenta Regresiva: 1, 2, 3
-    const t2 = setTimeout(() => {
-      setIntroCountNum(2);
-      audioEngine.playEffect('sfx_tick');
-    }, 1100);
-
-    const t3 = setTimeout(() => {
-      setIntroCountNum(3);
-      audioEngine.playEffect('sfx_tick');
-    }, 2200);
-
-    // Paso 2: Mostrar TEMA DE LA PARTIDA (3.3s)
-    const tTema = setTimeout(() => {
-      setIntroStep(2);
-      audioEngine.playEffect('sfx_power_up');
-      hostSyncRef.current?.broadcast('START_INTRO', {
-        introStep: 2,
-        introTitle: gameData?.title || 'Seguridad Vial y Normas de Tránsito',
-      });
-    }, 3300);
-
-    // Paso 3: AXEL'S PLAY EN PRESENTACIÓN CINEMATOGRÁFICA LEGIBLE (5.6s - Se mantiene en pantalla hasta 12.6s = 7 segundos enteros)
-    const tZoom = setTimeout(() => {
-      setIntroStep(3);
-      audioEngine.playEffect('sfx_intro');
-      hostSyncRef.current?.broadcast('START_INTRO', {
-        introStep: 3,
-        introTitle: "AXEL'S PLAY",
-      });
-    }, 5600);
-
-    // Paso 4: ¡EMPIEZA EL JUEGO! (12.6s)
+    // Paso a la primera pregunta en 3 segundos
     const tStart = setTimeout(() => {
       handleStartQuestions();
-    }, 12600);
+    }, 3200);
 
-    introTimeoutsRef.current = [t2, t3, tTema, tZoom, tStart];
+    introTimeoutsRef.current = [tStart];
   };
 
   const handleStartQuestions = () => {
@@ -1612,88 +1579,26 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* ── FASE INTRO: SECUENCIA CINEMATOGRÁFICA (1, 2, 3 -> TEMA -> AXEL'S PLAY EN ZOOM) ── */}
+      {/* ── FASE INTRO: PRESENTACIÓN RÁPIDA (SOLO AXEL'S PLAY - PLATAFORMA DE GAMIFICACIÓN) ── */}
       {gamePhase === 'intro' && (
-        <div className="card p-8 md:p-14 border-purple-500/50 bg-gradient-to-b from-purple-950/70 via-slate-950 to-slate-950 text-center shadow-2xl relative overflow-hidden min-h-[500px] flex flex-col items-center justify-center">
-          {/* PASO 1: CONTEO ANIMADO 1, 2, 3 */}
-          {introStep === 1 && (
-            <div className="flex flex-col items-center justify-center space-y-6 animate-fade-in">
-              <span className="text-xs font-black uppercase tracking-widest text-purple-300 bg-purple-500/20 px-4 py-1.5 rounded-full border border-purple-500/40">
-                ¡PREPARADOS EN SUS CELULARES!
-              </span>
-              <div
-                key={introCountNum}
-                className="w-48 h-48 sm:w-56 sm:h-56 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-500 flex items-center justify-center shadow-[0_0_60px_rgba(168,85,247,0.6)] border-4 border-yellow-300 animate-bounce-in"
-              >
-                <span className="text-8xl sm:text-9xl font-black text-white tracking-tighter drop-shadow-2xl">
-                  {introCountNum}
-                </span>
-              </div>
-              <p className="text-xl sm:text-2xl font-black text-yellow-300 tracking-wider animate-pulse">
-                {introCountNum === 1 ? '¡Uno!' : introCountNum === 2 ? '¡Dos!' : '¡Tres!'}
-              </p>
-            </div>
-          )}
+        <div className="card p-8 md:p-14 border-purple-500/50 bg-gradient-to-b from-purple-950/70 via-slate-950 to-slate-950 text-center shadow-2xl relative overflow-hidden min-h-[460px] flex flex-col items-center justify-center select-none animate-fade-in">
+          <div className="absolute -inset-32 bg-gradient-to-r from-purple-600/30 via-pink-600/20 to-yellow-400/20 rounded-full blur-3xl opacity-50 animate-pulse pointer-events-none" />
 
-          {/* PASO 2: NOMBRE DEL TEMA */}
-          {introStep === 2 && (
-            <div className="flex flex-col items-center justify-center space-y-6 animate-fade-in max-w-4xl mx-auto p-4">
-              <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-yellow-400/20 border border-yellow-400/50 text-yellow-300 text-xs font-black uppercase tracking-widest shadow-lg animate-pulse">
-                <Sparkles className="w-4 h-4 text-yellow-400 animate-spin" />
-                <span>TEMA DE LA ACTIVIDAD</span>
-              </div>
-              <h1 className="text-4xl sm:text-6xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-white to-amber-300 leading-tight drop-shadow-[0_10px_35px_rgba(234,179,8,0.4)] animate-bounce-in">
-                {gameData?.title || 'Seguridad Vial y Normas de Tránsito'}
-              </h1>
-              <p className="text-white/70 text-sm sm:text-base max-w-2xl mx-auto">
-                {gameData?.description || 'Responde con rapidez y precisión para acumular la mayor cantidad de puntos.'}
-              </p>
-            </div>
-          )}
+          <div className="relative z-10 space-y-4 max-w-4xl py-6">
+            <h1 className="text-6xl sm:text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-purple-200 to-pink-300 tracking-tight drop-shadow-[0_15px_60px_rgba(168,85,247,0.9)] animate-bounce-in">
+              AXEL'S PLAY
+            </h1>
+            <p className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-purple-200 tracking-wide uppercase drop-shadow-md">
+              Plataforma de gamificación
+            </p>
+          </div>
 
-          {/* PASO 3: AXEL'S PLAY EN PRESENTACIÓN CINEMATOGRÁFICA LEGIBLE (7 SEGUNDOS) */}
-          {introStep === 3 && (
-            <div className="flex flex-col items-center justify-center space-y-6 animate-fade-in relative max-w-4xl mx-auto py-8">
-              <div className="absolute -inset-20 bg-gradient-to-r from-purple-600 via-pink-600 to-yellow-400 rounded-full blur-3xl opacity-40 animate-pulse pointer-events-none" />
-              
-              <div className="relative">
-                <span className="text-xs md:text-sm font-black uppercase tracking-[0.3em] text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-4 py-1.5 rounded-full inline-block mb-4 shadow-sm animate-pulse">
-                  ⭐ Plataforma de Evaluación Gamificada ⭐
-                </span>
-                <h1 className="text-6xl sm:text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-purple-200 to-pink-300 tracking-tight drop-shadow-[0_15px_60px_rgba(168,85,247,0.9)] select-none">
-                  AXEL'S PLAY
-                </h1>
-              </div>
-
-              <div className="space-y-3 pt-2 text-center">
-                <p className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white tracking-wide drop-shadow-md">
-                  ¡PREPARADOS PARA LA PRIMERA PREGUNTA!
-                </p>
-                <p className="text-xs sm:text-sm text-purple-200/80">
-                  Mira la pantalla gigante, piensa rápido y responde en tu teléfono
-                </p>
-
-                {/* Barra de progreso de lectura pausada de 7 segundos */}
-                <div className="w-64 sm:w-80 h-2 bg-white/10 rounded-full overflow-hidden mx-auto mt-4 border border-white/20">
-                  <div
-                    className="h-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-500 rounded-full animate-pulse"
-                    style={{
-                      width: '100%',
-                      animation: 'progress7s 7s linear forwards',
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Botón de Salto Rápido para el Docente */}
-          <div className="mt-8 pt-4">
+          <div className="mt-8 z-10">
             <button
               onClick={handleStartQuestions}
-              className="py-2.5 px-6 rounded-xl text-xs font-bold text-white/60 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
+              className="py-2.5 px-6 rounded-xl text-xs font-bold text-white/50 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
             >
-              Iniciar Pregunta 1 Inmediatamente →
+              Comenzar Inmediatamente →
             </button>
           </div>
         </div>
@@ -1846,11 +1751,11 @@ export default function SessionPage() {
             {/* Centro: Imagen (si existe) y Pregunta */}
             <div className="card p-3 sm:p-5 border-purple-500/30 bg-gradient-to-b from-purple-950/40 to-slate-900 flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden shadow-xl rounded-2xl">
               {currentQ.imageUrl && (
-                <div className="mb-2 max-h-24 sm:max-h-32 overflow-hidden rounded-xl border border-white/20">
+                <div className="mb-2 flex items-center justify-center rounded-2xl overflow-hidden border border-white/20 bg-black/40 p-1 shadow-lg max-h-[22vh] w-auto">
                   <img
                     src={currentQ.imageUrl}
                     alt="Imagen de apoyo"
-                    className="max-h-24 sm:max-h-32 object-contain mx-auto"
+                    className="max-h-[20vh] max-w-full w-auto h-auto object-contain rounded-xl"
                   />
                 </div>
               )}
@@ -1918,90 +1823,192 @@ export default function SessionPage() {
               );
             })}
           </div>
+
+          {/* ── BARRA LATERAL EN EL COSTADO: PODERES SOLO ICONOS PARA DAR EN CUALQUIER MOMENTO ── */}
+          <div className="fixed right-3 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-2 p-2 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-purple-500/40 shadow-2xl">
+            {/* 1. Ronda Dorada 2X */}
+            <button
+              type="button"
+              onClick={handleToggleGoldenRound}
+              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${
+                isGoldenRound
+                  ? 'bg-yellow-400 text-slate-950 ring-4 ring-yellow-300 shadow-lg shadow-yellow-400/50 scale-110 animate-pulse'
+                  : 'bg-white/10 hover:bg-white/20 text-yellow-300 hover:scale-105'
+              }`}
+              title={isGoldenRound ? 'Ronda Dorada 2X ACTIVA' : 'Activar Ronda Dorada (Puntos Dobles 2X)'}
+            >
+              <Sparkles className={`w-5 h-5 ${isGoldenRound ? 'fill-slate-950' : 'fill-yellow-400'}`} />
+            </button>
+
+            {/* 2. Robo de Puntos */}
+            <button
+              type="button"
+              onClick={handleAuthorizeStealPower}
+              disabled={isStealAuthorized}
+              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${
+                isStealAuthorized
+                  ? 'bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 cursor-default'
+                  : 'bg-gradient-to-tr from-red-600 to-rose-500 text-white shadow-lg shadow-red-600/30 hover:scale-105 active:scale-95 animate-pulse'
+              }`}
+              title={isStealAuthorized ? 'Robo de Puntos YA Autorizado' : 'Autorizar Robo de Puntos (50 pts)'}
+            >
+              <Zap className={`w-5 h-5 ${isStealAuthorized ? 'fill-yellow-400' : 'fill-white'}`} />
+            </button>
+
+            {/* 3. +10 Segundos Extra para Todos */}
+            <button
+              type="button"
+              onClick={() => {
+                setTimerLeft((t) => t + 10);
+                handleApplyPowerToAll('extra_time');
+              }}
+              className="w-11 h-11 rounded-xl bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-400/40 text-cyan-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-cyan-600/20"
+              title="Dar +10 Segundos Extra a Todos los Estudiantes"
+            >
+              <Clock className="w-5 h-5" />
+            </button>
+
+            {/* 4. Escudo Protector a Todos */}
+            <button
+              type="button"
+              onClick={() => handleApplyPowerToAll('shield')}
+              className="w-11 h-11 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 border border-blue-400/40 text-blue-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-blue-600/20"
+              title="Otorgar Escudo Protector Anti-Robo a Todos"
+            >
+              <Shield className="w-5 h-5" />
+            </button>
+
+            {/* 5. Comodín 50:50 a Todos */}
+            <button
+              type="button"
+              onClick={() => handleApplyPowerToAll('eliminate_two')}
+              className="w-11 h-11 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/40 text-emerald-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-emerald-600/20"
+              title="Activar 50:50 (Eliminar 2 opciones incorrectas)"
+            >
+              <Award className="w-5 h-5" />
+            </button>
+
+            {/* 6. Pista Pedagógica a Todos */}
+            <button
+              type="button"
+              onClick={() => handleApplyPowerToAll('hint')}
+              className="w-11 h-11 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-400/40 text-amber-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-amber-600/20"
+              title="Dar Pista a Todos los Estudiantes"
+            >
+              <HelpCircle className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       )}
 
-      {/* ── FASE 3: GRAN PODIO OLÍMPICO DE GANADORES REALES ── */}
+      {/* ── FASE 3: GRAN PODIO OLÍMPICO DE GANADORES REALES (COLORES ALEGRES Y BOMBA DE CONFETI) ── */}
       {gamePhase === 'finished' && (
-        <div className="space-y-8 animate-bounce-in">
+        <div className="space-y-8 animate-bounce-in relative overflow-hidden">
+          {/* BOMBA DE CONFETI EXPLOSIVA AL REVELAR EL NÚMERO 1 */}
+          {(podiumStep >= 3 || podiumConfetti) && (
+            <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+              {[...Array(60)].map((_, i) => {
+                const colors = ['#facc15', '#ef4444', '#3b82f6', '#10b981', '#ec4899', '#8b5cf6', '#06b6d4', '#f97316'];
+                const randomColor = colors[i % colors.length];
+                const left = (i * 1.65) % 100;
+                const size = 8 + (i % 8) * 2;
+                const animDuration = 2.5 + (i % 5) * 0.4;
+                const delay = (i % 10) * 0.1;
+                return (
+                  <div
+                    key={i}
+                    className="absolute top-0 rounded-sm animate-confetti-drop"
+                    style={{
+                      left: `${left}%`,
+                      width: `${size}px`,
+                      height: `${size * 1.4}px`,
+                      backgroundColor: randomColor,
+                      animationDuration: `${animDuration}s`,
+                      animationDelay: `${delay}s`,
+                      transform: `rotate(${i * 25}deg)`,
+                      boxShadow: `0 0 10px ${randomColor}`,
+                    }}
+                  />
+                );
+              })}
+            </div>
+          )}
+
           <div className="card border-purple-500/30 p-8 text-center relative overflow-hidden bg-gradient-to-b from-purple-950/40 via-slate-900 to-slate-950 shadow-2xl">
             <div className="mb-4">
-              <Crown className="w-16 h-16 text-yellow-400 mx-auto mb-2 animate-bounce" />
-              <h2 className="text-3xl sm:text-4xl font-black text-white">¡Gran Podio Olímpico!</h2>
-              <p className="text-purple-300 font-bold text-sm mt-1">
-                Resultados finales de los participantes que compitieron en la sala
+              <Crown className="w-16 h-16 text-yellow-300 mx-auto mb-2 animate-bounce drop-shadow-[0_0_20px_rgba(250,204,21,0.8)]" />
+              <h2 className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-200 to-yellow-400">
+                ¡Gran Podio de Campeones!
+              </h2>
+              <p className="text-yellow-300/80 font-bold text-sm mt-1">
+                Resultados finales y celebración de la partida
               </p>
             </div>
 
-            {/* Estructura del Podio de Jugadores REALES con revelación secuencial */}
+            {/* Estructura del Podio de Jugadores REALES con revelación secuencial y colores alegres */}
             {liveParticipants.length === 0 ? (
               <div className="p-8 text-white/50 text-sm">
                 No hubo participantes registrados en esta partida.
               </div>
             ) : (
-              <div className="flex items-end justify-center gap-4 max-w-2xl mx-auto my-8 pt-8 min-h-60 relative">
-                {/* Partículas de Confeti animadas cuando se revela el 1er lugar */}
-                {podiumConfetti && (
-                  <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden flex justify-center items-center">
-                    <span className="text-4xl animate-bounce">🎉</span>
-                    <span className="text-5xl animate-spin mx-6">⭐</span>
-                    <span className="text-4xl animate-bounce">🎊</span>
-                  </div>
-                )}
-
-                {/* 🥈 2do Lugar (Aparece en paso 2) */}
+              <div className="flex items-end justify-center gap-4 sm:gap-6 max-w-3xl mx-auto my-8 pt-8 min-h-64 relative">
+                {/* 🥈 2do Lugar (Aparece en paso 2 - Plata Luminosa y Alegre) */}
                 <div className={`flex-1 flex flex-col items-center transition-all duration-700 ${
                   podiumStep >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
                 }`}>
                   {secondPlace && (
                     <>
-                      <div className="w-20 h-20 rounded-3xl bg-slate-400/20 p-1.5 border-2 border-slate-300/40 mb-2 shadow-lg flex items-center justify-center">
+                      <div className="w-20 h-20 rounded-3xl bg-cyan-500/30 p-1.5 border-3 border-cyan-300 mb-2 shadow-xl shadow-cyan-500/30 flex items-center justify-center">
                         <MascotAvatar avatar={secondPlace.avatar} emotion="happy" size="lg" />
                       </div>
-                      <span className="font-bold text-sm text-white truncate max-w-full">{secondPlace.nickname}</span>
-                      <span className="text-xs text-slate-300 font-extrabold mb-2">{secondPlace.score.toLocaleString()} pts</span>
-                      <div className="w-full h-32 rounded-t-2xl bg-gradient-to-t from-slate-600/40 to-slate-400/30 border-t-4 border-slate-300 flex flex-col items-center justify-center shadow-xl">
-                        <Medal className="w-8 h-8 text-slate-300 mb-1" />
-                        <span className="font-black text-3xl text-slate-300">2°</span>
+                      <span className="font-bold text-sm text-cyan-200 truncate max-w-full drop-shadow">{secondPlace.nickname}</span>
+                      <span className="text-xs text-white font-extrabold mb-2">{secondPlace.score.toLocaleString()} pts</span>
+                      <div className="w-full h-36 rounded-t-3xl bg-gradient-to-t from-sky-600 via-cyan-400 to-indigo-200 border-t-4 border-cyan-200 flex flex-col items-center justify-center shadow-2xl shadow-cyan-500/40">
+                        <Medal className="w-9 h-9 text-slate-950 mb-1" />
+                        <span className="font-black text-4xl text-slate-950">2°</span>
                       </div>
                     </>
                   )}
                 </div>
 
-                {/* 🥇 1er Lugar (Aparece al final en paso 3 con celebración especial) */}
-                <div className={`flex-1 flex flex-col items-center -mt-8 transition-all duration-700 ${
-                  podiumStep >= 3 ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-12 scale-90'
+                {/* 🥇 1er Lugar (Aparece en paso 3 - Oro Brillante y Bomba de Confeti) */}
+                <div className={`flex-1 flex flex-col items-center -mt-10 transition-all duration-700 ${
+                  podiumStep >= 3 ? 'opacity-100 translate-y-0 scale-105' : 'opacity-0 translate-y-12 scale-90'
                 }`}>
                   {firstPlace && (
                     <>
-                      <div className="w-24 h-24 rounded-3xl bg-yellow-400/30 p-2 border-4 border-yellow-400 shadow-2xl shadow-yellow-500/50 mb-2 animate-float flex items-center justify-center">
+                      <div className="w-26 h-26 rounded-3xl bg-yellow-400/40 p-2 border-4 border-yellow-300 shadow-2xl shadow-yellow-400/80 mb-2 animate-bounce ring-4 ring-yellow-300/40 flex items-center justify-center">
                         <MascotAvatar avatar={firstPlace.avatar} emotion="victory" size="xl" />
                       </div>
-                      <span className="font-black text-base text-yellow-300 truncate max-w-full">{firstPlace.nickname}</span>
-                      <span className="text-sm text-yellow-400 font-black mb-2">{firstPlace.score.toLocaleString()} pts</span>
-                      <div className="w-full h-44 rounded-t-3xl bg-gradient-to-t from-yellow-600/50 to-yellow-400/40 border-t-4 border-yellow-400 flex flex-col items-center justify-center shadow-2xl shadow-yellow-500/40">
-                        <Trophy className="w-12 h-12 text-yellow-400 mb-1 animate-pulse" />
-                        <span className="font-black text-4xl text-yellow-400">1°</span>
-                        <span className="text-[10px] font-black text-yellow-300 uppercase tracking-wider">¡GRAN CAMPEÓN!</span>
+                      <span className="font-black text-base text-yellow-300 truncate max-w-full drop-shadow-[0_2px_10px_rgba(250,204,21,0.5)]">
+                        {firstPlace.nickname}
+                      </span>
+                      <span className="text-sm text-white font-black mb-2">{firstPlace.score.toLocaleString()} pts</span>
+                      <div className="w-full h-48 rounded-t-3xl bg-gradient-to-t from-amber-500 via-yellow-400 to-yellow-200 border-t-4 border-yellow-200 flex flex-col items-center justify-center shadow-2xl shadow-yellow-400/70">
+                        <Trophy className="w-14 h-14 text-slate-950 mb-1 animate-pulse" />
+                        <span className="font-black text-5xl text-slate-950">1°</span>
+                        <span className="text-[11px] font-black text-slate-950 uppercase tracking-widest bg-yellow-300/80 px-2 py-0.5 rounded-full mt-0.5">
+                          ¡GRAN CAMPEÓN!
+                        </span>
                       </div>
                     </>
                   )}
                 </div>
 
-                {/* 🥉 3er Lugar (Aparece primero en paso 1) */}
+                {/* 🥉 3er Lugar (Aparece en paso 1 - Bronce Radiante y Alegre) */}
                 <div className={`flex-1 flex flex-col items-center transition-all duration-700 ${
                   podiumStep >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
                 }`}>
                   {thirdPlace && (
                     <>
-                      <div className="w-20 h-20 rounded-3xl bg-amber-700/20 p-1.5 border-2 border-amber-600/40 mb-2 shadow-md flex items-center justify-center">
+                      <div className="w-20 h-20 rounded-3xl bg-orange-500/30 p-1.5 border-3 border-orange-300 mb-2 shadow-xl shadow-orange-500/30 flex items-center justify-center">
                         <MascotAvatar avatar={thirdPlace.avatar} emotion="happy" size="lg" />
                       </div>
-                      <span className="font-bold text-sm text-white truncate max-w-full">{thirdPlace.nickname}</span>
-                      <span className="text-xs text-amber-400 font-extrabold mb-2">{thirdPlace.score.toLocaleString()} pts</span>
-                      <div className="w-full h-24 rounded-t-2xl bg-gradient-to-t from-amber-800/40 to-amber-700/30 border-t-4 border-amber-600 flex flex-col items-center justify-center shadow-lg">
-                        <Medal className="w-7 h-7 text-amber-400 mb-1" />
-                        <span className="font-black text-2xl text-amber-400">3°</span>
+                      <span className="font-bold text-sm text-orange-200 truncate max-w-full drop-shadow">{thirdPlace.nickname}</span>
+                      <span className="text-xs text-white font-extrabold mb-2">{thirdPlace.score.toLocaleString()} pts</span>
+                      <div className="w-full h-28 rounded-t-3xl bg-gradient-to-t from-orange-600 via-amber-500 to-rose-400 border-t-4 border-orange-300 flex flex-col items-center justify-center shadow-2xl shadow-orange-500/40">
+                        <Medal className="w-8 h-8 text-slate-950 mb-1" />
+                        <span className="font-black text-3xl text-slate-950">3°</span>
                       </div>
                     </>
                   )}

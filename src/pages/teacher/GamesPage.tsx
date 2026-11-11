@@ -131,7 +131,10 @@ export default function GamesPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <Link
                     to={`/teacher/games/${game.id}/session`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="btn-primary py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-purple-600/30"
+                    title="Lanzar partida en vivo en una nueva ventana limpia de pantalla completa"
                   >
                     <Play className="w-4 h-4 fill-white" />
                     <span>Lanzar Partida</span>
