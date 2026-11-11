@@ -972,9 +972,10 @@ export default function SessionPage() {
   };
 
   return (
-    <div className="space-y-6 select-none">
-      {/* ── Top Bar de Control Docente ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-4 select-none">
+      {/* ── Top Bar de Control Docente (Oculto en pregunta activa para maximizar espacio 100vh) ── */}
+      {gamePhase !== 'question' && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
             to="/teacher/games"
@@ -987,16 +988,10 @@ export default function SessionPage() {
               <span className={`badge ${
                 gamePhase === 'finished'
                   ? 'badge-warning'
-                  : gamePhase === 'question'
-                  ? 'badge-success'
-                  : gamePhase === 'intro'
-                  ? 'badge-primary'
                   : 'badge-primary'
               } text-[10px]`}>
                 {gamePhase === 'finished'
                   ? 'PARTIDA FINALIZADA'
-                  : gamePhase === 'question'
-                  ? 'EN VIVO'
                   : gamePhase === 'intro'
                   ? 'PRESENTACIÓN'
                   : 'SALA DE ESPERA'}
@@ -1008,8 +1003,6 @@ export default function SessionPage() {
                 ? '🏆 Gran Podio de Ganadores'
                 : gamePhase === 'intro'
                 ? "AXEL'S PLAY — Presentación de la Actividad"
-                : gamePhase === 'question'
-                ? `Pregunta ${currentQIndex + 1} de ${questions.length}`
                 : "AXEL'S PLAY — Partida en Tiempo Real"}
             </h1>
           </div>
@@ -1253,27 +1246,6 @@ export default function SessionPage() {
             </button>
           )}
 
-          {gamePhase === 'question' && (
-            <>
-              <button
-                onClick={handlePauseResume}
-                className="btn-secondary py-2 px-3 rounded-xl text-xs font-bold flex items-center gap-1.5"
-              >
-                {isPaused ? <Play className="w-4 h-4 text-green-400" /> : <Pause className="w-4 h-4 text-amber-400" />}
-                <span>{isPaused ? 'Reanudar' : 'Pausar'}</span>
-              </button>
-
-              <button
-                onClick={handleEndGame}
-                className="btn-danger py-2 px-3 rounded-xl text-xs font-bold flex items-center gap-1.5"
-                title="Terminar la partida y mostrar ganadores"
-              >
-                <Square className="w-3.5 h-3.5" />
-                <span>Terminar</span>
-              </button>
-            </>
-          )}
-
           {gamePhase === 'finished' && (
             <Link
               to="/teacher/analytics"
@@ -1285,31 +1257,29 @@ export default function SessionPage() {
           )}
         </div>
       </div>
+      )}
 
-      {/* Banner de Robo de Puntos Activo */}
-      {stealBanner && (
-        <div className="card p-4 border-red-500/60 bg-gradient-to-r from-red-600/30 via-rose-600/20 to-red-600/30 text-white font-black text-sm flex items-center justify-center gap-3 animate-bounce-in shadow-2xl shadow-red-600/30 ring-2 ring-red-400">
-          <Zap className="w-6 h-6 fill-yellow-400 text-yellow-400 animate-pulse" />
+      {/* Banner de Robo de Puntos Activo (Oculto en pregunta activa para evitar scroll) */}
+      {gamePhase !== 'question' && stealBanner && (
+        <div className="card p-3 border-red-500/60 bg-gradient-to-r from-red-600/30 via-rose-600/20 to-red-600/30 text-white font-black text-xs flex items-center justify-center gap-2 animate-bounce-in shadow-xl">
+          <Zap className="w-5 h-5 fill-yellow-400 text-yellow-400 animate-pulse" />
           <span>{stealBanner}</span>
-          <Sparkles className="w-5 h-5 text-yellow-400 animate-spin" />
         </div>
       )}
 
-      {/* Banner de Ganador de Robo de Puntos */}
-      {stealWinnerBanner && (
-        <div className="card p-4 border-yellow-400/60 bg-gradient-to-r from-amber-500/30 via-yellow-500/20 to-amber-500/30 text-yellow-300 font-black text-base flex items-center justify-center gap-3 animate-bounce-in shadow-2xl shadow-yellow-500/30 ring-2 ring-yellow-400">
-          <Award className="w-6 h-6 text-yellow-300 animate-bounce" />
+      {/* Banner de Ganador de Robo de Puntos (Oculto en pregunta activa para evitar scroll) */}
+      {gamePhase !== 'question' && stealWinnerBanner && (
+        <div className="card p-3 border-yellow-400/60 bg-gradient-to-r from-amber-500/30 via-yellow-500/20 to-amber-500/30 text-yellow-300 font-black text-xs flex items-center justify-center gap-2 animate-bounce-in shadow-xl">
+          <Award className="w-5 h-5 text-yellow-300 animate-bounce" />
           <span>{stealWinnerBanner}</span>
-          <Sparkles className="w-5 h-5 text-yellow-300 animate-spin" />
         </div>
       )}
 
-      {/* Banner de Poder Global Activado */}
-      {globalPowerSuccess && (
-        <div className="card p-4 border-yellow-400/40 bg-gradient-to-r from-amber-500/20 to-yellow-600/20 text-yellow-300 font-black text-sm flex items-center justify-center gap-3 animate-bounce-in shadow-xl shadow-yellow-500/20">
-          <Zap className="w-6 h-6 fill-yellow-400 text-yellow-400" />
+      {/* Banner de Poder Global Activado (Oculto en pregunta activa para evitar scroll) */}
+      {gamePhase !== 'question' && globalPowerSuccess && (
+        <div className="card p-3 border-yellow-400/40 bg-gradient-to-r from-amber-500/20 to-yellow-600/20 text-yellow-300 font-black text-xs flex items-center justify-center gap-2 animate-bounce-in shadow-xl">
+          <Zap className="w-5 h-5 fill-yellow-400 text-yellow-400" />
           <span>{globalPowerSuccess}</span>
-          <Sparkles className="w-5 h-5 text-yellow-400 animate-spin" />
         </div>
       )}
 
@@ -1804,6 +1774,24 @@ export default function SessionPage() {
                   <SkipForward className="w-4 h-4 fill-slate-950" />
                 </button>
               )}
+
+              {/* Controles de Pausa y Fin de Partida */}
+              <button
+                type="button"
+                onClick={handlePauseResume}
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+                title={isPaused ? 'Reanudar partida' : 'Pausar partida'}
+              >
+                {isPaused ? <Play className="w-4 h-4 text-green-400" /> : <Pause className="w-4 h-4 text-amber-400" />}
+              </button>
+              <button
+                type="button"
+                onClick={handleEndGame}
+                className="p-2 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-400 transition-colors"
+                title="Terminar partida anticipadamente"
+              >
+                <Square className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 
@@ -2210,20 +2198,20 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* ── TABLA DE CLASIFICACIÓN TOP 5 COMPACTA Y ANIMADA FÍSICAMENTE ── */}
+      {/* ── TABLA DE CLASIFICACIÓN TOP 5 ULTRA COMPACTA Y ANIMADA FÍSICAMENTE (CERO SCROLL) ── */}
       {showLeaderboard && leaderboardData.length > 0 && gamePhase === 'question' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
-          <div className="card max-w-md w-full p-3 sm:p-4 border-purple-500/40 bg-slate-900/95 shadow-2xl text-center space-y-2 rounded-2xl max-h-[82vh] overflow-hidden flex flex-col justify-between">
-            <div className="flex items-center justify-between border-b border-white/10 pb-2">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-yellow-400" />
-                <h3 className="text-base sm:text-lg font-black text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
+          <div className="card max-w-sm sm:max-w-md w-full p-3 sm:p-3.5 border-purple-500/40 bg-slate-900/95 shadow-2xl text-center space-y-2 rounded-2xl max-h-[75vh] overflow-hidden flex flex-col justify-between">
+            <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
+              <div className="flex items-center gap-1.5">
+                <BarChart3 className="w-4 h-4 text-yellow-400" />
+                <h3 className="text-sm sm:text-base font-black text-white">
                   Clasificación · TOP 5 🏆
                 </h3>
               </div>
               <button
                 onClick={() => setShowLeaderboard(false)}
-                className="text-xs px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70"
+                className="text-[11px] px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70"
               >
                 Cerrar ✕
               </button>
@@ -2231,14 +2219,14 @@ export default function SessionPage() {
 
             {/* Notificación compacta de Robo de Puntos si ocurrió */}
             {latestStealEvent && (
-              <div className="py-1 px-3 rounded-xl bg-gradient-to-r from-red-600/30 via-amber-600/30 to-yellow-600/30 border border-yellow-400/40 text-yellow-200 text-[11px] font-black flex items-center justify-center gap-1.5 animate-bounce-in shadow-sm">
+              <div className="py-0.5 px-2.5 rounded-xl bg-gradient-to-r from-red-600/30 via-amber-600/30 to-yellow-600/30 border border-yellow-400/40 text-yellow-200 text-[10px] font-black flex items-center justify-center gap-1 animate-bounce-in shadow-sm">
                 <span>🗡️</span>
                 <span>¡{latestStealEvent.from} robó {latestStealEvent.amount} pts a {latestStealEvent.to}!</span>
               </div>
             )}
 
             {/* Lista de Filas Compactas con Desplazamiento Físico Animado (Sin badges de texto) */}
-            <div className="space-y-1.5 relative overflow-hidden py-1">
+            <div className="space-y-1 relative overflow-hidden py-0.5">
               {leaderboardData.slice(0, 5).map((p, idx) => {
                 const isTop1 = idx === 0;
                 const isTop2 = idx === 1;
@@ -2249,7 +2237,7 @@ export default function SessionPage() {
                 const rankDelta = p.rankDelta !== undefined ? p.rankDelta : 0;
 
                 // Desplazamiento físico: si subió puestos parte de abajo; si bajó parte de arriba
-                const rowHeight = 52;
+                const rowHeight = 44;
                 const initialOffsetY = !isLeaderboardAnimated ? rankDelta * rowHeight : 0;
 
                 return (
@@ -2261,7 +2249,7 @@ export default function SessionPage() {
                         ? 'transform 850ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 400ms ease, border-color 400ms ease'
                         : 'none',
                     }}
-                    className={`flex items-center justify-between p-2.5 rounded-xl border ${
+                    className={`flex items-center justify-between p-2 rounded-xl border ${
                       rankDelta > 0 && isLeaderboardAnimated
                         ? 'ring-2 ring-emerald-400/60 shadow-lg shadow-emerald-500/25 border-emerald-400/50'
                         : rankDelta < 0 && isLeaderboardAnimated

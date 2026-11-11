@@ -650,11 +650,6 @@ export default function GameStudentPage() {
                 La presión del reloj te ganó en esta pregunta (+0 pts). ¡Concéntrate para la siguiente!
               </p>
             </div>
-            {explanationText && (
-              <div className="mt-2 p-2.5 rounded-xl bg-purple-900/40 border border-purple-500/30 text-[11px] text-purple-200 text-left">
-                💡 <strong>Explicación:</strong> {explanationText}
-              </div>
-            )}
           </div>
         )}
 
@@ -690,13 +685,6 @@ export default function GameStudentPage() {
             ) : (
               <div className="p-3 rounded-2xl bg-white/10 border border-white/20 text-white/80 text-xs">
                 Respuesta enviada. Esperando que todos respondan...
-              </div>
-            )}
-
-            {/* Explicación pedagógica si fue revelada */}
-            {explanationText && (
-              <div className="mt-2 p-2.5 rounded-xl bg-purple-900/40 border border-purple-500/30 text-[11px] text-purple-200 text-left">
-                💡 <strong>Explicación:</strong> {explanationText}
               </div>
             )}
           </div>
