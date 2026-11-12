@@ -5,10 +5,17 @@ import { audioEngine } from '../../lib/audio';
 import { getOrCreateGameClientSync, type GameEventMessage } from '../../lib/gameSync';
 import {
   Clock, CheckCircle2, XCircle, Zap, Sparkles, Award, Volume2, VolumeX,
-  Shield, ShieldCheck, Flame, Star
+  Shield, ShieldCheck, Flame, Star, Camera, Send, Trash2
 } from 'lucide-react';
 import type { Question, PowerUp, ParticipantRank } from '../../types';
 import MascotAvatar from '../../components/game/MascotAvatar';
+
+function getEmbedVideoUrl(url?: string): string {
+  if (!url) return '';
+  const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+  if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+  return url;
+}
 
 // Colores y símbolos estilo Kahoot para los botones táctiles de respuesta
 const OPTION_STYLES = [
@@ -90,6 +97,8 @@ export default function GameStudentPage() {
   const [studentHearts, setStudentHearts] = useState<number>(3);
   const [isWheelSelected, setIsWheelSelected] = useState<boolean>(true);
   const [wheelSelectedName, setWheelSelectedName] = useState<string | null>(null);
+  const [typedStudentAnswer, setTypedStudentAnswer] = useState<string>('');
+  const [photoStudentAnswer, setPhotoStudentAnswer] = useState<string | null>(null);
 
   // Escuchar mensajes en tiempo real vía GameClientSync (SSE + P2P)
   useEffect(() => {
@@ -102,6 +111,8 @@ export default function GameStudentPage() {
       if (msg.type === 'QUESTION' && msg.question) {
         setActiveQuestion(msg.question);
         setSelectedOption(null);
+        setTypedStudentAnswer('');
+        setPhotoStudentAnswer(null);
         setIsAnswerSubmitted(false);
         setFeedback(null);
         setPointsGained(null);
@@ -314,6 +325,7 @@ export default function GameStudentPage() {
   // Manejo de envío de respuesta
   const handleSelectAnswer = async (optionId: string) => {
     if (isAnswerSubmitted || timeLeft <= 0 || !activeQuestion) return;
+    if (currentGameMode === 'survival' && studentHearts <= 0) return;
 
     setSelectedOption(optionId);
     setIsAnswerSubmitted(true);
@@ -622,8 +634,18 @@ export default function GameStudentPage() {
             )}
           </div>
 
-          {/* Imagen de la Pregunta en el celular */}
-          {displayQuestion.imageUrl && (
+          {/* Video o Imagen de la Pregunta en el celular */}
+          {displayQuestion.videoUrl ? (
+            <div className="mb-2.5 rounded-xl overflow-hidden border border-white/20 aspect-video bg-black flex items-center justify-center max-h-48">
+              <iframe
+                src={getEmbedVideoUrl(displayQuestion.videoUrl)}
+                className="w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                title="Video de apoyo"
+              />
+            </div>
+          ) : displayQuestion.imageUrl ? (
             <div className="mb-2.5 rounded-xl overflow-hidden border border-white/20 max-h-40 bg-slate-950 flex items-center justify-center">
               <img
                 src={displayQuestion.imageUrl}
@@ -631,7 +653,7 @@ export default function GameStudentPage() {
                 className="max-h-36 object-contain rounded"
               />
             </div>
-          )}
+          ) : null}
 
           <h2 className="text-sm md:text-base font-black text-white leading-snug">
             {displayQuestion.content}
@@ -672,7 +694,7 @@ export default function GameStudentPage() {
             <div className="text-5xl">💀</div>
             <h3 className="text-xl font-black text-white">¡Has sido eliminado!</h3>
             <p className="text-xs text-red-200">
-              Perdiste tus 3 corazones. Puedes continuar en la sala como espectador viendo cómo avanzan tus compañeros.
+              Perdiste tus 3 corazones. Has quedado bloqueado y no puedes responder más preguntas; continúa en la sala observando el podio de tus compañeros.
             </p>
           </div>
         ) : currentGameMode === 'team_battle' && !isMyTeamTurn ? (
@@ -690,6 +712,86 @@ export default function GameStudentPage() {
             <h3 className="text-lg font-black text-white">La Ruleta eligió a:</h3>
             <p className="text-2xl font-black text-yellow-300">{wheelSelectedName || 'un compañero'}</p>
             <p className="text-xs text-white/50">El estudiante seleccionado está respondiendo desde su celular.</p>
+          </div>
+        ) : displayQuestion.type === 'short_answer' ? (
+          /* ── Modo Respuesta Escrita en Celular / PC ── */
+          <div className="card p-4 border-blue-500/40 bg-blue-950/30 rounded-2xl space-y-3 my-2">
+            <label className="block text-xs font-bold text-blue-300 uppercase tracking-wider">
+              ✍️ Escribe tu Respuesta
+            </label>
+            <textarea
+              rows={3}
+              value={typedStudentAnswer}
+              onChange={(e) => setTypedStudentAnswer(e.target.value)}
+              disabled={isAnswerSubmitted || timeLeft <= 0}
+              placeholder="Escribe tu respuesta aquí..."
+              className="w-full p-3 rounded-xl bg-slate-900 border border-white/20 text-white text-sm focus:outline-none focus:border-blue-400 resize-none"
+            />
+            <button
+              type="button"
+              disabled={isAnswerSubmitted || !typedStudentAnswer.trim() || timeLeft <= 0}
+              onClick={() => handleSelectAnswer(typedStudentAnswer.trim())}
+              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 transition-all"
+            >
+              <Send className="w-4 h-4" />
+              <span>{isAnswerSubmitted ? 'Respuesta Enviada' : 'Enviar Respuesta'}</span>
+            </button>
+          </div>
+        ) : displayQuestion.type === 'photo_only' ? (
+          /* ── Modo Solo Foto / Evidencia en Celular / PC ── */
+          <div className="card p-5 border-purple-500/40 bg-purple-950/30 rounded-2xl text-center space-y-3 my-2">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 mx-auto">
+              <Camera className="w-5 h-5" />
+            </div>
+            <h4 className="text-sm font-bold text-white">📸 Foto de tu Trabajo</h4>
+            <p className="text-xs text-white/60">Toma una foto de tu cuaderno o ejercicio</p>
+
+            {photoStudentAnswer ? (
+              <div className="relative max-w-xs mx-auto rounded-xl overflow-hidden border border-white/20 bg-black/60">
+                <img src={photoStudentAnswer} alt="Foto trabajo" className="w-full max-h-48 object-contain" />
+                {!isAnswerSubmitted && (
+                  <button
+                    type="button"
+                    onClick={() => setPhotoStudentAnswer(null)}
+                    className="absolute top-2 right-2 p-1.5 rounded-full bg-red-600 text-white"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer shadow-lg transition-all">
+                <Camera className="w-4 h-4" />
+                <span>Tomar o Elegir Foto</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      setPhotoStudentAnswer(ev.target?.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+            )}
+
+            {photoStudentAnswer && !isAnswerSubmitted && (
+              <button
+                type="button"
+                disabled={timeLeft <= 0}
+                onClick={() => handleSelectAnswer('photo-uploaded')}
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-lg"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Enviar Foto de Evidencia</span>
+              </button>
+            )}
           </div>
         ) : (
           /* ── Botones Grandes de Respuesta (Estilo Kahoot) ── */

@@ -11,6 +11,9 @@ export interface HomeworkAnswerSubmission {
   correctOptionText: string;
   isCorrect: boolean;
   wasCorrected: boolean;
+  questionType?: string;
+  studentPhoto?: string; // Si la pregunta requería subir foto
+  writtenAnswer?: string; // Si la pregunta era de escribir texto
 }
 
 export interface HomeworkSubmission {

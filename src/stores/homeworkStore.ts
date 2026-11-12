@@ -102,6 +102,7 @@ interface HomeworkState {
     allowRetries?: boolean;
   }) => HomeworkAssignment;
   getAssignmentByIdOrPin: (idOrPin: string) => HomeworkAssignment | undefined;
+  updateAssignment: (id: string, data: Partial<HomeworkAssignment>) => void;
   submitHomework: (assignmentId: string, submission: Omit<HomeworkSubmission, 'id' | 'submittedAt'>) => HomeworkSubmission;
   toggleAssignmentStatus: (id: string) => void;
   deleteAssignment: (id: string) => void;
@@ -161,6 +162,17 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
     getAssignmentByIdOrPin: (idOrPin) => {
       const list = get().assignments;
       return list.find((a) => a.id === idOrPin || a.pin === idOrPin.trim());
+    },
+
+    updateAssignment: (id, data) => {
+      const updated = get().assignments.map((a) => {
+        if (a.id === id) {
+          return { ...a, ...data };
+        }
+        return a;
+      });
+      set({ assignments: updated });
+      persist(updated);
     },
 
     submitHomework: (assignmentId, subData) => {

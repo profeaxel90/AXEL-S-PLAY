@@ -45,6 +45,13 @@ const OPTION_STYLES = [
   },
 ];
 
+function getEmbedVideoUrl(url?: string): string {
+  if (!url) return '';
+  const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+  if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+  return url;
+}
+
 // Componente de puntuación animada con incremento en tiempo real
 function AnimatedScoreValue({ target, start = 0, duration = 1200 }: { target: number; start?: number; duration?: number }) {
   const [val, setVal] = useState(start);
@@ -1853,24 +1860,34 @@ export default function SessionPage() {
               </div>
             </div>
 
-            {/* Centro: Imagen (Grande y sin distorsión) y Pregunta */}
+            {/* Centro: Multimedia (Video o Imagen sin distorsión) y Pregunta */}
             <div className="card p-3 sm:p-4 border-purple-500/30 bg-gradient-to-b from-purple-950/40 to-slate-900 flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden shadow-xl rounded-2xl">
-              {currentQ.imageUrl && (
-                <div className="mb-2 flex items-center justify-center rounded-2xl overflow-hidden border border-white/20 bg-black/40 p-1 shadow-lg max-h-[28vh] sm:max-h-[30vh] w-auto">
+              {currentQ.videoUrl ? (
+                <div className="mb-2 w-full max-w-md rounded-2xl overflow-hidden border border-white/20 bg-black shadow-lg aspect-video max-h-[26vh]">
+                  <iframe
+                    src={getEmbedVideoUrl(currentQ.videoUrl)}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title="Video de la pregunta"
+                  />
+                </div>
+              ) : currentQ.imageUrl ? (
+                <div className="mb-2 flex items-center justify-center rounded-2xl overflow-hidden border border-white/20 bg-black/40 p-1 shadow-lg max-h-[26vh] sm:max-h-[28vh] w-auto">
                   <img
                     src={currentQ.imageUrl}
                     alt="Imagen de apoyo"
-                    className="max-h-[26vh] sm:max-h-[29vh] max-w-full w-auto h-auto object-contain rounded-xl"
+                    className="max-h-[24vh] sm:max-h-[27vh] max-w-full w-auto h-auto object-contain rounded-xl"
                   />
                 </div>
-              )}
+              ) : null}
 
-              <h2 className="text-base sm:text-lg md:text-xl font-bold text-white leading-snug max-w-3xl px-2">
+              <h2 className="text-sm sm:text-base md:text-lg font-bold text-white leading-snug max-w-3xl px-2">
                 {currentQ.content}
               </h2>
 
               {/* Barra de progreso de tiempo delgada complementaria */}
-              <div className="w-full bg-white/10 rounded-full h-1.5 mt-2.5 overflow-hidden max-w-2xl">
+              <div className="w-full bg-white/10 rounded-full h-1.5 mt-2 overflow-hidden max-w-2xl">
                 <div
                   className={`h-full transition-all duration-1000 ${
                     timerLeft <= 5 ? 'bg-red-500' : 'bg-gradient-to-r from-purple-500 to-indigo-400'
@@ -1882,52 +1899,78 @@ export default function SessionPage() {
 
             {/* TARJETA GIGANTE DE RESPUESTAS (Estilo Kahoot) */}
             <div className="shrink-0 flex items-center justify-center">
-              <div className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 rounded-3xl bg-slate-900/95 border-4 border-indigo-500/50 shadow-2xl shadow-indigo-900/50 flex flex-col items-center justify-center select-none text-center p-2">
-                <span className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-indigo-300 tracking-tight leading-none">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 lg:w-32 lg:h-32 rounded-3xl bg-slate-900/95 border-4 border-indigo-500/50 shadow-2xl shadow-indigo-900/50 flex flex-col items-center justify-center select-none text-center p-2">
+                <span className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-indigo-300 tracking-tight leading-none">
                   {answeredCount}
                 </span>
-                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-white/80 mt-1">
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-white/80 mt-1">
                   Respuestas
                 </span>
-                <span className="text-[9px] sm:text-[10px] text-white/50 font-bold mt-0.5">
+                <span className="text-[8px] sm:text-[9px] text-white/50 font-bold mt-0.5">
                   de {liveParticipants.length}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Cuadrícula de 4 Opciones Compactas y Elegantes (Cero Scroll) */}
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 flex-1 max-h-[44vh]">
-            {(currentQ.options || []).map((option, idx) => {
-              const style = OPTION_STYLES[idx % OPTION_STYLES.length];
-              const isCorrect = currentQ.correctAnswer === option.id;
-
-              return (
-                <div
-                  key={option.id}
-                  className={`p-3 sm:p-3.5 rounded-2xl border-2 transition-all flex items-center gap-3 relative shadow-md select-none ${
-                    isAnswerRevealed
-                      ? isCorrect
-                        ? 'bg-emerald-600 border-yellow-400 text-white scale-[1.01] shadow-emerald-500/40 ring-4 ring-yellow-400'
-                        : 'opacity-25 bg-slate-900 border-white/10'
-                      : `${style.bg} ${style.border}`
-                  }`}
-                >
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black text-base sm:text-lg shrink-0 ${style.symbolBg}`}>
-                    {style.icon}
-                  </div>
-
-                  <span className="text-sm sm:text-base font-bold leading-snug flex-1">
-                    {option.text}
-                  </span>
-
-                  {isAnswerRevealed && isCorrect && (
-                    <CheckCircle2 className="w-6 h-6 text-yellow-300 shrink-0 animate-bounce" />
-                  )}
+          {/* Opciones o Respuestas (Segmentos Estilizados y de Altura Moderada) */}
+          {currentQ.type === 'short_answer' ? (
+            <div className="w-full max-w-3xl mx-auto p-4 sm:p-5 rounded-2xl bg-blue-950/40 border border-blue-500/40 text-center shadow-lg">
+              <span className="text-2xl sm:text-3xl mb-1 block">✍️</span>
+              <h3 className="text-base sm:text-lg font-bold text-white">Pregunta de Respuesta Abierta</h3>
+              <p className="text-xs sm:text-sm text-blue-200 mt-1">
+                Los estudiantes están redactando sus respuestas desde sus dispositivos móviles o computadores.
+              </p>
+              {isAnswerRevealed && (
+                <div className="mt-3 p-3 rounded-xl bg-black/40 border border-blue-400/40 text-left">
+                  <span className="text-[10px] text-blue-300 uppercase font-bold tracking-wider block">Respuesta modelo / sugerida:</span>
+                  <p className="text-sm font-semibold text-white mt-0.5">
+                    {currentQ.options?.[0]?.text || currentQ.explanation || 'Respuesta abierta recibida'}
+                  </p>
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </div>
+          ) : currentQ.type === 'photo_only' ? (
+            <div className="w-full max-w-3xl mx-auto p-4 sm:p-5 rounded-2xl bg-purple-950/40 border border-purple-500/40 text-center shadow-lg">
+              <span className="text-2xl sm:text-3xl mb-1 block">📸</span>
+              <h3 className="text-base sm:text-lg font-bold text-white">Pregunta de Evidencia Fotográfica</h3>
+              <p className="text-xs sm:text-sm text-purple-200 mt-1">
+                Los estudiantes están tomando una foto de su trabajo o cuaderno y subiéndola en tiempo real.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 flex-1 max-h-[34vh] max-w-4xl mx-auto w-full">
+              {(currentQ.options || []).map((option, idx) => {
+                const style = OPTION_STYLES[idx % OPTION_STYLES.length];
+                const isCorrect = currentQ.correctAnswer === option.id;
+
+                return (
+                  <div
+                    key={option.id}
+                    className={`py-2 sm:py-2.5 px-3 sm:px-4 rounded-xl border-2 transition-all flex items-center gap-2.5 relative shadow-md select-none ${
+                      isAnswerRevealed
+                        ? isCorrect
+                          ? 'bg-emerald-600 border-yellow-400 text-white scale-[1.01] shadow-emerald-500/40 ring-4 ring-yellow-400'
+                          : 'opacity-25 bg-slate-900 border-white/10'
+                        : `${style.bg} ${style.border}`
+                    }`}
+                  >
+                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-black text-sm sm:text-base shrink-0 ${style.symbolBg}`}>
+                      {style.icon}
+                    </div>
+
+                    <span className="text-xs sm:text-sm md:text-base font-bold leading-snug flex-1 truncate-none">
+                      {option.text}
+                    </span>
+
+                    {isAnswerRevealed && isCorrect && (
+                      <CheckCircle2 className="w-5 h-5 text-yellow-300 shrink-0 animate-bounce" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* ── BARRA LATERAL EN EL COSTADO: TODOS LOS PODERES (SOLO ICONOS COMPACTOS) ── */}
           <div className="fixed right-2 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1.5 p-1.5 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-purple-500/40 shadow-2xl">

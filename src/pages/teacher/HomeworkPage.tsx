@@ -5,7 +5,7 @@ import {
   BookOpen, Plus, Clipboard, CheckCircle2, XCircle,
   Trash2, Users, ChevronRight, Download, ArrowLeft,
   Calendar, Hash, ToggleLeft, ToggleRight, Eye, Award, FileText, Camera, Image as ImageIcon,
-  QrCode, X, Clock, ExternalLink
+  QrCode, X, Clock, ExternalLink, Pencil
 } from 'lucide-react';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
@@ -48,6 +48,7 @@ function exportCSV(assignment: HomeworkAssignment) {
 // ── Componente: Modal Nueva Asignación ────────────────────────
 interface NewAssignmentModalProps {
   defaultGameId?: string;
+  initialAssignment?: HomeworkAssignment | null;
   onClose: () => void;
   onCreate: (data: {
     title: string;
@@ -65,33 +66,39 @@ interface NewAssignmentModalProps {
   }) => void;
 }
 
-function NewAssignmentModal({ defaultGameId, onClose, onCreate }: NewAssignmentModalProps) {
+function NewAssignmentModal({ defaultGameId, initialAssignment, onClose, onCreate }: NewAssignmentModalProps) {
   const gamesMap = useGameStore((state) => state.games);
   const games = useMemo(() => Object.values(gamesMap), [gamesMap]);
-  const [assignmentType, setAssignmentType] = useState<'quiz' | 'pdf_guide' | 'exam_review'>('quiz');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('Lee con atención y responde la actividad.');
-  const [gradeGroupTarget, setGradeGroupTarget] = useState('');
-  const [gameId, setGameId] = useState(defaultGameId || (games[0]?.id ?? ''));
-  const [dueDate, setDueDate] = useState('');
-  const [dueTime, setDueTime] = useState('23:59');
-  const [maxCorrections, setMaxCorrections] = useState(3);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pdfName, setPdfName] = useState<string | null>(null);
-  const [allowPhotoUpload, setAllowPhotoUpload] = useState(true);
-  const [allowRetries, setAllowRetries] = useState(false);
+  const [assignmentType, setAssignmentType] = useState<'quiz' | 'pdf_guide' | 'exam_review'>(
+    initialAssignment?.assignmentType || 'quiz'
+  );
+  const [title, setTitle] = useState(initialAssignment?.title || '');
+  const [description, setDescription] = useState(
+    initialAssignment?.description || 'Lee con atención y responde la actividad.'
+  );
+  const [gradeGroupTarget, setGradeGroupTarget] = useState(initialAssignment?.gradeGroupTarget || '');
+  const [gameId, setGameId] = useState(initialAssignment?.gameId || defaultGameId || (games[0]?.id ?? ''));
+  const [dueDate, setDueDate] = useState(initialAssignment?.dueDate || '');
+  const [dueTime, setDueTime] = useState(initialAssignment?.dueTime || '23:59');
+  const [maxCorrections, setMaxCorrections] = useState(initialAssignment?.maxCorrections ?? 3);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(initialAssignment?.pdfUrl || null);
+  const [pdfName, setPdfName] = useState<string | null>(initialAssignment?.pdfName || null);
+  const [allowPhotoUpload, setAllowPhotoUpload] = useState(initialAssignment?.allowPhotoUpload ?? true);
+  const [allowRetries, setAllowRetries] = useState(initialAssignment?.allowRetries ?? false);
 
-  // Asegurar que si games carga o cambia defaultGameId, se seleccione un gameId válido
+  // Asegurar que si games carga o cambia defaultGameId, se seleccione un gameId válido (solo si no estamos editando)
   useEffect(() => {
-    if (defaultGameId && gamesMap[defaultGameId]) {
-      setGameId(defaultGameId);
-      if (!title) {
-        setTitle(`Tarea para Casa: ${gamesMap[defaultGameId].title}`);
+    if (!initialAssignment) {
+      if (defaultGameId && gamesMap[defaultGameId]) {
+        setGameId(defaultGameId);
+        if (!title) {
+          setTitle(`Tarea para Casa: ${gamesMap[defaultGameId].title}`);
+        }
+      } else if (!gameId && games.length > 0) {
+        setGameId(games[0].id);
       }
-    } else if (!gameId && games.length > 0) {
-      setGameId(games[0].id);
     }
-  }, [defaultGameId, gamesMap, games, gameId, title]);
+  }, [defaultGameId, gamesMap, games, gameId, title, initialAssignment]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,8 +128,12 @@ function NewAssignmentModal({ defaultGameId, onClose, onCreate }: NewAssignmentM
             <BookOpen className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="font-black text-white text-lg">Nueva Asignación de Deberes</h2>
-            <p className="text-xs text-white/50">Elige la modalidad pedagógica para el trabajo en casa</p>
+            <h2 className="font-black text-white text-lg">
+              {initialAssignment ? 'Editar Asignación de Deberes' : 'Nueva Asignación de Deberes'}
+            </h2>
+            <p className="text-xs text-white/50">
+              {initialAssignment ? 'Modifica los parámetros de la actividad' : 'Elige la modalidad pedagógica para el trabajo en casa'}
+            </p>
           </div>
         </div>
 
@@ -357,8 +368,8 @@ function NewAssignmentModal({ defaultGameId, onClose, onCreate }: NewAssignmentM
             <button type="button" onClick={onClose} className="flex-1 py-2.5 px-4 rounded-xl border border-white/10 text-white/70 hover:bg-white/5 text-sm font-semibold">
               Cancelar
             </button>
-            <button type="submit" className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-sm hover:opacity-90 transition-opacity">
-              Crear Asignación
+            <button type="submit" className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-sm hover:opacity-90 transition-opacity shadow-lg shadow-emerald-600/20">
+              {initialAssignment ? 'Guardar Cambios' : 'Crear Asignación'}
             </button>
           </div>
         </form>
@@ -475,12 +486,14 @@ function AssignmentDetail({
   onToggleStatus,
   onExport,
   onOpenQr,
+  onEdit,
 }: {
   assignment: HomeworkAssignment;
   onBack: () => void;
   onToggleStatus: () => void;
   onExport: () => void;
   onOpenQr?: (assignment: HomeworkAssignment) => void;
+  onEdit?: () => void;
 }) {
   const [selectedStudent, setSelectedStudent] = useState<HomeworkSubmission | null>(null);
   const shareUrl = `${window.location.origin}/homework/${assignment.pin}`;
@@ -532,6 +545,15 @@ function AssignmentDetail({
         </div>
 
         <div className="flex gap-2">
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-purple-500/30 bg-purple-500/10 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition-colors"
+              title="Editar parámetros de esta asignación"
+            >
+              <Pencil className="w-4 h-4 text-purple-400" /> Editar
+            </button>
+          )}
           <button onClick={onToggleStatus} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 text-xs font-semibold text-white/70 hover:bg-white/5">
             {assignment.status === 'active' ? <ToggleRight className="w-4 h-4 text-emerald-400" /> : <ToggleLeft className="w-4 h-4" />}
             {assignment.status === 'active' ? 'Cerrar' : 'Reabrir'}
@@ -701,8 +723,9 @@ function AssignmentQrModal({ assignment, onClose }: { assignment: HomeworkAssign
 export default function HomeworkPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { assignments, createAssignment, toggleAssignmentStatus, deleteAssignment } = useHomeworkStore();
+  const { assignments, createAssignment, updateAssignment, toggleAssignmentStatus, deleteAssignment } = useHomeworkStore();
   const [showModal, setShowModal] = useState(searchParams.has('gameId'));
+  const [editingAssignment, setEditingAssignment] = useState<HomeworkAssignment | null>(null);
   const [selectedAssignment, setSelectedAssignment] = useState<HomeworkAssignment | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [qrModalAssignment, setQrModalAssignment] = useState<HomeworkAssignment | null>(null);
@@ -713,6 +736,12 @@ export default function HomeworkPage() {
     const a = createAssignment(data);
     setShowModal(false);
     setSelectedAssignment(a);
+  };
+
+  const handleUpdate = (data: Parameters<typeof createAssignment>[0]) => {
+    if (!editingAssignment) return;
+    updateAssignment(editingAssignment.id, data);
+    setEditingAssignment(null);
   };
 
   const sorted = useMemo(
@@ -730,9 +759,17 @@ export default function HomeworkPage() {
           onToggleStatus={() => toggleAssignmentStatus(live.id)}
           onExport={() => exportCSV(live)}
           onOpenQr={(a) => setQrModalAssignment(a)}
+          onEdit={() => setEditingAssignment(live)}
         />
         {qrModalAssignment && (
           <AssignmentQrModal assignment={qrModalAssignment} onClose={() => setQrModalAssignment(null)} />
+        )}
+        {editingAssignment && (
+          <NewAssignmentModal
+            initialAssignment={editingAssignment}
+            onClose={() => setEditingAssignment(null)}
+            onCreate={handleUpdate}
+          />
         )}
       </div>
     );
@@ -776,31 +813,41 @@ export default function HomeworkPage() {
               key={hw.id}
               className="bg-white/5 border border-white/10 rounded-2xl p-5 hover:border-white/20 hover:bg-white/[0.07] transition-all group flex flex-col"
             >
-              {/* Status badge */}
+              {/* Status badge y acciones de gestión */}
               <div className="flex items-center justify-between mb-3">
                 <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${hw.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/10 text-white/40'}`}>
                   {hw.status === 'active' ? '🟢 Activa' : '🔴 Cerrada'}
                 </span>
-                {confirmDelete === hw.id ? (
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => { deleteAssignment(hw.id); setConfirmDelete(null); }}
-                      className="text-xs px-2 py-1 rounded-lg bg-red-600 text-white font-bold"
-                    >
-                      Eliminar
-                    </button>
-                    <button onClick={() => setConfirmDelete(null)} className="text-xs px-2 py-1 rounded-lg bg-white/10 text-white/60">
-                      No
-                    </button>
-                  </div>
-                ) : (
+                <div className="flex items-center gap-1">
                   <button
-                    onClick={() => setConfirmDelete(hw.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                    onClick={() => setEditingAssignment(hw)}
+                    className="p-1.5 rounded-lg text-white/40 hover:text-purple-300 hover:bg-purple-500/10 transition-all"
+                    title="Editar asignación"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Pencil className="w-3.5 h-3.5" />
                   </button>
-                )}
+                  {confirmDelete === hw.id ? (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => { deleteAssignment(hw.id); setConfirmDelete(null); }}
+                        className="text-xs px-2 py-1 rounded-lg bg-red-600 text-white font-bold"
+                      >
+                        Eliminar
+                      </button>
+                      <button onClick={() => setConfirmDelete(null)} className="text-xs px-2 py-1 rounded-lg bg-white/10 text-white/60">
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDelete(hw.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                      title="Eliminar asignación"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Info */}
@@ -872,6 +919,15 @@ export default function HomeworkPage() {
           defaultGameId={defaultGameId}
           onClose={() => setShowModal(false)}
           onCreate={handleCreate}
+        />
+      )}
+
+      {/* Modal Editar Asignación */}
+      {editingAssignment && (
+        <NewAssignmentModal
+          initialAssignment={editingAssignment}
+          onClose={() => setEditingAssignment(null)}
+          onCreate={handleUpdate}
         />
       )}
 

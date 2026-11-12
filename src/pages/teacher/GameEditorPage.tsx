@@ -3,7 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   Save, ArrowLeft, Plus, Trash2, Copy, Eye, Clock,
   Award, Sparkles, CheckCircle2, Image as ImageIcon,
-  HelpCircle, Settings, Layers, ListOrdered, Upload, Database
+  HelpCircle, Settings, Layers, ListOrdered, Upload, Database, Video
 } from 'lucide-react';
 import { SUBJECTS } from '../../types';
 import type { QuestionType, Difficulty, GameMode, GradeLevel } from '../../types';
@@ -12,6 +12,13 @@ import GamePreviewModal from '../../components/teacher/GamePreviewModal';
 import { useGameStore } from '../../stores/gameStore';
 import type { Question } from '../../types';
 import type { BankItem } from '../../data/questionBank';
+
+function getEmbedVideoUrl(url: string): string {
+  if (!url) return '';
+  const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+  if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+  return url;
+}
 
 interface QuestionDraft {
   id: string;
@@ -23,6 +30,7 @@ interface QuestionDraft {
   difficulty: Difficulty;
   explanation: string;
   imageUrl?: string;
+  videoUrl?: string;
   options: { id: string; text: string; isCorrect: boolean }[];
 }
 
@@ -174,6 +182,7 @@ export default function GameEditorPage() {
               difficulty: q.difficulty || 'medium',
               explanation: q.explanation || '',
               imageUrl: q.imageUrl,
+              videoUrl: q.videoUrl,
               options,
             };
           });
@@ -269,6 +278,7 @@ export default function GameEditorPage() {
         difficulty: q.difficulty || 'medium',
         explanation: q.explanation || '',
         imageUrl: q.imageUrl,
+        videoUrl: q.videoUrl,
         orderIndex: idx,
         correctAnswer,
         createdAt: new Date().toISOString(),
@@ -532,14 +542,15 @@ export default function GameEditorPage() {
                 <select
                   value={activeQuestion.type}
                   onChange={(e) => updateActiveQuestion({ type: e.target.value as QuestionType })}
-                  className="input text-xs bg-slate-900 border-white/10 py-2 font-semibold"
+                  className="input text-xs bg-slate-900 border-white/10 py-2 font-semibold text-purple-300"
                 >
-                  <option value="single_choice">Selección Única (4 opciones)</option>
-                  <option value="multiple_choice">Selección Múltiple</option>
-                  <option value="short_answer">Respuesta Corta</option>
-                  <option value="matching">Relacionar Columnas</option>
-                  <option value="image_based">Pregunta con Imagen</option>
-                  <option value="situation">Interpretación de Casos</option>
+                  <option value="single_choice">🔘 Selección Única (4 colores Kahoot)</option>
+                  <option value="multiple_choice">☑️ Selección Múltiple (varias correctas)</option>
+                  <option value="short_answer">✍️ Escribir Texto / Respuesta Abierta</option>
+                  <option value="photo_only">📸 Solo Foto / Evidencia del Trabajo</option>
+                  <option value="image_based">🖼️ Pregunta con Imagen Destacada</option>
+                  <option value="situation">📖 Caso o Situación Pedagógica</option>
+                  <option value="matching">🧩 Relacionar Columnas</option>
                 </select>
               </div>
 
@@ -594,60 +605,102 @@ export default function GameEditorPage() {
               </div>
             </div>
 
-            {/* Imagen Opcional de la Pregunta */}
-            <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-white/80 flex items-center gap-1.5">
-                  <ImageIcon className="w-4 h-4 text-purple-400" />
-                  <span>Imagen de la Pregunta (Opcional - Se proyecta y se ve en el móvil)</span>
-                </label>
+            {/* Recursos Multimedia (Imagen y Video Opcionales) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Imagen */}
+              <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-white/80 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-purple-400" />
+                    <span>Imagen Ilustrativa</span>
+                  </label>
+                  {activeQuestion.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => updateActiveQuestion({ imageUrl: undefined })}
+                      className="text-[10px] text-red-400 hover:text-red-300 font-bold"
+                    >
+                      Eliminar imagen
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    placeholder="URL de imagen..."
+                    value={activeQuestion.imageUrl || ''}
+                    onChange={(e) => updateActiveQuestion({ imageUrl: e.target.value })}
+                    className="input text-xs py-1.5 flex-1"
+                  />
+                  <label className="btn-secondary py-1.5 px-3 rounded-lg text-xs font-semibold cursor-pointer shrink-0">
+                    <span>Subir</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          updateActiveQuestion({ imageUrl: event.target?.result as string });
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+                </div>
+
                 {activeQuestion.imageUrl && (
-                  <button
-                    type="button"
-                    onClick={() => updateActiveQuestion({ imageUrl: undefined })}
-                    className="text-[10px] text-red-400 hover:text-red-300 font-bold"
-                  >
-                    Eliminar imagen
-                  </button>
+                  <div className="relative rounded-lg overflow-hidden border border-white/15 max-h-36 bg-slate-950 flex items-center justify-center p-1">
+                    <img
+                      src={activeQuestion.imageUrl}
+                      alt="Vista previa imagen"
+                      className="max-h-32 object-contain rounded"
+                    />
+                  </div>
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              {/* Video */}
+              <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-white/80 flex items-center gap-1.5">
+                    <Video className="w-4 h-4 text-red-400" />
+                    <span>Enlace de Video (YouTube o MP4)</span>
+                  </label>
+                  {activeQuestion.videoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => updateActiveQuestion({ videoUrl: undefined })}
+                      className="text-[10px] text-red-400 hover:text-red-300 font-bold"
+                    >
+                      Eliminar video
+                    </button>
+                  )}
+                </div>
+
                 <input
                   type="url"
-                  placeholder="Pega la URL de una imagen o sube un archivo..."
-                  value={activeQuestion.imageUrl || ''}
-                  onChange={(e) => updateActiveQuestion({ imageUrl: e.target.value })}
-                  className="input text-xs py-1.5 flex-1"
+                  placeholder="https://www.youtube.com/watch?v=... o .mp4"
+                  value={activeQuestion.videoUrl || ''}
+                  onChange={(e) => updateActiveQuestion({ videoUrl: e.target.value })}
+                  className="input text-xs py-1.5 w-full"
                 />
-                <label className="btn-secondary py-1.5 px-3 rounded-lg text-xs font-semibold cursor-pointer shrink-0">
-                  <span>Subir Foto</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (event) => {
-                        updateActiveQuestion({ imageUrl: event.target?.result as string });
-                      };
-                      reader.readAsDataURL(file);
-                    }}
-                  />
-                </label>
-              </div>
 
-              {activeQuestion.imageUrl && (
-                <div className="relative rounded-lg overflow-hidden border border-white/15 max-h-48 bg-slate-950 flex items-center justify-center p-1">
-                  <img
-                    src={activeQuestion.imageUrl}
-                    alt="Vista previa de la pregunta"
-                    className="max-h-44 object-contain rounded"
-                  />
-                </div>
-              )}
+                {activeQuestion.videoUrl && (
+                  <div className="relative rounded-lg overflow-hidden border border-white/15 aspect-video bg-black flex items-center justify-center">
+                    <iframe
+                      src={getEmbedVideoUrl(activeQuestion.videoUrl)}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      title="Vista previa del video"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Enunciado */}
@@ -664,89 +717,127 @@ export default function GameEditorPage() {
               />
             </div>
 
-            {/* Opciones de Respuesta */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-white/70 mb-2">
-                Opciones de Respuesta (Marca la casilla de la respuesta correcta)
-              </label>
+            {/* Respuestas o Modo de Entrega según Tipo */}
+            {activeQuestion.type === 'short_answer' ? (
+              <div className="p-4 rounded-2xl bg-blue-950/30 border border-blue-500/30 space-y-3">
+                <div className="flex items-center gap-2 text-blue-300 text-sm font-bold">
+                  <span>✍️ Pregunta de Respuesta Abierta / Escribir Texto</span>
+                </div>
+                <p className="text-xs text-white/60">
+                  El alumno verá un cuadro de texto en su móvil o computador para redactar su respuesta. Opcionalmente puedes definir una respuesta modelo o palabra clave de referencia:
+                </p>
+                <div>
+                  <label className="block text-xs font-semibold text-white/70 mb-1">
+                    Respuesta o Palabras Clave de Referencia (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={activeQuestion.options[0]?.text || ''}
+                    onChange={(e) => {
+                      const updatedOptions = [
+                        { id: activeQuestion.options[0]?.id || 'opt-open-1', text: e.target.value, isCorrect: true },
+                      ];
+                      updateActiveQuestion({ options: updatedOptions });
+                    }}
+                    placeholder="Ejemplo: Fotosíntesis / Clorofila (o dejar vacío para revisión cualitativa)"
+                    className="input text-sm py-2 bg-slate-900 border-white/10"
+                  />
+                </div>
+              </div>
+            ) : activeQuestion.type === 'photo_only' ? (
+              <div className="p-5 rounded-2xl bg-purple-950/30 border border-purple-500/30 space-y-2 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 mx-auto">
+                  <ImageIcon className="w-6 h-6" />
+                </div>
+                <h4 className="text-sm font-bold text-white">📸 Pregunta de Solo Foto / Evidencia del Trabajo</h4>
+                <p className="text-xs text-white/60 max-w-md mx-auto">
+                  No requiere opciones múltiples. El estudiante tendrá habilitado directamente el botón de cámara o selector de fotos para subir la imagen de su cuaderno, procedimiento o dibujo desde su celular o PC.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-white/70 mb-2">
+                  Opciones de Respuesta (Marca la casilla de la respuesta correcta)
+                </label>
 
-              <div className="space-y-3">
-                {activeQuestion.options.map((opt, optIdx) => {
-                  const CREATION_COLORS = [
-                    { border: 'border-red-500/60 bg-red-950/25', badge: 'bg-red-600 text-white', symbol: '▲', name: 'Rojo' },
-                    { border: 'border-blue-500/60 bg-blue-950/25', badge: 'bg-blue-600 text-white', symbol: '◆', name: 'Azul' },
-                    { border: 'border-amber-500/60 bg-amber-950/25', badge: 'bg-amber-400 text-slate-950', symbol: '●', name: 'Amarillo' },
-                    { border: 'border-emerald-500/60 bg-emerald-950/25', badge: 'bg-emerald-600 text-white', symbol: '■', name: 'Verde' },
-                  ];
-                  const cStyle = CREATION_COLORS[optIdx % CREATION_COLORS.length];
+                <div className="space-y-3">
+                  {activeQuestion.options.map((opt, optIdx) => {
+                    const CREATION_COLORS = [
+                      { border: 'border-red-500/60 bg-red-950/25', badge: 'bg-red-600 text-white', symbol: '▲', name: 'Rojo' },
+                      { border: 'border-blue-500/60 bg-blue-950/25', badge: 'bg-blue-600 text-white', symbol: '◆', name: 'Azul' },
+                      { border: 'border-amber-500/60 bg-amber-950/25', badge: 'bg-amber-400 text-slate-950', symbol: '●', name: 'Amarillo' },
+                      { border: 'border-emerald-500/60 bg-emerald-950/25', badge: 'bg-emerald-600 text-white', symbol: '■', name: 'Verde' },
+                    ];
+                    const cStyle = CREATION_COLORS[optIdx % CREATION_COLORS.length];
 
-                  return (
-                    <div
-                      key={opt.id}
-                      className={`p-3.5 rounded-2xl border-2 flex items-center gap-3 transition-all ${cStyle.border} ${
-                        opt.isCorrect ? 'ring-2 ring-yellow-400 shadow-lg shadow-yellow-500/20' : 'hover:border-white/40'
-                      }`}
-                    >
-                      <input
-                        type={activeQuestion.type === 'multiple_choice' ? 'checkbox' : 'radio'}
-                        name={`correct-opt-${activeQuestion.id}`}
-                        checked={opt.isCorrect}
-                        onChange={() => {
-                          const updatedOptions = activeQuestion.options.map((o, idx) => ({
-                            ...o,
-                            isCorrect: activeQuestion.type === 'multiple_choice'
-                              ? idx === optIdx ? !o.isCorrect : o.isCorrect
-                              : idx === optIdx,
-                          }));
-                          updateActiveQuestion({ options: updatedOptions });
-                        }}
-                        className="w-5 h-5 accent-yellow-400 cursor-pointer"
-                        title="Marcar como respuesta correcta"
-                      />
-
-                      <div className={`w-8 h-8 rounded-xl ${cStyle.badge} flex items-center justify-center font-black text-xs shadow-md shrink-0 flex items-center gap-1 px-1.5`}>
-                        <span className="text-[10px]">{cStyle.symbol}</span>
-                        <span>{String.fromCharCode(65 + optIdx)}</span>
-                      </div>
-
-                      <input
-                        type="text"
-                        value={opt.text}
-                        onChange={(e) => {
-                          const updatedOptions = activeQuestion.options.map((o, idx) =>
-                            idx === optIdx ? { ...o, text: e.target.value } : o
-                          );
-                          updateActiveQuestion({ options: updatedOptions });
-                        }}
-                        placeholder={`Escribe el texto de la opción ${String.fromCharCode(65 + optIdx)} (${cStyle.name})...`}
-                        className="input py-2 text-sm flex-1 bg-slate-950/50 border border-white/10 focus:border-white/30 rounded-xl"
-                      />
-
-                      {opt.isCorrect ? (
-                        <span className="bg-yellow-400 text-slate-950 font-black text-xs px-2.5 py-1 rounded-full flex items-center gap-1 shrink-0 shadow-sm">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Correcta</span>
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
+                    return (
+                      <div
+                        key={opt.id}
+                        className={`p-3.5 rounded-2xl border-2 flex items-center gap-3 transition-all ${cStyle.border} ${
+                          opt.isCorrect ? 'ring-2 ring-yellow-400 shadow-lg shadow-yellow-500/20' : 'hover:border-white/40'
+                        }`}
+                      >
+                        <input
+                          type={activeQuestion.type === 'multiple_choice' ? 'checkbox' : 'radio'}
+                          name={`correct-opt-${activeQuestion.id}`}
+                          checked={opt.isCorrect}
+                          onChange={() => {
                             const updatedOptions = activeQuestion.options.map((o, idx) => ({
                               ...o,
-                              isCorrect: idx === optIdx,
+                              isCorrect: activeQuestion.type === 'multiple_choice'
+                                ? idx === optIdx ? !o.isCorrect : o.isCorrect
+                                : idx === optIdx,
                             }));
                             updateActiveQuestion({ options: updatedOptions });
                           }}
-                          className="text-[11px] text-white/40 hover:text-white px-2 py-1 rounded-lg border border-white/10 hover:bg-white/5 transition-colors shrink-0"
-                        >
-                          Hacer Correcta
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                          className="w-5 h-5 accent-yellow-400 cursor-pointer"
+                          title="Marcar como respuesta correcta"
+                        />
+
+                        <div className={`w-8 h-8 rounded-xl ${cStyle.badge} flex items-center justify-center font-black text-xs shadow-md shrink-0 flex items-center gap-1 px-1.5`}>
+                          <span className="text-[10px]">{cStyle.symbol}</span>
+                          <span>{String.fromCharCode(65 + optIdx)}</span>
+                        </div>
+
+                        <input
+                          type="text"
+                          value={opt.text}
+                          onChange={(e) => {
+                            const updatedOptions = activeQuestion.options.map((o, idx) =>
+                              idx === optIdx ? { ...o, text: e.target.value } : o
+                            );
+                            updateActiveQuestion({ options: updatedOptions });
+                          }}
+                          placeholder={`Escribe el texto de la opción ${String.fromCharCode(65 + optIdx)} (${cStyle.name})...`}
+                          className="input py-2 text-sm flex-1 bg-slate-950/50 border border-white/10 focus:border-white/30 rounded-xl"
+                        />
+
+                        {opt.isCorrect ? (
+                          <span className="bg-yellow-400 text-slate-950 font-black text-xs px-2.5 py-1 rounded-full flex items-center gap-1 shrink-0 shadow-sm">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Correcta</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updatedOptions = activeQuestion.options.map((o, idx) => ({
+                                ...o,
+                                isCorrect: idx === optIdx,
+                              }));
+                              updateActiveQuestion({ options: updatedOptions });
+                            }}
+                            className="text-[11px] text-white/40 hover:text-white px-2 py-1 rounded-lg border border-white/10 hover:bg-white/5 transition-colors shrink-0"
+                          >
+                            Hacer Correcta
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Explicación Pedagógica */}
             <div>

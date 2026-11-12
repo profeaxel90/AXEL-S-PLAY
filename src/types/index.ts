@@ -21,10 +21,11 @@ export type GradeLevel =
 
 // --- TIPOS DE PREGUNTAS ---
 export type QuestionType =
-  | 'single_choice'      // Selección única
+  | 'single_choice'      // Selección única (4 opciones)
   | 'multiple_choice'    // Selección múltiple
+  | 'short_answer'       // Escribir texto / Respuesta abierta
+  | 'photo_only'         // Solo subir foto del trabajo / procedimiento
   | 'true_false'         // Verdadero o Falso
-  | 'short_answer'       // Respuesta corta
   | 'ordering'           // Ordenar elementos
   | 'matching'           // Relacionar columnas
   | 'find_error'         // Identificar errores
@@ -123,6 +124,7 @@ export interface Question {
   difficulty: Difficulty;
   orderIndex: number;
   imageUrl?: string;
+  videoUrl?: string; // Enlace de video (YouTube / MP4 / Vimeo)
   audioUrl?: string;
   tags?: string[];
   createdAt: string;

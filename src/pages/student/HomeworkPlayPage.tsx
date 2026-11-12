@@ -10,6 +10,13 @@ import { SAMPLE_GAMES } from '../../data/mockGames';
 import type { HomeworkAnswerSubmission } from '../../types/homework';
 import MascotAvatar from '../../components/game/MascotAvatar';
 
+function getEmbedVideoUrl(url?: string): string {
+  if (!url) return '';
+  const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+  if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+  return url;
+}
+
 interface StudentData {
   pin: string;
   fullName: string;
@@ -57,6 +64,8 @@ export default function HomeworkPlayPage() {
   const [isPdfOpenInPage, setIsPdfOpenInPage] = useState<boolean>(true);
   const [showPdfModal, setShowPdfModal] = useState<boolean>(false);
   const [selectedZoomPhoto, setSelectedZoomPhoto] = useState<string | null>(null);
+  const [typedAnswer, setTypedAnswer] = useState('');
+  const [photoAnswer, setPhotoAnswer] = useState<string | null>(null);
 
   const maxCorrections = assignment?.maxCorrections ?? 3;
   const currentQ = questions[currentIndex];
@@ -64,6 +73,12 @@ export default function HomeworkPlayPage() {
   const isAnswered = currentAnswer !== null;
   const isLastQuestion = currentIndex === questions.length - 1;
   const allAnswered = answers.every((a) => a !== null);
+
+  // Reiniciar campos al cambiar de pregunta
+  useEffect(() => {
+    setTypedAnswer('');
+    setPhotoAnswer(null);
+  }, [currentIndex]);
 
   // Redirigir si no hay datos de estudiante o pin inválido
   useEffect(() => {
@@ -527,62 +542,159 @@ export default function HomeworkPlayPage() {
           </div>
         )}
 
-        {/* Pregunta */}
+        {/* Pregunta con Video o Imagen */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl">
-          {currentQ.imageUrl && (
+          {currentQ.videoUrl ? (
+            <div className="w-full aspect-video rounded-xl overflow-hidden border border-white/20 bg-black mb-4">
+              <iframe
+                src={getEmbedVideoUrl(currentQ.videoUrl)}
+                className="w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                title="Video explicativo"
+              />
+            </div>
+          ) : currentQ.imageUrl ? (
             <img
               src={currentQ.imageUrl}
               alt="Imagen de la pregunta"
-              className="w-full max-h-40 object-cover rounded-xl mb-4"
+              className="w-full max-h-48 object-contain rounded-xl mb-4 bg-black/40"
             />
-          )}
+          ) : null}
           <p className="text-xl font-black text-white text-center leading-snug">{currentQ.content}</p>
           <p className="text-center text-xs text-white/30 mt-2">Sin límite de tiempo · Sin presión ⏸</p>
         </div>
 
-        {/* Opciones */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {(currentQ.options ?? []).map((opt, i) => {
-            const isSelected = currentAnswer?.selectedOptionId === opt.id;
-            const isCorrectOpt = opt.id === currentQ.correctAnswer;
-
-            let borderClass = 'border-white/10 hover:border-white/30 hover:bg-white/10';
-            let bgClass = 'bg-white/5';
-
-            if (showFeedback) {
-              if (isCorrectOpt) {
-                bgClass = 'bg-emerald-500/20';
-                borderClass = 'border-emerald-400';
-              } else if (isSelected && !isCorrectOpt) {
-                bgClass = 'bg-red-500/20';
-                borderClass = 'border-red-400';
-              } else {
-                bgClass = 'bg-white/5 opacity-40';
-                borderClass = 'border-white/10';
-              }
-            }
-
-            return (
+        {/* Respuestas según Tipo (Texto, Foto o Selección Múltiple) */}
+        {currentQ.type === 'short_answer' ? (
+          <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+            <label className="block text-xs font-bold uppercase tracking-wider text-blue-300">
+              ✍️ Tu Respuesta Escrita
+            </label>
+            <textarea
+              rows={4}
+              value={typedAnswer}
+              onChange={(e) => setTypedAnswer(e.target.value)}
+              disabled={showFeedback}
+              placeholder="Escribe aquí tu respuesta detallada, justificación o procedimiento..."
+              className="w-full p-4 rounded-xl bg-slate-900 border border-white/15 text-white placeholder-white/40 focus:outline-none focus:border-blue-400 text-sm resize-none"
+            />
+            {!showFeedback && (
               <button
-                key={opt.id}
-                onClick={() => handleSelectOption(opt.id, opt.text)}
-                disabled={showFeedback}
-                className={`relative flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${bgClass} ${borderClass} disabled:cursor-default`}
+                type="button"
+                disabled={!typedAnswer.trim()}
+                onClick={() => handleSelectOption('written', typedAnswer.trim())}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-sm hover:opacity-90 disabled:opacity-40 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
               >
-                <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${OPTION_COLORS[i % 4]} flex items-center justify-center font-black text-sm text-white flex-shrink-0`}>
-                  {String.fromCharCode(65 + i)}
-                </div>
-                <span className="text-sm font-semibold text-white leading-snug">{opt.text}</span>
-                {showFeedback && isCorrectOpt && (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 ml-auto flex-shrink-0" />
-                )}
-                {showFeedback && isSelected && !isCorrectOpt && (
-                  <XCircle className="w-5 h-5 text-red-400 ml-auto flex-shrink-0" />
-                )}
+                <Send className="w-4 h-4" /> Confirmar Respuesta
               </button>
-            );
-          })}
-        </div>
+            )}
+          </div>
+        ) : currentQ.type === 'photo_only' ? (
+          <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 mx-auto">
+              <Camera className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-white">📸 Sube la Foto de tu Trabajo o Cuaderno</h4>
+              <p className="text-xs text-white/50 mt-1">
+                Toma una foto clara con tu celular o sube el archivo desde tu computador.
+              </p>
+            </div>
+
+            {photoAnswer ? (
+              <div className="relative max-w-sm mx-auto rounded-2xl overflow-hidden border border-white/20 bg-black/60 shadow-lg">
+                <img src={photoAnswer} alt="Foto de trabajo" className="w-full max-h-56 object-contain" />
+                {!showFeedback && (
+                  <button
+                    type="button"
+                    onClick={() => setPhotoAnswer(null)}
+                    className="absolute top-2 right-2 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-500 shadow-md"
+                    title="Eliminar foto y tomar otra"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <label className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm cursor-pointer shadow-lg shadow-purple-600/30 transition-all">
+                <Camera className="w-4 h-4" />
+                <span>Tomar o Elegir Foto</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const dataUrl = ev.target?.result as string;
+                      setPhotoAnswer(dataUrl);
+                      setStudentPhotos((prev) => [...prev, dataUrl]);
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+            )}
+
+            {!showFeedback && photoAnswer && (
+              <button
+                type="button"
+                onClick={() => handleSelectOption('photo', 'Evidencia fotográfica adjuntada')}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
+              >
+                <CheckCircle2 className="w-4 h-4" /> Enviar Evidencia Fotográfica
+              </button>
+            )}
+          </div>
+        ) : (
+          /* Opciones de Selección Múltiple (4 Colores) */
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(currentQ.options ?? []).map((opt, i) => {
+              const isSelected = currentAnswer?.selectedOptionId === opt.id;
+              const isCorrectOpt = opt.id === currentQ.correctAnswer;
+
+              let borderClass = 'border-white/10 hover:border-white/30 hover:bg-white/10';
+              let bgClass = 'bg-white/5';
+
+              if (showFeedback) {
+                if (isCorrectOpt) {
+                  bgClass = 'bg-emerald-500/20';
+                  borderClass = 'border-emerald-400';
+                } else if (isSelected && !isCorrectOpt) {
+                  bgClass = 'bg-red-500/20';
+                  borderClass = 'border-red-400';
+                } else {
+                  bgClass = 'bg-white/5 opacity-40';
+                  borderClass = 'border-white/10';
+                }
+              }
+
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => handleSelectOption(opt.id, opt.text)}
+                  disabled={showFeedback}
+                  className={`relative flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${bgClass} ${borderClass} disabled:cursor-default`}
+                >
+                  <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${OPTION_COLORS[i % 4]} flex items-center justify-center font-black text-sm text-white flex-shrink-0`}>
+                    {String.fromCharCode(65 + i)}
+                  </div>
+                  <span className="text-sm font-semibold text-white leading-snug">{opt.text}</span>
+                  {showFeedback && isCorrectOpt && (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 ml-auto flex-shrink-0" />
+                  )}
+                  {showFeedback && isSelected && !isCorrectOpt && (
+                    <XCircle className="w-5 h-5 text-red-400 ml-auto flex-shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Feedback + acciones */}
         {showFeedback && (
