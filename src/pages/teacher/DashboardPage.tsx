@@ -69,10 +69,10 @@ export default function DashboardPage() {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-semibold mb-3">
               <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
-              <span>Panel del Docente</span>
+              <span>{user?.role === 'superadmin' ? 'Super Administrador' : 'Panel del Docente'}</span>
             </div>
             <h1 className="text-3xl md:text-4xl font-black text-white">
-              ¡Hola, {user?.fullName || 'Profesor Axel'}!
+              ¡Hola, {user?.fullName || 'Profe Axel'}! 👋
             </h1>
             <p className="text-white/60 text-sm mt-1 max-w-xl">
               Crea partidas interactivas, proyecta el código QR para tus estudiantes y dale dinamismo a tu clase con poderes en vivo.

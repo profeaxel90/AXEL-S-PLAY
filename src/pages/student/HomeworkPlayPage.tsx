@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   CheckCircle2, XCircle, RotateCcw, Send, Home, AlertCircle,
@@ -24,12 +24,35 @@ interface StudentData {
   avatar: string;
 }
 
+interface PlayedOption {
+  id: string;
+  text: string;
+  isCorrect?: boolean;
+}
+
+interface PlayedQuestion {
+  id: string;
+  content: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  timeLimit?: number;
+  points?: number;
+  options: PlayedOption[];
+  correctAnswer: string;
+  explanation?: string;
+  allowChoice?: boolean;
+  allowTextResponse?: boolean;
+  allowPhotoUpload?: boolean;
+}
+
 interface DraftAnswer {
   selectedOptionId: string;
   selectedOptionText: string;
   isCorrect: boolean;
   wasCorrected: boolean;
   corrections: number; // cuántas veces se corrigió esta pregunta
+  writtenAnswer?: string;
+  studentPhoto?: string;
 }
 
 export default function HomeworkPlayPage() {
@@ -50,7 +73,43 @@ export default function HomeworkPlayPage() {
 
   const assignment = pin ? getAssignmentByIdOrPin(pin) : undefined;
   const game = assignment ? (useGameStore.getState().getGame(assignment.gameId) || SAMPLE_GAMES[assignment.gameId]) : undefined;
-  const questions = game?.questions ?? [];
+  
+  const questions: PlayedQuestion[] = useMemo(() => {
+    if (assignment?.customQuestions && assignment.customQuestions.length > 0) {
+      return assignment.customQuestions.map((cq, idx) => ({
+        id: cq.id || `cq-${idx}`,
+        content: cq.content,
+        imageUrl: cq.imageUrl,
+        videoUrl: cq.videoUrl,
+        timeLimit: 0,
+        points: cq.points || 1000,
+        options: (cq.options || []).map((o) => ({ id: o.id, text: o.text, isCorrect: o.isCorrect })),
+        correctAnswer: cq.options?.find((o) => o.isCorrect)?.id || '',
+        explanation: cq.explanation || '',
+        allowChoice: cq.allowChoice ?? (Boolean(cq.options && cq.options.length > 0)),
+        allowTextResponse: Boolean(cq.allowTextResponse),
+        allowPhotoUpload: Boolean(cq.allowPhotoUpload),
+      }));
+    }
+    return (game?.questions ?? []).map((gq) => ({
+      id: gq.id,
+      content: gq.content,
+      imageUrl: gq.imageUrl,
+      videoUrl: gq.videoUrl,
+      timeLimit: gq.timeLimit || 0,
+      points: gq.points || 1000,
+      options: (gq.options || []).map((o) => ({ id: o.id, text: o.text })),
+      correctAnswer: typeof gq.correctAnswer === 'string'
+        ? gq.correctAnswer
+        : Array.isArray(gq.correctAnswer)
+        ? (typeof gq.correctAnswer[0] === 'string' ? gq.correctAnswer[0] : '')
+        : '',
+      explanation: gq.explanation || '',
+      allowChoice: true,
+      allowTextResponse: false,
+      allowPhotoUpload: false,
+    }));
+  }, [assignment, game]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<(DraftAnswer | null)[]>(
@@ -66,6 +125,7 @@ export default function HomeworkPlayPage() {
   const [selectedZoomPhoto, setSelectedZoomPhoto] = useState<string | null>(null);
   const [typedAnswer, setTypedAnswer] = useState('');
   const [photoAnswer, setPhotoAnswer] = useState<string | null>(null);
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
 
   const maxCorrections = assignment?.maxCorrections ?? 3;
   const currentQ = questions[currentIndex];
@@ -74,38 +134,50 @@ export default function HomeworkPlayPage() {
   const isLastQuestion = currentIndex === questions.length - 1;
   const allAnswered = answers.every((a) => a !== null);
 
-  // Reiniciar campos al cambiar de pregunta
+  // Sincronizar o reiniciar campos al cambiar de pregunta
   useEffect(() => {
-    setTypedAnswer('');
-    setPhotoAnswer(null);
-  }, [currentIndex]);
+    setTypedAnswer(currentAnswer?.writtenAnswer || '');
+    setPhotoAnswer(currentAnswer?.studentPhoto || null);
+    setSelectedOptionId(currentAnswer?.selectedOptionId || null);
+  }, [currentIndex, currentAnswer]);
 
   // Redirigir si no hay datos de estudiante o pin inválido
   useEffect(() => {
-    if (!studentData || !pin || !assignment || !game || questions.length === 0) {
+    const hasQuestions = questions.length > 0;
+    if (!studentData || !pin || !assignment || !hasQuestions) {
       navigate(`/homework/${pin || ''}`, { replace: true });
     }
-  }, [studentData, pin, assignment, game, questions.length, navigate]);
+  }, [studentData, pin, assignment, questions.length, navigate]);
 
-  const handleSelectOption = (optionId: string, optionText: string) => {
+  const handleConfirmAnswer = (forcedOptId?: string, forcedOptText?: string) => {
     if (isAnswered && !showFeedback) return;
     if (showFeedback) return;
 
-    const q = currentQ;
-    const isCorrect = optionId === q.correctAnswer;
+    const optId = forcedOptId || selectedOptionId || '';
+    const chosenOpt = (currentQ.options ?? []).find((o) => o.id === optId);
+    const optText = forcedOptText || chosenOpt?.text || (typedAnswer ? 'Respuesta redactada' : photoAnswer ? 'Evidencia fotográfica' : '');
+
+    const hasChoice = currentQ.allowChoice !== false && (currentQ.options?.length ?? 0) > 0;
+    const isCorrect = hasChoice ? (optId === currentQ.correctAnswer) : true;
 
     setAnswers((prev) => {
       const updated = [...prev];
       updated[currentIndex] = {
-        selectedOptionId: optionId,
-        selectedOptionText: optionText,
+        selectedOptionId: optId,
+        selectedOptionText: optText || 'Respondido',
         isCorrect,
         wasCorrected: (prev[currentIndex]?.corrections ?? 0) > 0,
         corrections: prev[currentIndex]?.corrections ?? 0,
+        writtenAnswer: typedAnswer.trim() || undefined,
+        studentPhoto: photoAnswer || undefined,
       };
       return updated;
     });
     setShowFeedback(true);
+  };
+
+  const handleSelectOption = (optionId: string, optionText: string) => {
+    handleConfirmAnswer(optionId, optionText);
   };
 
   const handleCorrect = () => {
@@ -146,6 +218,8 @@ export default function HomeworkPlayPage() {
         correctOptionText: correctOpt?.text ?? '',
         isCorrect: a?.isCorrect ?? false,
         wasCorrected: (a?.corrections ?? 0) > 0,
+        writtenAnswer: a?.writtenAnswer,
+        studentPhoto: a?.studentPhoto,
       };
     });
 
@@ -201,7 +275,7 @@ export default function HomeworkPlayPage() {
     setSubmitted(false);
   };
 
-  if (!assignment || !game || !currentQ || !studentData) return null;
+  if (!assignment || !currentQ || !studentData) return null;
 
   const OPTION_COLORS = [
     'from-red-600 to-rose-700',
@@ -565,136 +639,171 @@ export default function HomeworkPlayPage() {
           <p className="text-center text-xs text-white/30 mt-2">Sin límite de tiempo · Sin presión ⏸</p>
         </div>
 
-        {/* Respuestas según Tipo (Texto, Foto o Selección Múltiple) */}
-        {currentQ.type === 'short_answer' ? (
-          <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3">
-            <label className="block text-xs font-bold uppercase tracking-wider text-blue-300">
-              ✍️ Tu Respuesta Escrita
-            </label>
-            <textarea
-              rows={4}
-              value={typedAnswer}
-              onChange={(e) => setTypedAnswer(e.target.value)}
-              disabled={showFeedback}
-              placeholder="Escribe aquí tu respuesta detallada, justificación o procedimiento..."
-              className="w-full p-4 rounded-xl bg-slate-900 border border-white/15 text-white placeholder-white/40 focus:outline-none focus:border-blue-400 text-sm resize-none"
-            />
-            {!showFeedback && (
-              <button
-                type="button"
-                disabled={!typedAnswer.trim()}
-                onClick={() => handleSelectOption('written', typedAnswer.trim())}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-sm hover:opacity-90 disabled:opacity-40 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
-              >
-                <Send className="w-4 h-4" /> Confirmar Respuesta
-              </button>
-            )}
-          </div>
-        ) : currentQ.type === 'photo_only' ? (
-          <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-4 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 mx-auto">
-              <Camera className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-white">📸 Sube la Foto de tu Trabajo o Cuaderno</h4>
-              <p className="text-xs text-white/50 mt-1">
-                Toma una foto clara con tu celular o sube el archivo desde tu computador.
-              </p>
-            </div>
+        {/* ── SECCIONES DE RESPUESTA MODULARES Y FLEXIBLES (SELECCIÓN MÚLTIPLE, TEXTO Y/O FOTO) ── */}
+        {(() => {
+          const hasChoice = currentQ.allowChoice !== false && (currentQ.options?.length ?? 0) > 0;
+          const hasText = Boolean(currentQ.allowTextResponse);
+          const hasPhoto = Boolean(currentQ.allowPhotoUpload);
+          const isMultiInput = hasText || hasPhoto;
 
-            {photoAnswer ? (
-              <div className="relative max-w-sm mx-auto rounded-2xl overflow-hidden border border-white/20 bg-black/60 shadow-lg">
-                <img src={photoAnswer} alt="Foto de trabajo" className="w-full max-h-56 object-contain" />
-                {!showFeedback && (
-                  <button
-                    type="button"
-                    onClick={() => setPhotoAnswer(null)}
-                    className="absolute top-2 right-2 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-500 shadow-md"
-                    title="Eliminar foto y tomar otra"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            ) : (
-              <label className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm cursor-pointer shadow-lg shadow-purple-600/30 transition-all">
-                <Camera className="w-4 h-4" />
-                <span>Tomar o Elegir Foto</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = (ev) => {
-                      const dataUrl = ev.target?.result as string;
-                      setPhotoAnswer(dataUrl);
-                      setStudentPhotos((prev) => [...prev, dataUrl]);
-                    };
-                    reader.readAsDataURL(file);
-                  }}
-                />
-              </label>
-            )}
+          return (
+            <div className="space-y-4">
+              {/* 1. SELECCIÓN MÚLTIPLE (SI ESTÁ HABILITADO) */}
+              {hasChoice && (
+                <div className="space-y-2">
+                  {isMultiInput && (
+                    <label className="block text-xs font-bold uppercase tracking-wider text-purple-300">
+                      🔘 Selecciona una Opción
+                    </label>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {(currentQ.options ?? []).map((opt, i) => {
+                      const isChosen = isMultiInput
+                        ? selectedOptionId === opt.id
+                        : currentAnswer?.selectedOptionId === opt.id;
+                      const isCorrectOpt = opt.id === currentQ.correctAnswer;
 
-            {!showFeedback && photoAnswer && (
-              <button
-                type="button"
-                onClick={() => handleSelectOption('photo', 'Evidencia fotográfica adjuntada')}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
-              >
-                <CheckCircle2 className="w-4 h-4" /> Enviar Evidencia Fotográfica
-              </button>
-            )}
-          </div>
-        ) : (
-          /* Opciones de Selección Múltiple (4 Colores) */
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {(currentQ.options ?? []).map((opt, i) => {
-              const isSelected = currentAnswer?.selectedOptionId === opt.id;
-              const isCorrectOpt = opt.id === currentQ.correctAnswer;
+                      let borderClass = 'border-white/10 hover:border-white/30 hover:bg-white/10';
+                      let bgClass = 'bg-white/5';
 
-              let borderClass = 'border-white/10 hover:border-white/30 hover:bg-white/10';
-              let bgClass = 'bg-white/5';
+                      if (showFeedback) {
+                        if (isCorrectOpt) {
+                          bgClass = 'bg-emerald-500/20';
+                          borderClass = 'border-emerald-400';
+                        } else if (isChosen && !isCorrectOpt) {
+                          bgClass = 'bg-red-500/20';
+                          borderClass = 'border-red-400';
+                        } else {
+                          bgClass = 'bg-white/5 opacity-40';
+                          borderClass = 'border-white/10';
+                        }
+                      } else if (isChosen) {
+                        bgClass = 'bg-purple-600/25 ring-2 ring-purple-400';
+                        borderClass = 'border-purple-400';
+                      }
 
-              if (showFeedback) {
-                if (isCorrectOpt) {
-                  bgClass = 'bg-emerald-500/20';
-                  borderClass = 'border-emerald-400';
-                } else if (isSelected && !isCorrectOpt) {
-                  bgClass = 'bg-red-500/20';
-                  borderClass = 'border-red-400';
-                } else {
-                  bgClass = 'bg-white/5 opacity-40';
-                  borderClass = 'border-white/10';
-                }
-              }
-
-              return (
-                <button
-                  key={opt.id}
-                  onClick={() => handleSelectOption(opt.id, opt.text)}
-                  disabled={showFeedback}
-                  className={`relative flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${bgClass} ${borderClass} disabled:cursor-default`}
-                >
-                  <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${OPTION_COLORS[i % 4]} flex items-center justify-center font-black text-sm text-white flex-shrink-0`}>
-                    {String.fromCharCode(65 + i)}
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            if (isMultiInput) {
+                              if (!showFeedback) setSelectedOptionId(opt.id);
+                            } else {
+                              handleSelectOption(opt.id, opt.text);
+                            }
+                          }}
+                          disabled={showFeedback}
+                          className={`relative flex items-center gap-3.5 p-3.5 sm:p-4 rounded-2xl border-2 transition-all text-left ${bgClass} ${borderClass} disabled:cursor-default`}
+                        >
+                          <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${OPTION_COLORS[i % 4]} flex items-center justify-center font-black text-sm text-white flex-shrink-0 shadow-md`}>
+                            {String.fromCharCode(65 + i)}
+                          </div>
+                          <span className="text-sm font-semibold text-white leading-snug">{opt.text}</span>
+                          {showFeedback && isCorrectOpt && (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-400 ml-auto flex-shrink-0" />
+                          )}
+                          {showFeedback && isChosen && !isCorrectOpt && (
+                            <XCircle className="w-5 h-5 text-red-400 ml-auto flex-shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <span className="text-sm font-semibold text-white leading-snug">{opt.text}</span>
-                  {showFeedback && isCorrectOpt && (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 ml-auto flex-shrink-0" />
+                </div>
+              )}
+
+              {/* 2. ESPACIO PARA ESCRIBIR TEXTO (SI ESTÁ HABILITADO POR EL DOCENTE) */}
+              {hasText && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 space-y-2.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-blue-300 flex items-center gap-2">
+                    <span>✍️ Tu Respuesta Escrita / Justificación</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={typedAnswer}
+                    onChange={(e) => setTypedAnswer(e.target.value)}
+                    disabled={showFeedback}
+                    placeholder="Escribe aquí tu respuesta detallada, justificación o procedimiento..."
+                    className="w-full p-3.5 rounded-xl bg-slate-900 border border-white/15 text-white placeholder-white/40 focus:outline-none focus:border-blue-400 text-sm resize-none shadow-inner"
+                  />
+                </div>
+              )}
+
+              {/* 3. ESPACIO PARA SUBIR FOTO DEL TRABAJO / CUADERNO (SI ESTÁ HABILITADO) */}
+              {hasPhoto && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3 text-center">
+                  <div className="flex items-center justify-between text-left">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+                        <Camera className="w-4 h-4 text-purple-400" />
+                        <span>📸 Foto de tu Trabajo o Procedimiento</span>
+                      </h4>
+                      <p className="text-[11px] text-white/50 mt-0.5">
+                        Captura o sube una imagen clara de tu cuaderno
+                      </p>
+                    </div>
+                  </div>
+
+                  {photoAnswer ? (
+                    <div className="relative max-w-xs mx-auto rounded-xl overflow-hidden border border-white/20 bg-black/60 shadow-lg">
+                      <img src={photoAnswer} alt="Foto adjunta" className="w-full max-h-48 object-contain" />
+                      {!showFeedback && (
+                        <button
+                          type="button"
+                          onClick={() => setPhotoAnswer(null)}
+                          className="absolute top-2 right-2 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-500 shadow-md"
+                          title="Eliminar y tomar otra foto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 text-purple-200 font-bold text-xs cursor-pointer shadow-md transition-all">
+                      <Camera className="w-4 h-4" />
+                      <span>Tomar o Seleccionar Foto</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            const dataUrl = ev.target?.result as string;
+                            setPhotoAnswer(dataUrl);
+                            setStudentPhotos((prev) => [...prev, dataUrl]);
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
                   )}
-                  {showFeedback && isSelected && !isCorrectOpt && (
-                    <XCircle className="w-5 h-5 text-red-400 ml-auto flex-shrink-0" />
-                  )}
+                </div>
+              )}
+
+              {/* BOTÓN DE CONFIRMACIÓN SI HAY TEXTO O FOTO */}
+              {!showFeedback && isMultiInput && (
+                <button
+                  type="button"
+                  disabled={
+                    (hasChoice && !selectedOptionId) ||
+                    (hasText && !typedAnswer.trim()) ||
+                    (hasPhoto && !photoAnswer)
+                  }
+                  onClick={() => handleConfirmAnswer()}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-sm hover:opacity-90 disabled:opacity-40 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Confirmar Respuesta</span>
                 </button>
-              );
-            })}
-          </div>
-        )}
+              )}
+            </div>
+          );
+        })()}
 
         {/* Feedback + acciones */}
         {showFeedback && (

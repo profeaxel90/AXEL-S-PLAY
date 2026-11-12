@@ -22,11 +22,14 @@ interface AuthState {
   updateProfile: (data: Partial<UserProfile> & { newPassword?: string }) => Promise<void>;
   loadUser: () => Promise<void>;
   clearError: () => void;
+  getAllTeachers: () => StoredAccount[];
+  createTeacher: (data: { email: string; password: string; fullName: string; school?: string; role?: 'teacher' | 'superadmin' }) => StoredAccount;
+  deleteTeacher: (email: string) => void;
 }
 
 const LOCAL_ACCOUNTS_KEY = 'axelplay_local_accounts';
 
-interface StoredAccount {
+export interface StoredAccount {
   email: string;
   passwordHash: string;
   profile: UserProfile;
@@ -37,8 +40,12 @@ function getLocalAccounts(): StoredAccount[] {
     const raw = localStorage.getItem(LOCAL_ACCOUNTS_KEY);
     const list: StoredAccount[] = raw ? JSON.parse(raw) : [];
 
-    // Cuenta predeterminada de Administrador
-    if (!list.some((a) => a.email.toLowerCase() === 'profe@axelsplay.edu' || a.email.toLowerCase() === 'profe@axelplay.edu')) {
+    // Cuenta predeterminada de Super Administrador (Profe Axel)
+    const existingIndex = list.findIndex(
+      (a) => a.email.toLowerCase() === 'profe@axelsplay.edu' || a.email.toLowerCase() === 'profe@axelplay.edu'
+    );
+
+    if (existingIndex === -1) {
       const defaultAdmin: StoredAccount = {
         email: 'profe@axelsplay.edu',
         passwordHash: 'admin123',
@@ -46,14 +53,21 @@ function getLocalAccounts(): StoredAccount[] {
           id: 'admin-axel-01',
           userId: 'user-axel-01',
           email: 'profe@axelsplay.edu',
-          fullName: 'Profesor Axel',
+          fullName: 'Profe Axel',
           school: 'Colegio Experimental AXEL',
-          role: 'teacher',
+          role: 'superadmin',
           createdAt: new Date().toISOString(),
         },
       };
       list.push(defaultAdmin);
       saveLocalAccounts(list);
+    } else {
+      // Actualizar nombre a "Profe Axel" y rol superadmin
+      if (list[existingIndex].profile.fullName !== 'Profe Axel' || list[existingIndex].profile.role !== 'superadmin') {
+        list[existingIndex].profile.fullName = 'Profe Axel';
+        list[existingIndex].profile.role = 'superadmin';
+        saveLocalAccounts(list);
+      }
     }
     return list;
   } catch {
@@ -358,6 +372,41 @@ export const useAuthStore = create<AuthState>()(
       },
 
       clearError: () => set({ error: null }),
+
+      getAllTeachers: () => {
+        return getLocalAccounts();
+      },
+
+      createTeacher: (data) => {
+        const accounts = getLocalAccounts();
+        const existing = accounts.find((a) => a.email.toLowerCase() === data.email.trim().toLowerCase());
+        if (existing) {
+          throw new Error('Ya existe un docente con este correo.');
+        }
+
+        const newAccount: StoredAccount = {
+          email: data.email.trim(),
+          passwordHash: data.password.trim(),
+          profile: {
+            id: `teacher-${Date.now()}`,
+            userId: `user-${Date.now()}`,
+            email: data.email.trim(),
+            fullName: data.fullName.trim(),
+            school: data.school?.trim() || 'Colegio Experimental AXEL',
+            role: data.role || 'teacher',
+            createdAt: new Date().toISOString(),
+          },
+        };
+
+        accounts.push(newAccount);
+        saveLocalAccounts(accounts);
+        return newAccount;
+      },
+
+      deleteTeacher: (email) => {
+        const accounts = getLocalAccounts().filter((a) => a.email.toLowerCase() !== email.toLowerCase());
+        saveLocalAccounts(accounts);
+      },
     }),
     {
       name: 'axelplay-auth',

@@ -3,7 +3,7 @@
 // ============================================================
 
 // --- ROLES ---
-export type UserRole = 'teacher' | 'student' | 'admin';
+export type UserRole = 'teacher' | 'student' | 'admin' | 'superadmin';
 
 // --- DIFICULTAD ---
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert';

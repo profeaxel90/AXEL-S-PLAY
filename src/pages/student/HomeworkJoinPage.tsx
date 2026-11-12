@@ -8,7 +8,7 @@ import MascotAvatar from '../../components/game/MascotAvatar';
 export default function HomeworkJoinPage() {
   const navigate = useNavigate();
   const { pin: paramPin } = useParams<{ pin?: string }>();
-  const { getAssignmentByIdOrPin } = useHomeworkStore();
+  const { getAssignmentByIdOrPin, getGroupByIdOrCode } = useHomeworkStore();
 
   const [step, setStep] = useState<'pin' | 'info'>(paramPin ? 'info' : 'pin');
   const [pin, setPin] = useState(paramPin || '');
@@ -27,6 +27,12 @@ export default function HomeworkJoinPage() {
   // Si viene con param pin, validarlo directo
   useEffect(() => {
     if (paramPin) {
+      const groupFound = getGroupByIdOrCode(paramPin);
+      if (groupFound) {
+        navigate(`/homework/group/${groupFound.code}`, { replace: true });
+        return;
+      }
+
       const found = getAssignmentByIdOrPin(paramPin);
       if (!found || found.status === 'closed') {
         setPinError('Esta asignación no existe o ya fue cerrada por el docente.');
@@ -36,7 +42,7 @@ export default function HomeworkJoinPage() {
         setStep('info');
       }
     }
-  }, [paramPin, getAssignmentByIdOrPin]);
+  }, [paramPin, getAssignmentByIdOrPin, getGroupByIdOrCode, navigate]);
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,9 +52,18 @@ export default function HomeworkJoinPage() {
       setPinError('El PIN debe tener exactamente 6 dígitos.');
       return;
     }
+
+    // Comprobar si es el PIN de un Grupo de Clase
+    const groupFound = getGroupByIdOrCode(trimmed);
+    if (groupFound) {
+      navigate(`/homework/group/${groupFound.code}`);
+      return;
+    }
+
+    // Comprobar si es el PIN de una asignación individual
     const found = getAssignmentByIdOrPin(trimmed);
     if (!found) {
-      setPinError('No se encontró ninguna asignación con ese PIN. Verifica con tu docente.');
+      setPinError('No se encontró ninguna actividad o grupo con ese PIN. Verifica con tu docente.');
       return;
     }
     if (found.status === 'closed') {

@@ -21,6 +21,7 @@ import ResultsStudentPage from './pages/student/ResultsStudentPage';
 // ── Asignación de Deberes ──
 import HomeworkJoinPage from './pages/student/HomeworkJoinPage';
 import HomeworkPlayPage from './pages/student/HomeworkPlayPage';
+import StudentWorkspacePage from './pages/student/StudentWorkspacePage';
 import HomeworkPage from './pages/teacher/HomeworkPage';
 
 // ── Panel docente ──
@@ -86,6 +87,7 @@ function App() {
         <Route path="/homework" element={<HomeworkJoinPage />} />
         <Route path="/homework/:pin" element={<HomeworkJoinPage />} />
         <Route path="/homework/play/:pin" element={<HomeworkPlayPage />} />
+        <Route path="/homework/group/:groupCode" element={<StudentWorkspacePage />} />
 
         {/* ── Sala de Partida en Vivo en Pantalla Completa (Sin Sidebar lateral para 100% de espacio) ── */}
         <Route

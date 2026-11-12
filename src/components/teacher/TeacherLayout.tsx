@@ -94,11 +94,13 @@ export default function TeacherLayout() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="w-9 h-9 rounded-full bg-purple-500/20 border border-purple-500/40 flex items-center justify-center font-bold text-sm text-purple-300 flex-shrink-0">
-                {user?.fullName ? user.fullName[0].toUpperCase() : 'D'}
+                {user?.fullName ? user.fullName[0].toUpperCase() : 'A'}
               </div>
               <div className="truncate text-xs">
-                <p className="font-semibold text-white truncate">{user?.fullName || 'Docente'}</p>
-                <p className="text-white/40 truncate">{user?.school || 'Profesor'}</p>
+                <p className="font-semibold text-white truncate">{user?.fullName || 'Profe Axel'}</p>
+                <p className="text-purple-300 font-medium text-[10px] truncate">
+                  {user?.role === 'superadmin' ? '⭐ Super Admin' : user?.school || 'Docente'}
+                </p>
               </div>
             </div>
 

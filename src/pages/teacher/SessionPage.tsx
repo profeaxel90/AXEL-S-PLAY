@@ -272,15 +272,38 @@ export default function SessionPage() {
         });
 
         // Actualizar puntaje y racha del estudiante real asegurando concordancia por ID o Nickname
-        setLiveParticipants((prev) =>
-          prev.map((p) => {
+        setLiveParticipants((prev) => {
+          const isCorrect = msg.isCorrect !== undefined
+            ? msg.isCorrect
+            : ((msg.pointsEarned || 0) > 0);
+          const earned = isCorrect ? (msg.pointsEarned || 1000) : 0;
+
+          // Si es batalla por equipos: Los puntos se suman por igual a TODOS los del equipo
+          if (gameData?.gameMode === 'team_battle') {
+            const respondent = prev.find(
+              (p) => (msg.participantId && p.id === msg.participantId) || (msg.nickname && p.nickname === msg.nickname)
+            );
+            const teamId = respondent?.teamId;
+
+            if (teamId) {
+              return prev.map((p) => {
+                if (p.teamId === teamId) {
+                  return {
+                    ...p,
+                    score: p.score + earned,
+                    streak: isCorrect ? (p.streak || 0) + 1 : 0,
+                    correctAnswers: isCorrect ? (p.correctAnswers || 0) + 1 : (p.correctAnswers || 0),
+                  };
+                }
+                return p;
+              });
+            }
+          }
+
+          return prev.map((p) => {
             const isMatch = (msg.participantId && p.id === msg.participantId) ||
                             (msg.nickname && p.nickname === msg.nickname);
             if (!isMatch) return p;
-
-            const isCorrect = msg.isCorrect !== undefined
-              ? msg.isCorrect
-              : ((msg.pointsEarned || 0) > 0);
 
             // En modo Supervivencia, restar un corazón en caso de respuesta errónea
             let updatedHearts = p.hearts !== undefined ? p.hearts : 3;
@@ -296,7 +319,7 @@ export default function SessionPage() {
             // Aplicar multiplicador por Ronda Dorada y Racha si se calculó en local
             const updatedScore = msg.newScore !== undefined
               ? msg.newScore
-              : (p.score + (msg.pointsEarned || 0));
+              : (p.score + earned);
 
             return {
               ...p,
@@ -306,8 +329,8 @@ export default function SessionPage() {
               streak: nextStreak,
               correctAnswers: isCorrect ? (p.correctAnswers || 0) + 1 : (p.correctAnswers || 0),
             };
-          })
-        );
+          });
+        });
 
         audioEngine.playEffect('sfx_tick');
       } else if (msg.type === 'LIVE_EMOJI') {
@@ -498,6 +521,16 @@ export default function SessionPage() {
   const secondPlace = sortedParticipants[1];
   const thirdPlace = sortedParticipants[2];
 
+  // Cálculo de equipos para 'team_battle'
+  const isTeamBattle = gameData?.gameMode === 'team_battle';
+  const team1Members = liveParticipants.filter((p) => p.teamId === 't1');
+  const team2Members = liveParticipants.filter((p) => p.teamId === 't2');
+  const team1Score = team1Members.reduce((acc, p) => acc + p.score, 0);
+  const team2Score = team2Members.reduce((acc, p) => acc + p.score, 0);
+  const winningTeam = team1Score >= team2Score
+    ? { id: 't1', name: '🔴 Equipo Fénix', color: 'red', score: team1Score, members: team1Members }
+    : { id: 't2', name: '🔵 Equipo Titanes', color: 'blue', score: team2Score, members: team2Members };
+
   // ── Acciones del Docente ──
   const handleStartIntro = () => {
     if (liveParticipants.length === 0) return;
@@ -540,16 +573,13 @@ export default function SessionPage() {
     let updatedParticipants = [...liveParticipants];
     if (mode === 'team_battle') {
       const TEAMS = [
-        { id: 't1', name: '🔴 Equipo Fuego' },
-        { id: 't2', name: '🔵 Equipo Agua' },
-        { id: 't3', name: '🟢 Equipo Tierra' },
-        { id: 't4', name: '🟡 Equipo Relámpago' },
+        { id: 't1', name: '🔴 Equipo Fénix' },
+        { id: 't2', name: '🔵 Equipo Titanes' },
       ];
-      const numTeams = updatedParticipants.length >= 6 ? 3 : 2;
       updatedParticipants = updatedParticipants.map((p, idx) => ({
         ...p,
-        teamId: TEAMS[idx % numTeams].id,
-        teamName: TEAMS[idx % numTeams].name,
+        teamId: TEAMS[idx % 2].id,
+        teamName: TEAMS[idx % 2].name,
       }));
       setLiveParticipants(updatedParticipants);
     } else if (mode === 'survival') {
@@ -2118,6 +2148,61 @@ export default function SessionPage() {
             {liveParticipants.length === 0 ? (
               <div className="p-8 text-white/50 text-sm">
                 No hubo participantes registrados en esta partida.
+              </div>
+            ) : isTeamBattle ? (
+              /* PODIO EXCLUSIVO DEL EQUIPO GANADOR EN BATALLA POR EQUIPOS */
+              <div className="space-y-6 my-6 max-w-4xl mx-auto animate-bounce-in">
+                <div className={`p-6 sm:p-8 rounded-3xl border-4 ${
+                  winningTeam.id === 't1'
+                    ? 'bg-gradient-to-r from-red-950/80 via-rose-900/70 to-amber-950/80 border-red-500 shadow-2xl shadow-red-500/40 text-red-100'
+                    : 'bg-gradient-to-r from-blue-950/80 via-cyan-900/70 to-indigo-950/80 border-blue-500 shadow-2xl shadow-blue-500/40 text-blue-100'
+                } flex flex-col items-center justify-center text-center relative overflow-hidden backdrop-blur-md`}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <Trophy className="w-12 h-12 text-yellow-300 animate-bounce drop-shadow-[0_0_20px_rgba(250,204,21,0.9)]" />
+                    <span className="text-2xl sm:text-4xl font-black text-yellow-300 uppercase tracking-tight">
+                      ¡EQUIPO GANADOR: {winningTeam.name}!
+                    </span>
+                  </div>
+                  <p className="text-sm sm:text-base font-bold text-white/90">
+                    Puntaje total compartido: <span className="text-yellow-400 font-black text-xl">{winningTeam.score.toLocaleString()} pts</span>
+                  </p>
+                  <div className="mt-3 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-yellow-400/20 border border-yellow-400/40 text-yellow-200 text-xs font-black">
+                    <Crown className="w-4 h-4 text-yellow-300" />
+                    <span>CAMPEONES DEL DESAFÍO POR EQUIPOS ({winningTeam.members.length} Jugadores)</span>
+                  </div>
+                </div>
+
+                <div className="text-left">
+                  <div className="flex items-center justify-center gap-2 text-yellow-300 font-black text-sm uppercase tracking-wider mb-4">
+                    <span>👑 Integrantes que Conquistaron la Victoria</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    {winningTeam.members.map((p, idx) => (
+                      <div
+                        key={p.id || idx}
+                        className={`p-3.5 rounded-2xl border-2 flex flex-col items-center text-center shadow-lg transition-all transform hover:scale-105 animate-bounce-in ${
+                          winningTeam.id === 't1'
+                            ? 'bg-red-950/50 border-red-500/50 hover:border-yellow-400 shadow-red-500/20'
+                            : 'bg-blue-950/50 border-blue-500/50 hover:border-yellow-400 shadow-blue-500/20'
+                        }`}
+                      >
+                        <div className="w-16 h-16 rounded-2xl bg-yellow-400/20 border-2 border-yellow-400/70 p-1 mb-2 flex items-center justify-center shadow-md ring-2 ring-yellow-300/40">
+                          <MascotAvatar avatar={p.avatar} emotion="victory" size="md" />
+                        </div>
+                        <span className="font-black text-xs text-white truncate max-w-full">
+                          {p.nickname}
+                        </span>
+                        <span className="text-[11px] font-extrabold text-yellow-300 mt-0.5">
+                          {p.score.toLocaleString()} pts
+                        </span>
+                        <span className="mt-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-yellow-400/20 border border-yellow-400/30 text-yellow-300 flex items-center gap-1">
+                          <span>🥇 Ganador</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="flex items-end justify-center gap-4 sm:gap-6 max-w-3xl mx-auto my-8 pt-8 min-h-64 relative">
