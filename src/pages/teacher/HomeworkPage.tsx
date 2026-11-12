@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   BookOpen, Plus, Clipboard, CheckCircle2, XCircle,
   Trash2, Users, ChevronRight, Download, ArrowLeft,
-  Calendar, Hash, ToggleLeft, ToggleRight, Eye, Award, FileText, Camera, Image as ImageIcon
+  Calendar, Hash, ToggleLeft, ToggleRight, Eye, Award, FileText, Camera, Image as ImageIcon,
+  QrCode, X, Clock, ExternalLink
 } from 'lucide-react';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
@@ -23,7 +25,7 @@ function copyToClipboard(text: string) {
 
 function exportCSV(assignment: HomeworkAssignment) {
   const rows = [
-    ['Nombre', 'Grado/Grupo', 'Puntaje', '% Aciertos', 'Correcciones usadas', 'Fecha entrega'],
+    ['Nombre', 'Categoría', 'Puntaje', '% Aciertos', 'Correcciones usadas', 'Fecha entrega'],
     ...assignment.submissions.map((s) => [
       s.studentFullName,
       s.gradeGroup,
@@ -53,6 +55,7 @@ interface NewAssignmentModalProps {
     gradeGroupTarget: string;
     gameId: string;
     dueDate: string;
+    dueTime?: string;
     maxCorrections: number;
     assignmentType: 'quiz' | 'pdf_guide' | 'exam_review';
     pdfUrl?: string;
@@ -67,10 +70,11 @@ function NewAssignmentModal({ defaultGameId, onClose, onCreate }: NewAssignmentM
   const games = useMemo(() => Object.values(gamesMap), [gamesMap]);
   const [assignmentType, setAssignmentType] = useState<'quiz' | 'pdf_guide' | 'exam_review'>('quiz');
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState('Lee con atención y responde la actividad.');
   const [gradeGroupTarget, setGradeGroupTarget] = useState('');
   const [gameId, setGameId] = useState(defaultGameId || (games[0]?.id ?? ''));
   const [dueDate, setDueDate] = useState('');
+  const [dueTime, setDueTime] = useState('23:59');
   const [maxCorrections, setMaxCorrections] = useState(3);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfName, setPdfName] = useState<string | null>(null);
@@ -94,10 +98,11 @@ function NewAssignmentModal({ defaultGameId, onClose, onCreate }: NewAssignmentM
     if (!title.trim() || !gameId) return;
     onCreate({
       title: title.trim(),
-      description: description.trim(),
+      description: description.trim() || 'Lee con atención y responde la actividad.',
       gradeGroupTarget: gradeGroupTarget.trim(),
       gameId,
       dueDate,
+      dueTime: dueTime.trim() || undefined,
       maxCorrections,
       assignmentType,
       pdfUrl: pdfUrl || undefined,
@@ -279,18 +284,18 @@ function NewAssignmentModal({ defaultGameId, onClose, onCreate }: NewAssignmentM
             <textarea
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/30 text-sm focus:outline-none focus:border-purple-500 resize-none"
               rows={2}
-              placeholder="Ej: Lee con atención la guía y responde con calma desde casa."
+              placeholder="Lee con atención y responde la actividad."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
 
-          {/* Grado/Grupo */}
+          {/* Categoría */}
           <div>
-            <label className="block text-xs font-semibold text-white/70 mb-1.5">Grado / Grupo objetivo</label>
+            <label className="block text-xs font-semibold text-white/70 mb-1.5">Categoría objetivo</label>
             <input
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/30 text-sm focus:outline-none focus:border-purple-500"
-              placeholder="Ej: Grado 7°A"
+              placeholder="Ej: Primaria, Secundaria, Categoría A, Libre..."
               value={gradeGroupTarget}
               onChange={(e) => setGradeGroupTarget(e.target.value)}
             />
@@ -311,7 +316,7 @@ function NewAssignmentModal({ defaultGameId, onClose, onCreate }: NewAssignmentM
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Fecha límite */}
             <div>
               <label className="block text-xs font-semibold text-white/70 mb-1.5">Fecha límite (opcional)</label>
@@ -322,16 +327,26 @@ function NewAssignmentModal({ defaultGameId, onClose, onCreate }: NewAssignmentM
                 onChange={(e) => setDueDate(e.target.value)}
               />
             </div>
+            {/* Hora límite */}
+            <div>
+              <label className="block text-xs font-semibold text-white/70 mb-1.5">Hora límite (opcional)</label>
+              <input
+                type="time"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-purple-500 [color-scheme:dark]"
+                value={dueTime}
+                onChange={(e) => setDueTime(e.target.value)}
+              />
+            </div>
             {/* Correcciones */}
             <div>
-              <label className="block text-xs font-semibold text-white/70 mb-1.5">Comodines de corrección</label>
+              <label className="block text-xs font-semibold text-white/70 mb-1.5">Comodines</label>
               <select
                 className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-purple-500"
                 value={maxCorrections}
                 onChange={(e) => setMaxCorrections(Number(e.target.value))}
               >
                 {[1, 2, 3, 4, 5].map((n) => (
-                  <option key={n} value={n}>{n} corrección{n !== 1 ? 'es' : ''}</option>
+                  <option key={n} value={n}>{n} comodín{n !== 1 ? 'es' : ''}</option>
                 ))}
               </select>
             </div>
@@ -459,11 +474,13 @@ function AssignmentDetail({
   onBack,
   onToggleStatus,
   onExport,
+  onOpenQr,
 }: {
   assignment: HomeworkAssignment;
   onBack: () => void;
   onToggleStatus: () => void;
   onExport: () => void;
+  onOpenQr?: (assignment: HomeworkAssignment) => void;
 }) {
   const [selectedStudent, setSelectedStudent] = useState<HomeworkSubmission | null>(null);
   const shareUrl = `${window.location.origin}/homework/${assignment.pin}`;
@@ -527,21 +544,37 @@ function AssignmentDetail({
 
       {/* Acceso */}
       <div className="bg-gradient-to-r from-emerald-900/40 to-teal-900/40 border border-emerald-500/20 rounded-2xl p-5 mb-6">
-        <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-3">Enlace para estudiantes</h3>
-        <div className="flex flex-col sm:flex-row gap-3">
+        <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-3">Acceso y Enlace para estudiantes</h3>
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch">
           <div className="flex-1 bg-black/30 rounded-xl p-3 flex items-center gap-3">
             <Hash className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-            <div>
+            <div className="min-w-0">
               <div className="text-2xl font-black text-white tracking-widest">{assignment.pin}</div>
               <div className="text-xs text-white/40 truncate">{shareUrl}</div>
             </div>
           </div>
           <button
             onClick={() => copyToClipboard(shareUrl)}
-            className="flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors"
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors"
           >
             <Clipboard className="w-4 h-4" /> Copiar enlace
           </button>
+          <button
+            onClick={() => onOpenQr?.(assignment)}
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-bold transition-colors border border-white/10"
+            title="Mostrar código QR en pantalla para escanear"
+          >
+            <QrCode className="w-4 h-4 text-emerald-400" /> Ver QR
+          </button>
+          <a
+            href={`/homework/${assignment.pin}?preview=true`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-sm font-bold transition-colors"
+            title="Probar la actividad tal como la ven los estudiantes"
+          >
+            <Eye className="w-4 h-4" /> Vista Previa
+          </a>
         </div>
       </div>
 
@@ -613,6 +646,57 @@ function AssignmentDetail({
   );
 }
 
+// ── Modal de Código QR para Asignación ──────────────────────
+function AssignmentQrModal({ assignment, onClose }: { assignment: HomeworkAssignment; onClose: () => void }) {
+  const shareUrl = `${window.location.origin}/homework/${assignment.pin}`;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+      <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 text-white/40 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+          title="Cerrar ventana"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto mb-3">
+          <QrCode className="w-6 h-6" />
+        </div>
+
+        <h3 className="text-lg font-black text-white">{assignment.title}</h3>
+        <p className="text-xs text-white/50 mt-1 mb-5">Escanea este código con cualquier celular para abrir la actividad</p>
+
+        <div className="bg-white p-4 rounded-2xl shadow-xl inline-block mx-auto mb-4">
+          <QRCodeSVG value={shareUrl} size={190} level="M" />
+        </div>
+
+        <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4">
+          <span className="text-[10px] text-white/40 uppercase tracking-wider block font-bold">PIN de Acceso</span>
+          <span className="text-2xl font-black text-emerald-400 tracking-widest">{assignment.pin}</span>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => copyToClipboard(shareUrl)}
+            className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <Clipboard className="w-4 h-4" /> Copiar enlace
+          </button>
+          <a
+            href={shareUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <ExternalLink className="w-4 h-4" /> Abrir
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Página principal ─────────────────────────────────────────
 export default function HomeworkPage() {
   const navigate = useNavigate();
@@ -621,6 +705,7 @@ export default function HomeworkPage() {
   const [showModal, setShowModal] = useState(searchParams.has('gameId'));
   const [selectedAssignment, setSelectedAssignment] = useState<HomeworkAssignment | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [qrModalAssignment, setQrModalAssignment] = useState<HomeworkAssignment | null>(null);
 
   const defaultGameId = searchParams.get('gameId') || undefined;
 
@@ -644,7 +729,11 @@ export default function HomeworkPage() {
           onBack={() => setSelectedAssignment(null)}
           onToggleStatus={() => toggleAssignmentStatus(live.id)}
           onExport={() => exportCSV(live)}
+          onOpenQr={(a) => setQrModalAssignment(a)}
         />
+        {qrModalAssignment && (
+          <AssignmentQrModal assignment={qrModalAssignment} onClose={() => setQrModalAssignment(null)} />
+        )}
       </div>
     );
   }
@@ -734,23 +823,42 @@ export default function HomeworkPage() {
                 {hw.dueDate && (
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" /> {fmtDate(hw.dueDate)}
+                    {hw.dueTime && <span className="text-[10px] text-white/50">({hw.dueTime})</span>}
                   </span>
                 )}
               </div>
 
               {/* Acciones */}
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                 <button
                   onClick={() => copyToClipboard(`${window.location.origin}/homework/${hw.pin}`)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-white/10 text-xs font-semibold text-white/60 hover:bg-white/5"
+                  className="py-2 px-1 rounded-xl border border-white/10 text-[11px] font-semibold text-white/70 hover:bg-white/5 flex items-center justify-center gap-1 transition-colors"
+                  title="Copiar enlace directo"
                 >
-                  <Clipboard className="w-3.5 h-3.5" /> Copiar enlace
+                  <Clipboard className="w-3.5 h-3.5" /> Enlace
                 </button>
                 <button
-                  onClick={() => setSelectedAssignment(hw)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-xs font-semibold text-emerald-400 hover:bg-emerald-600/30"
+                  onClick={() => setQrModalAssignment(hw)}
+                  className="py-2 px-1 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/20 flex items-center justify-center gap-1 transition-colors"
+                  title="Mostrar Código QR para que los alumnos escaneen"
                 >
-                  <Eye className="w-3.5 h-3.5" /> Ver resultados
+                  <QrCode className="w-3.5 h-3.5" /> QR
+                </button>
+                <a
+                  href={`/homework/${hw.pin}?preview=true`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2 px-1 rounded-xl border border-purple-500/30 bg-purple-500/10 text-[11px] font-bold text-purple-300 hover:bg-purple-500/20 flex items-center justify-center gap-1 transition-colors text-center"
+                  title="Vista previa como estudiante"
+                >
+                  <Eye className="w-3.5 h-3.5" /> Preview
+                </a>
+                <button
+                  onClick={() => setSelectedAssignment(hw)}
+                  className="py-2 px-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-[11px] font-bold text-white flex items-center justify-center gap-1 shadow-md shadow-emerald-600/20 transition-all"
+                  title="Ver entregas y resultados"
+                >
+                  Resultados
                 </button>
               </div>
             </div>
@@ -758,12 +866,20 @@ export default function HomeworkPage() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modal Nueva Asignación */}
       {showModal && (
         <NewAssignmentModal
           defaultGameId={defaultGameId}
           onClose={() => setShowModal(false)}
           onCreate={handleCreate}
+        />
+      )}
+
+      {/* Modal QR Code */}
+      {qrModalAssignment && (
+        <AssignmentQrModal
+          assignment={qrModalAssignment}
+          onClose={() => setQrModalAssignment(null)}
         />
       )}
 

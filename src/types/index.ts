@@ -210,7 +210,10 @@ export interface Participant {
   score: number;
   rank?: number;
   lives?: number;
+  hearts?: number; // Para modo Supervivencia (3 corazones)
   teamId?: string;
+  teamName?: string; // Para modo Por Equipos
+  isEliminated?: boolean;
   isConnected: boolean;
   joinedAt: string;
   correctAnswers?: number;

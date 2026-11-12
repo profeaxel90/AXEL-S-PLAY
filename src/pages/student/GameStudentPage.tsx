@@ -82,6 +82,15 @@ export default function GameStudentPage() {
   const [isShieldActive, setIsShieldActive] = useState(false);
   const [lastSentEmoji, setLastSentEmoji] = useState<string | null>(null);
 
+  // Modalidades avanzadas: Por Equipos, Supervivencia (3 corazones) y Ruleta
+  const [currentGameMode, setCurrentGameMode] = useState<string>('battle_live');
+  const [myTeamName, setMyTeamName] = useState<string | null>(null);
+  const [isMyTeamTurn, setIsMyTeamTurn] = useState<boolean>(true);
+  const [activeTeammateName, setActiveTeammateName] = useState<string | null>(null);
+  const [studentHearts, setStudentHearts] = useState<number>(3);
+  const [isWheelSelected, setIsWheelSelected] = useState<boolean>(true);
+  const [wheelSelectedName, setWheelSelectedName] = useState<string | null>(null);
+
   // Escuchar mensajes en tiempo real vía GameClientSync (SSE + P2P)
   useEffect(() => {
     if (!sessionId) return;
@@ -113,6 +122,38 @@ export default function GameStudentPage() {
         }
         // Sin música en dispositivos de alumnos — solo beep de inicio
         audioEngine.playEffect('sfx_tick');
+
+        // Modalidad de Juego
+        if (msg.gameMode) {
+          setCurrentGameMode(msg.gameMode);
+        }
+
+        // Modo Por Equipos: calcular a quién le toca responder
+        if (msg.gameMode === 'team_battle' && msg.participants && currentParticipant) {
+          const myP = msg.participants.find((p: any) => p.id === currentParticipant.id || p.nickname === currentParticipant.nickname);
+          const tName = myP?.teamName || null;
+          setMyTeamName(tName);
+          if (tName) {
+            const teamMembers = msg.participants.filter((p: any) => p.teamName === tName);
+            const activeMember = teamMembers[(msg.index || 0) % teamMembers.length];
+            const isTurn = activeMember?.id === currentParticipant.id || activeMember?.nickname === currentParticipant.nickname;
+            setIsMyTeamTurn(isTurn);
+            setActiveTeammateName(activeMember?.nickname || null);
+          } else {
+            setIsMyTeamTurn(true);
+          }
+        } else {
+          setIsMyTeamTurn(true);
+        }
+
+        // Modo Ruleta: comprobar si este estudiante fue el elegido por el sistema
+        if (msg.gameMode === 'wheel') {
+          setWheelSelectedName(msg.selectedStudentName || null);
+          const isSelected = !msg.selectedStudentId || (currentParticipant && (msg.selectedStudentId === currentParticipant.id || msg.selectedStudentName === currentParticipant.nickname));
+          setIsWheelSelected(Boolean(isSelected));
+        } else {
+          setIsWheelSelected(true);
+        }
 
         // Actualizar lista de jugadores disponibles para robar
         if (msg.participants) {
@@ -147,6 +188,9 @@ export default function GameStudentPage() {
           } else {
             setStreakCount(0);
             audioEngine.playEffect('sfx_wrong');
+            if (currentGameMode === 'survival') {
+              setStudentHearts((h) => Math.max(0, h - 1));
+            }
           }
         }
 
@@ -594,49 +638,104 @@ export default function GameStudentPage() {
           </h2>
         </div>
 
-        {/* ── Botones Grandes de Respuesta (Estilo Kahoot) ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {currentOptions.map((option, idx) => {
-            const style = OPTION_STYLES[idx % OPTION_STYLES.length];
-            const isSelected = selectedOption === option.id;
-            const isEliminated = eliminatedOptions.includes(option.id);
-            const isRevealedCorrect = revealedCorrectId === option.id;
-            const isRevealedWrong = revealedCorrectId && revealedCorrectId !== option.id;
-
-            return (
-              <button
-                key={option.id}
-                disabled={isAnswerSubmitted || isEliminated || timeLeft <= 0}
-                onClick={() => handleSelectAnswer(option.id)}
-                className={`p-4 rounded-2xl border-2 transition-all flex items-center gap-3 text-left font-bold relative shadow-lg ${
-                  isEliminated
-                    ? 'opacity-20 pointer-events-none line-through bg-slate-900 border-white/10'
-                    : isRevealedCorrect
-                    ? 'bg-emerald-600 border-yellow-300 text-white scale-[1.02] shadow-emerald-500/40 ring-4 ring-yellow-400'
-                    : isRevealedWrong
-                    ? 'opacity-40 bg-slate-900 border-white/10'
-                    : isSelected
-                    ? `${style.bg} ring-4 ring-white border-white scale-[1.02] shadow-2xl`
-                    : `${style.bg} ${isAnswerSubmitted ? 'opacity-50' : 'hover:scale-[1.02]'}`
-                }`}
-              >
-                {/* Símbolo geométrico */}
-                <span className="w-9 h-9 rounded-xl bg-black/25 flex items-center justify-center font-black text-lg shrink-0">
-                  {style.icon}
+        {/* ── Banners de Modalidades Especiales ── */}
+        {currentGameMode === 'survival' && (
+          <div className="flex items-center justify-between mb-3 px-3 py-2 rounded-xl bg-red-950/50 border border-red-500/40 text-xs">
+            <span className="font-bold text-red-300 flex items-center gap-1.5">
+              <span>❤️</span> Supervivencia:
+            </span>
+            <div className="flex items-center gap-1.5 text-lg">
+              {[1, 2, 3].map((h) => (
+                <span key={h} className={`transition-all ${h <= studentHearts ? 'scale-110 animate-pulse' : 'opacity-20 grayscale'}`}>
+                  {h <= studentHearts ? '❤️' : '🤍'}
                 </span>
+              ))}
+            </div>
+          </div>
+        )}
 
-                <span className="text-xs sm:text-sm leading-tight flex-1">
-                  {option.text}
-                </span>
+        {currentGameMode === 'team_battle' && isMyTeamTurn && (
+          <div className="p-2.5 rounded-xl bg-blue-600/20 border border-blue-400/40 text-blue-200 text-xs font-black text-center mb-3 animate-pulse">
+            🔥 ¡ES TU TURNO! Responde por {myTeamName || 'tu equipo'}.
+          </div>
+        )}
 
-                {/* Check si está seleccionada */}
-                {isSelected && (
-                  <CheckCircle2 className="w-5 h-5 text-white shrink-0 animate-bounce-in" />
-                )}
-              </button>
-            );
-          })}
-        </div>
+        {currentGameMode === 'wheel' && isWheelSelected && (
+          <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-400/50 text-yellow-300 text-xs font-black text-center mb-3 animate-bounce">
+            🎯 ¡LA RULETA TE ELIGIÓ! Tienes el control exclusivo para responder esta pregunta.
+          </div>
+        )}
+
+        {/* ── Vistas cuando NO es el turno del jugador o está eliminado ── */}
+        {currentGameMode === 'survival' && studentHearts <= 0 ? (
+          <div className="card p-6 border-red-500/40 bg-red-950/40 text-center rounded-3xl space-y-3 shadow-xl animate-fade-in my-2">
+            <div className="text-5xl">💀</div>
+            <h3 className="text-xl font-black text-white">¡Has sido eliminado!</h3>
+            <p className="text-xs text-red-200">
+              Perdiste tus 3 corazones. Puedes continuar en la sala como espectador viendo cómo avanzan tus compañeros.
+            </p>
+          </div>
+        ) : currentGameMode === 'team_battle' && !isMyTeamTurn ? (
+          <div className="card p-6 border-blue-500/40 bg-blue-950/50 text-center rounded-3xl space-y-3 shadow-xl animate-fade-in my-2">
+            <div className="text-5xl animate-pulse">🤝</div>
+            <h3 className="text-xl font-black text-white">¡Turno de {activeTeammateName || 'tu compañero'}!</h3>
+            <p className="text-xs text-blue-200">
+              Tu compañero está respondiendo esta pregunta por <strong className="text-yellow-300 font-bold">{myTeamName || 'tu equipo'}</strong>.
+            </p>
+            <p className="text-[11px] text-white/40">¡Apóyalo y observa la pantalla principal!</p>
+          </div>
+        ) : currentGameMode === 'wheel' && !isWheelSelected ? (
+          <div className="card p-6 border-amber-500/40 bg-amber-950/50 text-center rounded-3xl space-y-3 shadow-xl animate-fade-in my-2">
+            <div className="text-5xl animate-bounce">🎡</div>
+            <h3 className="text-lg font-black text-white">La Ruleta eligió a:</h3>
+            <p className="text-2xl font-black text-yellow-300">{wheelSelectedName || 'un compañero'}</p>
+            <p className="text-xs text-white/50">El estudiante seleccionado está respondiendo desde su celular.</p>
+          </div>
+        ) : (
+          /* ── Botones Grandes de Respuesta (Estilo Kahoot) ── */
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {currentOptions.map((option, idx) => {
+              const style = OPTION_STYLES[idx % OPTION_STYLES.length];
+              const isSelected = selectedOption === option.id;
+              const isEliminated = eliminatedOptions.includes(option.id);
+              const isRevealedCorrect = revealedCorrectId === option.id;
+              const isRevealedWrong = revealedCorrectId && revealedCorrectId !== option.id;
+
+              return (
+                <button
+                  key={option.id}
+                  disabled={isAnswerSubmitted || isEliminated || timeLeft <= 0}
+                  onClick={() => handleSelectAnswer(option.id)}
+                  className={`p-4 rounded-2xl border-2 transition-all flex items-center gap-3 text-left font-bold relative shadow-lg ${
+                    isEliminated
+                      ? 'opacity-20 pointer-events-none line-through bg-slate-900 border-white/10'
+                      : isRevealedCorrect
+                      ? 'bg-emerald-600 border-yellow-300 text-white scale-[1.02] shadow-emerald-500/40 ring-4 ring-yellow-400'
+                      : isRevealedWrong
+                      ? 'opacity-40 bg-slate-900 border-white/10'
+                      : isSelected
+                      ? `${style.bg} ring-4 ring-white border-white scale-[1.02] shadow-2xl`
+                      : `${style.bg} ${isAnswerSubmitted ? 'opacity-50' : 'hover:scale-[1.02]'}`
+                  }`}
+                >
+                  {/* Símbolo geométrico */}
+                  <span className="w-9 h-9 rounded-xl bg-black/25 flex items-center justify-center font-black text-lg shrink-0">
+                    {style.icon}
+                  </span>
+
+                  <span className="text-xs sm:text-sm leading-tight flex-1">
+                    {option.text}
+                  </span>
+
+                  {/* Check si está seleccionada */}
+                  {isSelected && (
+                    <CheckCircle2 className="w-5 h-5 text-white shrink-0 animate-bounce-in" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* ── Feedback cuando se acaba el tiempo sin responder ── */}
         {!isAnswerSubmitted && (timeLeft <= 0 || Boolean(revealedCorrectId)) && (

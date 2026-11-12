@@ -72,6 +72,14 @@ export interface GameEventMessage {
   isGoldenRound?: boolean;
   streak?: number;
   blockedByShield?: boolean;
+  // Campos para modalidades avanzadas (Equipos, Supervivencia 3 corazones, Ruleta)
+  gameMode?: string;
+  teamName?: string;
+  activeTurnPlayerId?: string;
+  activeTurnPlayerName?: string;
+  hearts?: number;
+  selectedStudentId?: string;
+  selectedStudentName?: string;
   _msgId?: string;
 }
 

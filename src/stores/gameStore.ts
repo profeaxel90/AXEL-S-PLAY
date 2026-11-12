@@ -73,7 +73,7 @@ function getInitialDefaultGames(): Record<string, Game> {
       description: 'Textos cortos, análisis de falacias y figuras literarias.',
       subject: 'Lenguaje y Literatura',
       topic: 'Comprensión',
-      gameMode: 'escape_room',
+      gameMode: 'wheel',
       difficulty: 'medium',
       questions: SAMPLE_QUESTIONS_ROAD_SAFETY.map((q, idx) => ({
         ...q,

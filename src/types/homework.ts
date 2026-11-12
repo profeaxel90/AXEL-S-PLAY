@@ -34,10 +34,11 @@ export interface HomeworkAssignment {
   pin: string;
   title: string;
   description?: string;
-  gradeGroupTarget?: string;
+  gradeGroupTarget?: string; // Ahora denominado Categoría en la interfaz
   gameId: string;
   teacherId?: string;
   dueDate?: string;
+  dueTime?: string; // Hora límite (ej: 18:00, 23:59)
   maxCorrections: number; // Por defecto 3
   status: 'active' | 'closed';
   createdAt: string;

@@ -93,6 +93,7 @@ interface HomeworkState {
     gradeGroupTarget?: string;
     gameId: string;
     dueDate?: string;
+    dueTime?: string;
     maxCorrections?: number;
     assignmentType?: 'quiz' | 'pdf_guide' | 'exam_review';
     pdfUrl?: string;
@@ -135,10 +136,11 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
         id: `hw-${Date.now()}`,
         pin: generateHomeworkPin(),
         title: data.title,
-        description: data.description || 'Actividad para responder con calma desde casa.',
+        description: data.description || 'Lee con atención y responde la actividad.',
         gradeGroupTarget: data.gradeGroupTarget || 'General',
         gameId: data.gameId || Object.keys(SAMPLE_GAMES)[0] || 'g-1',
         dueDate: data.dueDate,
+        dueTime: data.dueTime,
         maxCorrections: data.maxCorrections ?? 3,
         status: 'active',
         createdAt: new Date().toISOString(),

@@ -131,6 +131,9 @@ export default function SessionPage() {
   const [globalPowerModalOpen, setGlobalPowerModalOpen] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [globalPowerSuccess, setGlobalPowerSuccess] = useState<string | null>(null);
+  // Modalidades avanzadas (Equipos, Supervivencia 3 corazones, Ruleta) y Zoom de QR
+  const [showLiveQrZoom, setShowLiveQrZoom] = useState(false);
+  const [wheelSelectedStudent, setWheelSelectedStudent] = useState<Participant | null>(null);
 
   // Audio & Sonido Oficial
   const audioSettings = audioEngine.getSettings();
@@ -272,6 +275,12 @@ export default function SessionPage() {
               ? msg.isCorrect
               : ((msg.pointsEarned || 0) > 0);
 
+            // En modo Supervivencia, restar un corazón en caso de respuesta errónea
+            let updatedHearts = p.hearts !== undefined ? p.hearts : 3;
+            if (!isCorrect && !p.hasShield && gameData?.gameMode === 'survival') {
+              updatedHearts = Math.max(0, updatedHearts - 1);
+            }
+
             const nextStreak = isCorrect ? (p.streak || 0) + 1 : 0;
             if (nextStreak >= 2 && isCorrect) {
               audioEngine.playEffect('sfx_streak');
@@ -285,6 +294,8 @@ export default function SessionPage() {
             return {
               ...p,
               score: updatedScore,
+              hearts: updatedHearts,
+              isEliminated: updatedHearts <= 0,
               streak: nextStreak,
               correctAnswers: isCorrect ? (p.correctAnswers || 0) + 1 : (p.correctAnswers || 0),
             };
@@ -516,6 +527,40 @@ export default function SessionPage() {
     introTimeoutsRef.current.forEach(clearTimeout);
     introTimeoutsRef.current = [];
 
+    const mode = gameData?.gameMode || 'battle_live';
+
+    // Preparar participantes según la modalidad seleccionada
+    let updatedParticipants = [...liveParticipants];
+    if (mode === 'team_battle') {
+      const TEAMS = [
+        { id: 't1', name: '🔴 Equipo Fuego' },
+        { id: 't2', name: '🔵 Equipo Agua' },
+        { id: 't3', name: '🟢 Equipo Tierra' },
+        { id: 't4', name: '🟡 Equipo Relámpago' },
+      ];
+      const numTeams = updatedParticipants.length >= 6 ? 3 : 2;
+      updatedParticipants = updatedParticipants.map((p, idx) => ({
+        ...p,
+        teamId: TEAMS[idx % numTeams].id,
+        teamName: TEAMS[idx % numTeams].name,
+      }));
+      setLiveParticipants(updatedParticipants);
+    } else if (mode === 'survival') {
+      updatedParticipants = updatedParticipants.map((p) => ({
+        ...p,
+        hearts: 3,
+        isEliminated: false,
+      }));
+      setLiveParticipants(updatedParticipants);
+    }
+
+    // Si es modo Ruleta, seleccionar un estudiante al azar:
+    let wheelStudent: Participant | null = null;
+    if (mode === 'wheel' && updatedParticipants.length > 0) {
+      wheelStudent = updatedParticipants[Math.floor(Math.random() * updatedParticipants.length)];
+      setWheelSelectedStudent(wheelStudent);
+    }
+
     setGamePhase('question');
     setCurrentQIndex(0);
     setIsAnswerRevealed(false);
@@ -525,20 +570,24 @@ export default function SessionPage() {
     setTimerLeft(firstQ.timeLimit || 20);
 
     // Guardar puntajes y rankings iniciales para animación de subida/bajada
-    const initialSorted = [...liveParticipants].sort((a, b) => b.score - a.score);
+    const initialSorted = [...updatedParticipants].sort((a, b) => b.score - a.score);
     prevRanksRef.current = new Map(initialSorted.map((p, idx) => [p.id, idx + 1]));
-    roundStartScoresRef.current = new Map(liveParticipants.map((p) => [p.id, p.score]));
+    roundStartScoresRef.current = new Map(updatedParticipants.map((p) => [p.id, p.score]));
 
     // Iniciar la música repetitiva de la pregunta (se detiene cuando todos responden)
     audioEngine.playQuestionMusic();
 
-    // Transmitir primera pregunta a todos los celulares
+    // Transmitir primera pregunta a todos los celulares con datos de modalidad
     hostSyncRef.current?.broadcast('START_GAME');
     hostSyncRef.current?.broadcast('QUESTION', {
       question: firstQ,
       index: 0,
       total: questions.length,
       timeLimit: firstQ.timeLimit || 20,
+      gameMode: mode,
+      selectedStudentId: wheelStudent?.id,
+      selectedStudentName: wheelStudent?.nickname,
+      participants: updatedParticipants,
     });
   };
 
@@ -552,6 +601,15 @@ export default function SessionPage() {
     if (nextIdx >= questions.length) {
       handleEndGame();
       return;
+    }
+
+    const mode = gameData?.gameMode || 'battle_live';
+
+    // Si es modo Ruleta, seleccionar un nuevo estudiante al azar para la siguiente pregunta:
+    let wheelStudent: Participant | null = null;
+    if (mode === 'wheel' && liveParticipants.length > 0) {
+      wheelStudent = liveParticipants[Math.floor(Math.random() * liveParticipants.length)];
+      setWheelSelectedStudent(wheelStudent);
     }
 
     const nextQ = questions[nextIdx];
@@ -575,6 +633,10 @@ export default function SessionPage() {
       total: questions.length,
       timeLimit: nextQ.timeLimit || 20,
       isGoldenRound,
+      gameMode: mode,
+      selectedStudentId: wheelStudent?.id,
+      selectedStudentName: wheelStudent?.nickname,
+      participants: liveParticipants,
     });
   };
 
@@ -1606,10 +1668,10 @@ export default function SessionPage() {
 
       {/* ── FASE 2: PREGUNTA EN PANTALLA COMPLETA 100VH SIN SCROLL (ESTILO KAHOOT) ── */}
       {gamePhase === 'question' && (
-        <div className="h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] flex flex-col justify-between overflow-hidden gap-2 sm:gap-3 select-none">
+        <div className="h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] flex flex-col justify-between overflow-hidden gap-2 sm:gap-3 select-none pr-12 sm:pr-14">
           {/* Header Superior Compacto */}
-          <div className="card p-2.5 sm:p-3 border-purple-500/30 bg-slate-900/90 backdrop-blur-md flex items-center justify-between gap-3 shrink-0 rounded-2xl shadow-xl">
-            {/* Izquierda: Indicador de Pregunta y PIN */}
+          <div className="card p-2 sm:p-2.5 border-purple-500/30 bg-slate-900/90 backdrop-blur-md flex items-center justify-between gap-3 shrink-0 rounded-2xl shadow-xl">
+            {/* Izquierda: Indicador de Pregunta, PIN y Botón Zoom QR */}
             <div className="flex items-center gap-2 sm:gap-3">
               <span className="px-3 py-1.5 rounded-xl bg-purple-600/30 border border-purple-400 text-purple-200 font-black text-xs uppercase tracking-wider">
                 Pregunta {currentQIndex + 1} / {questions.length}
@@ -1618,6 +1680,19 @@ export default function SessionPage() {
                 <span>PIN:</span>
                 <span className="text-yellow-400 tracking-wider">{token}</span>
               </div>
+              {/* Botón QR Pequeño al lado del PIN con Zoom en pantalla completa */}
+              <button
+                type="button"
+                onClick={() => setShowLiveQrZoom(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 text-purple-200 text-xs font-bold transition-all shadow-md group cursor-pointer"
+                title="Ampliar QR para que nuevos estudiantes puedan unirse durante la partida"
+              >
+                <div className="w-5 h-5 bg-white p-0.5 rounded flex items-center justify-center shrink-0">
+                  <QRCodeSVG value={qrUrl} size={16} />
+                </div>
+                <span className="hidden md:inline">Ver QR</span>
+                <Maximize2 className="w-3.5 h-3.5 text-purple-300 group-hover:scale-110 transition-transform" />
+              </button>
             </div>
 
             {/* Centro: Título sutil de la partida */}
@@ -1697,8 +1772,38 @@ export default function SessionPage() {
             </div>
           </div>
 
+          {/* Banner especial según Modo de Juego Activo */}
+          {gameData?.gameMode === 'team_battle' && (
+            <div className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-900/40 via-purple-900/40 to-indigo-900/40 border border-blue-400/30 flex items-center justify-center gap-2 text-xs font-bold text-white shrink-0 shadow-md">
+              <span className="text-base">🤝</span>
+              <span className="text-blue-300 font-black uppercase">MODO POR EQUIPOS:</span>
+              <span className="text-white/80">Turno activo alternado en cada equipo para responder desde sus celulares</span>
+            </div>
+          )}
+          {gameData?.gameMode === 'survival' && (
+            <div className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-red-950/60 via-rose-950/60 to-pink-950/60 border border-red-500/40 flex items-center justify-center gap-2.5 text-xs font-bold text-white shrink-0 shadow-md">
+              <span className="text-base animate-pulse">❤️</span>
+              <span className="text-red-400 font-black uppercase">MODO SUPERVIVENCIA:</span>
+              <span className="text-white/80">Cada jugador tiene 3 corazones. Un fallo resta 1 vida.</span>
+              <span className="bg-red-500/20 px-2 py-0.5 rounded-lg border border-red-400/30 text-red-300 font-black">
+                Sobrevivientes: {liveParticipants.filter(p => (p.hearts ?? 3) > 0).length} / {liveParticipants.length}
+              </span>
+            </div>
+          )}
+          {gameData?.gameMode === 'wheel' && wheelSelectedStudent && (
+            <div className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-950/70 via-yellow-950/70 to-amber-950/70 border border-yellow-400/40 flex items-center justify-center gap-2 text-xs font-bold text-white shrink-0 shadow-md animate-fade-in">
+              <span className="text-base animate-bounce">🎡</span>
+              <span className="text-amber-300 font-black uppercase">RULETA DEL CONOCIMIENTO:</span>
+              <span className="text-white/80">¡El sistema seleccionó a</span>
+              <span className="text-yellow-300 font-black bg-yellow-400/20 px-2 py-0.5 rounded-lg border border-yellow-400/40 text-sm">
+                {wheelSelectedStudent.nickname}
+              </span>
+              <span className="text-white/80">para responder esta pregunta!</span>
+            </div>
+          )}
+
           {/* Área Central: Reloj Gigante de Impacto + Pregunta + Tarjeta Gigante de Respuestas */}
-          <div className="flex items-stretch justify-between gap-3 sm:gap-4 flex-1 min-h-[140px] max-h-[38vh]">
+          <div className="flex items-stretch justify-between gap-3 sm:gap-4 flex-1 min-h-[140px] max-h-[40vh]">
             {/* RELOJ CIRCULAR GIGANTE DE ALTO IMPACTO (Estilo Kahoot) */}
             <div className="shrink-0 flex items-center justify-center">
               <div
@@ -1748,24 +1853,24 @@ export default function SessionPage() {
               </div>
             </div>
 
-            {/* Centro: Imagen (si existe) y Pregunta */}
-            <div className="card p-3 sm:p-5 border-purple-500/30 bg-gradient-to-b from-purple-950/40 to-slate-900 flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden shadow-xl rounded-2xl">
+            {/* Centro: Imagen (Grande y sin distorsión) y Pregunta */}
+            <div className="card p-3 sm:p-4 border-purple-500/30 bg-gradient-to-b from-purple-950/40 to-slate-900 flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden shadow-xl rounded-2xl">
               {currentQ.imageUrl && (
-                <div className="mb-2 flex items-center justify-center rounded-2xl overflow-hidden border border-white/20 bg-black/40 p-1 shadow-lg max-h-[22vh] w-auto">
+                <div className="mb-2 flex items-center justify-center rounded-2xl overflow-hidden border border-white/20 bg-black/40 p-1 shadow-lg max-h-[28vh] sm:max-h-[30vh] w-auto">
                   <img
                     src={currentQ.imageUrl}
                     alt="Imagen de apoyo"
-                    className="max-h-[20vh] max-w-full w-auto h-auto object-contain rounded-xl"
+                    className="max-h-[26vh] sm:max-h-[29vh] max-w-full w-auto h-auto object-contain rounded-xl"
                   />
                 </div>
               )}
 
-              <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white leading-tight max-w-4xl px-2">
+              <h2 className="text-base sm:text-lg md:text-xl font-bold text-white leading-snug max-w-3xl px-2">
                 {currentQ.content}
               </h2>
 
               {/* Barra de progreso de tiempo delgada complementaria */}
-              <div className="w-full bg-white/10 rounded-full h-1.5 mt-3 overflow-hidden max-w-2xl">
+              <div className="w-full bg-white/10 rounded-full h-1.5 mt-2.5 overflow-hidden max-w-2xl">
                 <div
                   className={`h-full transition-all duration-1000 ${
                     timerLeft <= 5 ? 'bg-red-500' : 'bg-gradient-to-r from-purple-500 to-indigo-400'
@@ -1792,7 +1897,7 @@ export default function SessionPage() {
           </div>
 
           {/* Cuadrícula de 4 Opciones Compactas y Elegantes (Cero Scroll) */}
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 flex-1 max-h-[46vh]">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 flex-1 max-h-[44vh]">
             {(currentQ.options || []).map((option, idx) => {
               const style = OPTION_STYLES[idx % OPTION_STYLES.length];
               const isCorrect = currentQ.correctAnswer === option.id;
@@ -1800,7 +1905,7 @@ export default function SessionPage() {
               return (
                 <div
                   key={option.id}
-                  className={`p-3 sm:p-4 rounded-2xl border-2 transition-all flex items-center gap-3 relative shadow-md select-none ${
+                  className={`p-3 sm:p-3.5 rounded-2xl border-2 transition-all flex items-center gap-3 relative shadow-md select-none ${
                     isAnswerRevealed
                       ? isCorrect
                         ? 'bg-emerald-600 border-yellow-400 text-white scale-[1.01] shadow-emerald-500/40 ring-4 ring-yellow-400'
@@ -1808,94 +1913,115 @@ export default function SessionPage() {
                       : `${style.bg} ${style.border}`
                   }`}
                 >
-                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-black text-xl sm:text-2xl shrink-0 ${style.symbolBg}`}>
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black text-base sm:text-lg shrink-0 ${style.symbolBg}`}>
                     {style.icon}
                   </div>
 
-                  <span className="text-base sm:text-lg md:text-xl font-black leading-snug flex-1">
+                  <span className="text-sm sm:text-base font-bold leading-snug flex-1">
                     {option.text}
                   </span>
 
                   {isAnswerRevealed && isCorrect && (
-                    <CheckCircle2 className="w-7 h-7 text-yellow-300 shrink-0 animate-bounce" />
+                    <CheckCircle2 className="w-6 h-6 text-yellow-300 shrink-0 animate-bounce" />
                   )}
                 </div>
               );
             })}
           </div>
 
-          {/* ── BARRA LATERAL EN EL COSTADO: PODERES SOLO ICONOS PARA DAR EN CUALQUIER MOMENTO ── */}
-          <div className="fixed right-3 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-2 p-2 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-purple-500/40 shadow-2xl">
-            {/* 1. Ronda Dorada 2X */}
+          {/* ── BARRA LATERAL EN EL COSTADO: TODOS LOS PODERES (SOLO ICONOS COMPACTOS) ── */}
+          <div className="fixed right-2 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1.5 p-1.5 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-purple-500/40 shadow-2xl">
+            {/* 1. Doble Puntos (2X) a Todos */}
             <button
               type="button"
-              onClick={handleToggleGoldenRound}
-              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${
-                isGoldenRound
-                  ? 'bg-yellow-400 text-slate-950 ring-4 ring-yellow-300 shadow-lg shadow-yellow-400/50 scale-110 animate-pulse'
-                  : 'bg-white/10 hover:bg-white/20 text-yellow-300 hover:scale-105'
-              }`}
-              title={isGoldenRound ? 'Ronda Dorada 2X ACTIVA' : 'Activar Ronda Dorada (Puntos Dobles 2X)'}
+              onClick={() => handleApplyPowerToAll('double_points')}
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-400/40 text-amber-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-amber-600/20"
+              title="Doble Puntos (2X) en siguiente respuesta"
             >
-              <Sparkles className={`w-5 h-5 ${isGoldenRound ? 'fill-slate-950' : 'fill-yellow-400'}`} />
+              <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />
             </button>
 
-            {/* 2. Robo de Puntos */}
-            <button
-              type="button"
-              onClick={handleAuthorizeStealPower}
-              disabled={isStealAuthorized}
-              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${
-                isStealAuthorized
-                  ? 'bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 cursor-default'
-                  : 'bg-gradient-to-tr from-red-600 to-rose-500 text-white shadow-lg shadow-red-600/30 hover:scale-105 active:scale-95 animate-pulse'
-              }`}
-              title={isStealAuthorized ? 'Robo de Puntos YA Autorizado' : 'Autorizar Robo de Puntos (50 pts)'}
-            >
-              <Zap className={`w-5 h-5 ${isStealAuthorized ? 'fill-yellow-400' : 'fill-white'}`} />
-            </button>
-
-            {/* 3. +10 Segundos Extra para Todos */}
+            {/* 2. +10 Segundos Extra para Todos */}
             <button
               type="button"
               onClick={() => {
                 setTimerLeft((t) => t + 10);
                 handleApplyPowerToAll('extra_time');
               }}
-              className="w-11 h-11 rounded-xl bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-400/40 text-cyan-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-cyan-600/20"
-              title="Dar +10 Segundos Extra a Todos los Estudiantes"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-400/40 text-cyan-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-cyan-600/20"
+              title="Dar +10 Segundos Extra a Todos"
             >
-              <Clock className="w-5 h-5" />
+              <Clock className="w-4 h-4" />
             </button>
 
-            {/* 4. Escudo Protector a Todos */}
+            {/* 3. Escudo Protector a Todos */}
             <button
               type="button"
               onClick={() => handleApplyPowerToAll('shield')}
-              className="w-11 h-11 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 border border-blue-400/40 text-blue-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-blue-600/20"
-              title="Otorgar Escudo Protector Anti-Robo a Todos"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 border border-blue-400/40 text-blue-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-blue-600/20"
+              title="Otorgar Escudo Protector Anti-Error a Todos"
             >
-              <Shield className="w-5 h-5" />
+              <Shield className="w-4 h-4" />
             </button>
 
-            {/* 5. Comodín 50:50 a Todos */}
+            {/* 4. Comodín 50:50 a Todos */}
             <button
               type="button"
               onClick={() => handleApplyPowerToAll('eliminate_two')}
-              className="w-11 h-11 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/40 text-emerald-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-emerald-600/20"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/40 text-emerald-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-emerald-600/20"
               title="Activar 50:50 (Eliminar 2 opciones incorrectas)"
             >
-              <Award className="w-5 h-5" />
+              <Award className="w-4 h-4" />
             </button>
 
-            {/* 6. Pista Pedagógica a Todos */}
+            {/* 5. Pista Pedagógica a Todos */}
             <button
               type="button"
               onClick={() => handleApplyPowerToAll('hint')}
-              className="w-11 h-11 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-400/40 text-amber-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-amber-600/20"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-yellow-600/30 hover:bg-yellow-600/50 border border-yellow-400/40 text-yellow-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-yellow-600/20"
               title="Dar Pista a Todos los Estudiantes"
             >
-              <HelpCircle className="w-5 h-5" />
+              <HelpCircle className="w-4 h-4" />
+            </button>
+
+            {/* 6. Protagonista (Spotlight) */}
+            <button
+              type="button"
+              onClick={() => handleApplyPowerToAll('spotlight')}
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-pink-600/30 hover:bg-pink-600/50 border border-pink-400/40 text-pink-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-pink-600/20"
+              title="Destacar a los estudiantes en pantalla"
+            >
+              <Sparkles className="w-4 h-4" />
+            </button>
+
+            {/* 7. Congelar Tiempo (Freeze) */}
+            <button
+              type="button"
+              onClick={() => handleApplyPowerToAll('freeze')}
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-sky-600/30 hover:bg-sky-600/50 border border-sky-400/40 text-sky-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-sky-600/20"
+              title="Congelar tiempo 5 segundos para todos"
+            >
+              <Flame className="w-4 h-4" />
+            </button>
+
+            {/* 8. Saltar Pregunta */}
+            <button
+              type="button"
+              onClick={() => handleApplyPowerToAll('skip_question')}
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 text-purple-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-purple-600/20"
+              title="Permitir saltar pregunta sin penalización"
+            >
+              <SkipForward className="w-4 h-4" />
+            </button>
+
+            {/* 9. Puntos Bonus (+500 pts) */}
+            <button
+              type="button"
+              onClick={() => handleApplyPowerToAll('bonus_points')}
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/30 hover:bg-amber-500/50 border border-amber-300/40 text-yellow-300 flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-amber-500/20"
+              title="Otorgar +500 Puntos Bonus a Todos"
+            >
+              <Crown className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -2588,6 +2714,45 @@ export default function SessionPage() {
               >
                 Cerrar Diagnóstico
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL FULLSCREEN ZOOM QR PARA UNIRSE EN VIVO DURANTE LA PARTIDA ── */}
+      {showLiveQrZoom && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-slate-900 border-2 border-purple-500/50 rounded-3xl p-6 sm:p-10 max-w-md w-full text-center shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setShowLiveQrZoom(false)}
+              className="absolute top-4 right-4 p-2 text-white/50 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+              title="Cerrar QR"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="w-14 h-14 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 mx-auto mb-3">
+              <QrCode className="w-8 h-8" />
+            </div>
+
+            <h3 className="text-2xl font-black text-white">¡Únete a la Partida en Vivo!</h3>
+            <p className="text-sm text-purple-200 mt-1 mb-6">Escanea con tu cámara o celular para ingresar de inmediato</p>
+
+            <div className="bg-white p-5 rounded-3xl shadow-2xl inline-block mx-auto mb-6">
+              <QRCodeSVG value={qrUrl} size={260} level="M" />
+            </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-around">
+              <div>
+                <span className="text-[10px] text-white/40 uppercase tracking-widest block font-bold">CÓDIGO PIN</span>
+                <span className="text-3xl font-black text-yellow-400 tracking-widest">{token}</span>
+              </div>
+              <div className="h-8 w-px bg-white/10" />
+              <div>
+                <span className="text-[10px] text-white/40 uppercase tracking-widest block font-bold">ENLACE DIRECTO</span>
+                <span className="text-xs text-white/70 font-mono">{qrUrl}</span>
+              </div>
             </div>
           </div>
         </div>

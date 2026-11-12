@@ -391,15 +391,11 @@ export default function GameEditorPage() {
               onChange={(e) => setGameMode(e.target.value as GameMode)}
               className="input text-xs bg-slate-900 border-white/10 py-2"
             >
-              <option value="battle_live">⚔️ Batalla en Vivo</option>
+              <option value="battle_live">⚔️ Batalla en Vivo (Multijugador)</option>
               <option value="individual">🏋️ Individual</option>
-              <option value="team_battle">🤝 Por Equipos</option>
-              <option value="survival">❤️ Supervivencia</option>
-              <option value="escape_room">🔐 Escape Room</option>
-              <option value="wheel">🎡 Ruleta</option>
-              <option value="find_error">🔍 Detecta el Error</option>
-              <option value="ordering">📋 Ordena y Gana</option>
-              <option value="true_false_fast">✅ Verdadero o Falso</option>
+              <option value="team_battle">🤝 Por Equipos (Turnos Automáticos)</option>
+              <option value="survival">❤️ Supervivencia (3 Corazones)</option>
+              <option value="wheel">🎡 Ruleta (El sistema elige qué estudiante responde)</option>
             </select>
           </div>
 
@@ -540,11 +536,8 @@ export default function GameEditorPage() {
                 >
                   <option value="single_choice">Selección Única (4 opciones)</option>
                   <option value="multiple_choice">Selección Múltiple</option>
-                  <option value="true_false">Verdadero o Falso</option>
                   <option value="short_answer">Respuesta Corta</option>
-                  <option value="ordering">Ordenar Elementos (Drag & Drop)</option>
                   <option value="matching">Relacionar Columnas</option>
-                  <option value="find_error">Identificar Errores</option>
                   <option value="image_based">Pregunta con Imagen</option>
                   <option value="situation">Interpretación de Casos</option>
                 </select>

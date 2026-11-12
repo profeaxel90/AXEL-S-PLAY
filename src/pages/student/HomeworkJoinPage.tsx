@@ -66,7 +66,7 @@ export default function HomeworkJoinPage() {
       return;
     }
     if (!gradeGroup.trim()) {
-      setInfoError('Por favor ingresa tu grado y grupo.');
+      setInfoError('Por favor ingresa tu categoría (ej: Primaria, Secundaria, Categoría A, Libre).');
       return;
     }
     // Guardar datos en sessionStorage para la pantalla de juego
@@ -210,12 +210,12 @@ export default function HomeworkJoinPage() {
                   />
                 </div>
 
-                {/* Grado */}
+                {/* Categoría */}
                 <div>
-                  <label className="block text-xs font-bold text-white/60 uppercase tracking-wide mb-1.5">Grado y Grupo *</label>
+                  <label className="block text-xs font-bold text-white/60 uppercase tracking-wide mb-1.5">Categoría *</label>
                   <input
                     type="text"
-                    placeholder="Ej: 7°A"
+                    placeholder="Ej: Primaria, Secundaria, Categoría A, Libre..."
                     value={gradeGroup}
                     onChange={(e) => { setGradeGroup(e.target.value); setInfoError(''); }}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500 transition-colors"
