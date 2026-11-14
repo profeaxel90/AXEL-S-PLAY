@@ -13,6 +13,7 @@ import { homeworkSync } from '../../lib/homeworkSync';
 import { decodeAssignmentPayload } from '../../lib/assignmentPayload';
 import PdfCanvasViewer from '../../components/common/PdfCanvasViewer';
 import FormattedTextViewer from '../../components/common/FormattedTextViewer';
+import LiveCameraModal from '../../components/common/LiveCameraModal';
 import type { HomeworkAnswerSubmission } from '../../types/homework';
 import MascotAvatar from '../../components/game/MascotAvatar';
 
@@ -174,6 +175,24 @@ export default function HomeworkPlayPage() {
   const [documentViewMode, setDocumentViewMode] = useState<'canvas' | 'text'>('canvas');
   const [teacherFeedback, setTeacherFeedback] = useState<string | null>(null);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [cameraTarget, setCameraTarget] = useState<'question' | 'summary'>('question');
+  const [dismissBrowserBanner, setDismissBrowserBanner] = useState(false);
+
+  const isEmbeddedBrowser = useMemo(() => {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    return /FBAN|FBAV|Instagram|WhatsApp|Line|XiaoMi|Huawei|Snapchat|MicroMessenger|GSA|GMS|WebView|wv/i.test(ua);
+  }, []);
+
+  const handleCameraCapturedPhoto = (dataUrl: string) => {
+    if (cameraTarget === 'question') {
+      setPhotoAnswer(dataUrl);
+      setStudentPhotos((prev) => (prev.includes(dataUrl) ? prev : [...prev, dataUrl]));
+    } else {
+      setStudentPhotos((prev) => (prev.includes(dataUrl) ? prev : [...prev, dataUrl]));
+    }
+  };
 
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
@@ -587,6 +606,13 @@ export default function HomeworkPlayPage() {
             </div>
           </div>
         )}
+
+        {/* Modal de Cámara en Pantalla en Vivo */}
+        <LiveCameraModal
+          isOpen={cameraModalOpen}
+          onClose={() => setCameraModalOpen(false)}
+          onCapture={handleCameraCapturedPhoto}
+        />
       </div>
     );
   }
@@ -658,35 +684,35 @@ export default function HomeworkPlayPage() {
                   Adjunta capturas claras de tus apuntes o procedimientos antes de enviar.
                 </p>
 
-                {/* Botones de Cámara y Galería con Interacción Táctil Directa Inmune a Bloqueos */}
+                {/* Botones de Cámara en Vivo y Galería */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-                  {/* Botón 1: Cámara Nativa con captura directa */}
-                  <div className="relative overflow-hidden rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs font-black shadow-md p-3.5 flex items-center justify-center gap-2 cursor-pointer transition-all select-none border border-purple-400/30">
-                    <Camera className="w-4 h-4 flex-shrink-0 pointer-events-none" />
-                    <span className="pointer-events-none">📸 Tomar Foto con Cámara</span>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/jpg,image/*"
-                      capture="environment"
-                      disabled={isProcessingPhoto || studentPhotos.length >= 6}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
-                      onChange={handleSummaryCameraUpload}
-                    />
-                  </div>
+                  {/* Botón 1: Cámara en Pantalla en Vivo (getUserMedia directo) */}
+                  <button
+                    type="button"
+                    disabled={isProcessingPhoto || studentPhotos.length >= 6}
+                    onClick={() => {
+                      setCameraTarget('summary');
+                      setCameraModalOpen(true);
+                    }}
+                    className="flex items-center justify-center gap-2 p-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white text-xs font-black shadow-md cursor-pointer transition-all border border-purple-400/30 disabled:opacity-40"
+                  >
+                    <Camera className="w-4 h-4 flex-shrink-0" />
+                    <span>📸 Tomar Foto con Cámara</span>
+                  </button>
 
                   {/* Botón 2: Galería / Archivos */}
-                  <div className="relative overflow-hidden rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white text-xs font-black shadow-md p-3.5 flex items-center justify-center gap-2 cursor-pointer transition-all select-none">
-                    <Plus className="w-4 h-4 text-emerald-400 flex-shrink-0 pointer-events-none" />
-                    <span className="pointer-events-none">📁 Elegir de Galería</span>
+                  <label className="flex items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white text-xs font-black shadow-md cursor-pointer transition-all disabled:opacity-40">
+                    <Plus className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <span>📁 Elegir de Galería</span>
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp,image/jpg,image/*"
                       multiple
                       disabled={isProcessingPhoto || studentPhotos.length >= 6}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+                      className="hidden"
                       onChange={handleSummaryGalleryUpload}
                     />
-                  </div>
+                  </label>
                 </div>
                 {studentPhotos.length > 0 ? (
                   <div className="grid grid-cols-4 gap-2">
@@ -751,6 +777,13 @@ export default function HomeworkPlayPage() {
             </div>
           </div>
         )}
+
+        {/* Modal de Cámara en Pantalla en Vivo */}
+        <LiveCameraModal
+          isOpen={cameraModalOpen}
+          onClose={() => setCameraModalOpen(false)}
+          onCapture={handleCameraCapturedPhoto}
+        />
       </div>
     );
   }
@@ -761,6 +794,42 @@ export default function HomeworkPlayPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-teal-950 to-slate-950 flex flex-col">
+      {/* Banner inteligente para navegadores embebidos (QR Scanner / WhatsApp / Instagram) */}
+      {isEmbeddedBrowser && !dismissBrowserBanner && (
+        <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-600 text-slate-950 px-3 py-2 text-xs flex items-center justify-between gap-2 shadow-lg shrink-0 font-semibold z-40">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertCircle className="w-4 h-4 shrink-0 text-slate-950" />
+            <span className="truncate">
+              Estás en el lector de QR. Si la cámara o galería no abren, abre en <strong>Chrome</strong> o <strong>Safari</strong>.
+            </span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                const url = window.location.href;
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(url).then(() => {
+                    alert('✓ Enlace copiado. Pégalo en Chrome o Safari para máximo rendimiento.');
+                  });
+                }
+              }}
+              className="px-2 py-1 bg-black/80 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+            >
+              Copiar enlace
+            </button>
+            <button
+              type="button"
+              onClick={() => setDismissBrowserBanner(true)}
+              className="p-1 text-slate-950 hover:bg-black/10 rounded cursor-pointer"
+              title="Cerrar aviso"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* HUD Superior */}
       <header className="sticky top-0 z-30 bg-black/40 backdrop-blur-md border-b border-white/10 px-4 py-3">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
@@ -1130,32 +1199,32 @@ export default function HomeworkPlayPage() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                      {/* Botón 1: Cámara Nativa con captura directa (Táctil Directo) */}
-                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-purple-600/30 p-4 flex items-center justify-center gap-2 cursor-pointer transition-all select-none border border-purple-400/30">
-                        <Camera className="w-5 h-5 flex-shrink-0 pointer-events-none" />
-                        <span className="pointer-events-none">📸 Tomar Foto con Cámara</span>
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,image/jpg,image/*"
-                          capture="environment"
-                          disabled={isProcessingPhoto}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
-                          onChange={handleQuestionCameraUpload}
-                        />
-                      </div>
+                      {/* Opción 1: Cámara en Pantalla en Vivo (getUserMedia directo) */}
+                      <button
+                        type="button"
+                        disabled={isProcessingPhoto}
+                        onClick={() => {
+                          setCameraTarget('question');
+                          setCameraModalOpen(true);
+                        }}
+                        className="flex items-center justify-center gap-2 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-purple-600/30 cursor-pointer transition-all border border-purple-400/30"
+                      >
+                        <Camera className="w-5 h-5 flex-shrink-0" />
+                        <span>📸 Tomar Foto con Cámara</span>
+                      </button>
 
-                      {/* Botón 2: Galería / Buscador de Fotos */}
-                      <div className="relative overflow-hidden rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white font-bold text-xs sm:text-sm shadow-md p-4 flex items-center justify-center gap-2 cursor-pointer transition-all select-none">
-                        <FileText className="w-5 h-5 text-emerald-400 flex-shrink-0 pointer-events-none" />
-                        <span className="pointer-events-none">📁 Elegir de Galería o Archivos</span>
+                      {/* Opción 2: Selector Universal de Galería / Archivos */}
+                      <label className="flex items-center justify-center gap-2 p-3.5 sm:p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white font-bold text-xs sm:text-sm shadow-md cursor-pointer transition-all select-none">
+                        <FileText className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                        <span>📁 Elegir de Galería o Archivos</span>
                         <input
                           type="file"
                           accept="image/jpeg,image/png,image/webp,image/jpg,image/*"
                           disabled={isProcessingPhoto}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+                          className="hidden"
                           onChange={handleQuestionGalleryUpload}
                         />
-                      </div>
+                      </label>
                     </div>
                   )}
                 </div>
@@ -1263,6 +1332,13 @@ export default function HomeworkPlayPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL CÁMARA EN VIVO EN PANTALLA */}
+      <LiveCameraModal
+        isOpen={cameraModalOpen}
+        onClose={() => setCameraModalOpen(false)}
+        onCapture={handleCameraCapturedPhoto}
+      />
     </div>
   );
 }
