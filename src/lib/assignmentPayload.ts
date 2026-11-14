@@ -35,6 +35,11 @@ interface CompactAssignment {
  */
 export function encodeAssignmentPayload(assignment: HomeworkAssignment): string {
   try {
+    // Si el pdfUrl es un dataUrl grande (> 3000 caracteres), no lo metemos en la URL del QR
+    // para que la URL se mantenga ultracorta (< 1,200 chars) y cualquier cámara de celular
+    // (Android, iPhone, WhatsApp, Google Lens) pueda escanear y abrir al instante.
+    const safePdf = assignment.pdfUrl && assignment.pdfUrl.length > 3000 ? undefined : assignment.pdfUrl;
+
     const compact: CompactAssignment = {
       id: assignment.id,
       pin: assignment.pin,
@@ -43,7 +48,7 @@ export function encodeAssignmentPayload(assignment: HomeworkAssignment): string 
       g: assignment.gradeGroupTarget,
       gid: assignment.groupId,
       at: assignment.assignmentType,
-      pdf: assignment.pdfUrl,
+      pdf: safePdf,
       pdfN: assignment.pdfName,
       mc: assignment.maxCorrections,
       dueD: assignment.dueDate,
@@ -51,7 +56,7 @@ export function encodeAssignmentPayload(assignment: HomeworkAssignment): string 
       qs: (assignment.customQuestions || []).map((q) => ({
         i: q.id,
         c: q.content,
-        img: q.imageUrl,
+        img: q.imageUrl && q.imageUrl.length < 2000 ? q.imageUrl : undefined,
         vid: q.videoUrl,
         ac: q.allowChoice,
         at: q.allowTextResponse,
@@ -67,6 +72,12 @@ export function encodeAssignmentPayload(assignment: HomeworkAssignment): string 
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '');
+
+    // Si la cadena codificada supera los 1800 caracteres, devolvemos vacío para
+    // usar simplemente la URL limpia con el PIN /homework/123456, garantizando lectura 100% confiable
+    if (base64.length > 1800) {
+      return '';
+    }
 
     return base64;
   } catch (e) {

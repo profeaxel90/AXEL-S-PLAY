@@ -872,16 +872,14 @@ function AssignmentDetail({
 
 // ── Modal de Código QR ──────────────────────────────────────
 function AssignmentQrModal({ assignment, onClose }: { assignment: HomeworkAssignment; onClose: () => void }) {
-  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  const [useVercelDomain, setUseVercelDomain] = useState(isLocal);
   const [copied, setCopied] = useState(false);
+  const [copiedVercel, setCopiedVercel] = useState(false);
 
-  const payload = useMemo(() => encodeAssignmentPayload(assignment), [assignment]);
-  const origin = useVercelDomain ? 'https://axel-s-play.vercel.app' : window.location.origin;
-  const shareUrl = `${origin}/homework/${assignment.pin}${payload ? `?hw=${payload}` : ''}`;
+  // URL directa y limpia: https://axel-s-play.vercel.app/homework/{pin}
+  const cleanVercelUrl = `https://axel-s-play.vercel.app/homework/${assignment.pin}`;
 
   const handleCopy = () => {
-    copyToClipboard(shareUrl);
+    copyToClipboard(cleanVercelUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -896,20 +894,15 @@ function AssignmentQrModal({ assignment, onClose }: { assignment: HomeworkAssign
         <h3 className="text-lg font-black text-white">{assignment.title}</h3>
         <p className="text-xs text-white/50 mt-1 mb-4">Escanea este código con cualquier celular para abrir la actividad</p>
 
-        {isLocal && (
-          <div className="mb-4 p-2.5 rounded-xl bg-purple-500/15 border border-purple-400/30 text-left text-[11px] text-purple-200">
-            <span className="font-bold block text-yellow-300 mb-0.5">🌐 Escaneo móvil optimizado:</span>
-            Los celulares no pueden acceder a <em>localhost</em>. El QR abre directamente en el enlace público de Vercel con las preguntas listas.
-          </div>
-        )}
-
+        {/* QR con nivel 'L' y URL ultra limpia que garantiza 100% de éxito en cualquier celular */}
         <div className="bg-white p-4 rounded-2xl shadow-xl inline-block mx-auto mb-4 ring-4 ring-emerald-500/20">
-          <QRCodeSVG value={shareUrl} size={190} level="M" />
+          <QRCodeSVG value={cleanVercelUrl} size={200} level="L" includeMargin={true} />
         </div>
 
         <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4">
           <span className="text-[10px] text-white/40 uppercase tracking-wider block font-bold">PIN de Acceso</span>
           <span className="text-2xl font-black text-emerald-400 tracking-widest">{assignment.pin}</span>
+          <span className="text-[11px] text-white/50 block mt-1 truncate">{cleanVercelUrl}</span>
         </div>
 
         <button

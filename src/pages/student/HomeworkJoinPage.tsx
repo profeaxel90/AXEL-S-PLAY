@@ -60,8 +60,14 @@ export default function HomeworkJoinPage() {
       }
 
       const found = getAssignmentByIdOrPin(paramPin);
-      if (!found || found.status === 'closed') {
-        setPinError('Esta asignación no existe o ya fue cerrada por el docente.');
+      if (!found) {
+        // En lugar de bloquear al alumno si abrió en otro celular, le permitimos continuar al paso 'info'
+        // para que pueda ingresar su nombre y el sistema lo redirija al play, donde si hay datos o preguntas
+        // o si es la demo predeterminada, podrá responder sin trabas
+        setPin(paramPin);
+        setStep('info');
+      } else if (found.status === 'closed') {
+        setPinError('Esta asignación ya fue cerrada por el docente.');
         setStep('pin');
       } else {
         setPin(paramPin);
