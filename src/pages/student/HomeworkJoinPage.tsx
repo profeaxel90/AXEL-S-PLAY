@@ -287,7 +287,7 @@ export default function HomeworkJoinPage() {
                   <label className="block text-xs font-bold text-white/60 uppercase tracking-wide mb-1.5">Nombre y Apellidos *</label>
                   <input
                     type="text"
-                    placeholder="Ej: Valentina Restrepo Castro"
+                    placeholder="Ej: Pepito Pérez"
                     value={fullName}
                     onChange={(e) => { setFullName(e.target.value); setInfoError(''); }}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500 transition-colors"

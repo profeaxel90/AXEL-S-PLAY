@@ -40,7 +40,7 @@ const INITIAL_ASSIGNMENTS: HomeworkAssignment[] = [
         id: 'sub-1',
         assignmentId: 'hw-demo-1',
         groupId: 'grp-demo-1',
-        studentFullName: 'Valentina Restrepo Castro',
+        studentFullName: 'Pepito Pérez',
         gradeGroup: 'Grado 6°A',
         avatar: 'Fox',
         score: 1850,
@@ -72,7 +72,7 @@ const INITIAL_ASSIGNMENTS: HomeworkAssignment[] = [
         id: 'sub-2',
         assignmentId: 'hw-demo-1',
         groupId: 'grp-demo-1',
-        studentFullName: 'Camilo Andrés Gómez',
+        studentFullName: 'Pepito Pérez',
         gradeGroup: 'Grado 6°A',
         avatar: 'Dragon',
         score: 1420,
@@ -87,7 +87,7 @@ const INITIAL_ASSIGNMENTS: HomeworkAssignment[] = [
         id: 'sub-3',
         assignmentId: 'hw-demo-1',
         groupId: 'grp-demo-1',
-        studentFullName: 'Mariana Sofia Morales',
+        studentFullName: 'Pepito Pérez',
         gradeGroup: 'Grado 6°A',
         avatar: 'Wizard',
         score: 1780,
@@ -163,12 +163,24 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
 
   // Cargar Asignaciones desde localStorage
   const loadInitialAssignments = (): HomeworkAssignment[] => {
-    if (typeof window === 'undefined') return INITIAL_ASSIGNMENTS;
+    const sanitizeNames = (list: HomeworkAssignment[]): HomeworkAssignment[] => {
+      return list.map((a) => ({
+        ...a,
+        submissions: (a.submissions || []).map((s) => {
+          if (/Valentina|Camilo|Mariana/i.test(s.studentFullName)) {
+            return { ...s, studentFullName: 'Pepito Pérez' };
+          }
+          return s;
+        }),
+      }));
+    };
+
+    if (typeof window === 'undefined') return sanitizeNames(INITIAL_ASSIGNMENTS);
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) return JSON.parse(stored);
+      if (stored) return sanitizeNames(JSON.parse(stored));
     } catch {}
-    return INITIAL_ASSIGNMENTS;
+    return sanitizeNames(INITIAL_ASSIGNMENTS);
   };
 
   const persistAssignments = (items: HomeworkAssignment[]) => {

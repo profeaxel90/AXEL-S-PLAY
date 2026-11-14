@@ -129,7 +129,7 @@ export default function StudentWorkspacePage() {
                   setInputName(e.target.value);
                   setNameError('');
                 }}
-                placeholder="Ej: Camilo Andrés Gómez"
+                placeholder="Ej: Pepito Pérez"
                 className="w-full p-3.5 rounded-xl bg-slate-950 border border-white/15 text-white text-sm focus:outline-none focus:border-emerald-500"
                 autoFocus
               />
