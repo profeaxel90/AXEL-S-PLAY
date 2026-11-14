@@ -188,6 +188,42 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
     }
   };
 
+  // Auto-reparar asignaciones existentes en background (si tienen pdfUrl pero no documentText)
+  if (typeof window !== 'undefined') {
+    setTimeout(async () => {
+      try {
+        const assignments = get().assignments;
+        let needsUpdate = false;
+        const updated = await Promise.all(
+          assignments.map(async (a) => {
+            if (a.pdfUrl && !a.documentText && a.pdfUrl.startsWith('data:')) {
+              try {
+                const base64 = a.pdfUrl.split(',')[1];
+                const binary = atob(base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                const { extractTextFromPdf } = await import('../lib/documentQuestionExtractor');
+                const extracted = await extractTextFromPdf(bytes.buffer);
+                if (extracted && extracted.trim().length > 10) {
+                  needsUpdate = true;
+                  return { ...a, documentText: extracted.trim() };
+                }
+              } catch (e) {
+                console.warn('[AutoHeal] Error reparando texto PDF:', e);
+              }
+            }
+            return a;
+          })
+        );
+        if (needsUpdate) {
+          set({ assignments: updated });
+          persistAssignments(updated);
+          console.log('[AutoHeal] ✓ Texto de asignaciones existentes reparado y sincronizado');
+        }
+      } catch {}
+    }, 500);
+  }
+
   return {
     groups: loadInitialGroups(),
     assignments: loadInitialAssignments(),

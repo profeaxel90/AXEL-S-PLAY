@@ -1,20 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, FileText, Layers } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, FileText, AlertCircle } from 'lucide-react';
 
 interface PdfCanvasViewerProps {
   pdfUrl: string;
   fileName?: string;
+  fallbackText?: string;
 }
 
-export default function PdfCanvasViewer({ pdfUrl, fileName }: PdfCanvasViewerProps) {
+function dataUrlToUint8Array(dataUrl: string): Uint8Array {
+  try {
+    const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  } catch (e) {
+    console.warn('[PdfCanvasViewer] Error convirtiendo base64:', e);
+    return new Uint8Array();
+  }
+}
+
+export default function PdfCanvasViewer({ pdfUrl, fileName, fallbackText }: PdfCanvasViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [scale, setScale] = useState<number>(1.2);
+  const [scale, setScale] = useState<number>(1.1);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'single' | 'scroll'>('scroll');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const pdfDocRef = useRef<any>(null);
 
   useEffect(() => {
     let isCancelled = false;
@@ -28,8 +44,13 @@ export default function PdfCanvasViewer({ pdfUrl, fileName }: PdfCanvasViewerPro
           pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.js`;
         }
 
+        const isDataUri = pdfUrl.startsWith('data:') || !pdfUrl.startsWith('http');
+        const documentSource = isDataUri
+          ? { data: dataUrlToUint8Array(pdfUrl) }
+          : { url: pdfUrl };
+
         const loadingTask = pdfjsLib.getDocument({
-          url: pdfUrl,
+          ...documentSource,
           useWorkerFetch: false,
           isEvalSupported: false,
           useSystemFonts: true,
@@ -37,16 +58,14 @@ export default function PdfCanvasViewer({ pdfUrl, fileName }: PdfCanvasViewerPro
 
         const pdf = await loadingTask.promise;
         if (isCancelled) return;
+        pdfDocRef.current = pdf;
         setNumPages(pdf.numPages);
         setCurrentPage(1);
         setLoading(false);
-
-        // Renderizar página actual
-        renderPage(pdf, 1);
       } catch (err: any) {
         if (!isCancelled) {
-          console.warn('[PdfCanvasViewer] Error cargando PDF:', err);
-          setError('No se pudo visualizar el archivo visualmente.');
+          console.warn('[PdfCanvasViewer] Error cargando PDF con pdf.js:', err);
+          setError('No se pudo procesar la vista gráfica del PDF.');
           setLoading(false);
         }
       }
@@ -58,14 +77,16 @@ export default function PdfCanvasViewer({ pdfUrl, fileName }: PdfCanvasViewerPro
 
     return () => {
       isCancelled = true;
+      pdfDocRef.current = null;
     };
   }, [pdfUrl]);
 
-  const renderPage = async (pdfDoc?: any, pageNum = currentPage) => {
+  const renderPage = async (pageNum: number) => {
+    const pdf = pdfDocRef.current;
+    if (!pdf || !canvasRef.current) return;
+
     try {
-      const pdfjsLib = await import('pdfjs-dist');
-      const doc = pdfDoc || (await pdfjsLib.getDocument(pdfUrl).promise);
-      const page = await doc.getPage(pageNum);
+      const page = await pdf.getPage(pageNum);
       const canvas = canvasRef.current;
       if (!canvas) return;
 
@@ -89,15 +110,15 @@ export default function PdfCanvasViewer({ pdfUrl, fileName }: PdfCanvasViewerPro
 
       await page.render(renderContext).promise;
     } catch (e) {
-      console.warn('[PdfCanvasViewer] Error renderizando página:', e);
+      console.warn('[PdfCanvasViewer] Error renderizando página canvas:', e);
     }
   };
 
   useEffect(() => {
-    if (!loading && !error && numPages > 0) {
-      renderPage();
+    if (!loading && !error && pdfDocRef.current && numPages > 0) {
+      renderPage(currentPage);
     }
-  }, [currentPage, scale]);
+  }, [currentPage, scale, loading, error, numPages]);
 
   if (loading) {
     return (
@@ -109,7 +130,23 @@ export default function PdfCanvasViewer({ pdfUrl, fileName }: PdfCanvasViewerPro
   }
 
   if (error) {
-    return null; // Fallback al visor de texto si hay error visual
+    return (
+      <div className="p-4 rounded-2xl bg-slate-900/90 border border-white/10 space-y-3">
+        <div className="flex items-center gap-2 text-xs text-amber-300 font-bold">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>Vista de lectura directa activa</span>
+        </div>
+        {fallbackText ? (
+          <div className="max-h-72 overflow-y-auto text-xs text-slate-100 leading-relaxed whitespace-pre-line p-3 bg-slate-950 rounded-xl border border-white/5 font-normal">
+            {fallbackText}
+          </div>
+        ) : (
+          <p className="text-xs text-white/50">
+            Documento: {fileName || 'Guía de la asignación'}. Puedes leer las instrucciones y resolver las preguntas abajo.
+          </p>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -128,7 +165,7 @@ export default function PdfCanvasViewer({ pdfUrl, fileName }: PdfCanvasViewerPro
                 type="button"
                 disabled={currentPage <= 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="p-1 text-white/70 hover:text-white disabled:opacity-30 rounded"
+                className="p-1 text-white/70 hover:text-white disabled:opacity-30 rounded cursor-pointer"
                 title="Página anterior"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -140,7 +177,7 @@ export default function PdfCanvasViewer({ pdfUrl, fileName }: PdfCanvasViewerPro
                 type="button"
                 disabled={currentPage >= numPages}
                 onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
-                className="p-1 text-white/70 hover:text-white disabled:opacity-30 rounded"
+                className="p-1 text-white/70 hover:text-white disabled:opacity-30 rounded cursor-pointer"
                 title="Página siguiente"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -151,8 +188,8 @@ export default function PdfCanvasViewer({ pdfUrl, fileName }: PdfCanvasViewerPro
           <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
             <button
               type="button"
-              onClick={() => setScale((s) => Math.max(0.8, s - 0.2))}
-              className="p-1 text-white/70 hover:text-white rounded"
+              onClick={() => setScale((s) => Math.max(0.7, s - 0.2))}
+              className="p-1 text-white/70 hover:text-white rounded cursor-pointer"
               title="Alejar"
             >
               <ZoomOut className="w-3.5 h-3.5" />
@@ -160,7 +197,7 @@ export default function PdfCanvasViewer({ pdfUrl, fileName }: PdfCanvasViewerPro
             <button
               type="button"
               onClick={() => setScale((s) => Math.min(2.0, s + 0.2))}
-              className="p-1 text-white/70 hover:text-white rounded"
+              className="p-1 text-white/70 hover:text-white rounded cursor-pointer"
               title="Acercar"
             >
               <ZoomIn className="w-3.5 h-3.5" />
@@ -170,13 +207,10 @@ export default function PdfCanvasViewer({ pdfUrl, fileName }: PdfCanvasViewerPro
       </div>
 
       {/* Contenedor del Canvas con Scroll Nativo */}
-      <div
-        ref={scrollContainerRef}
-        className="overflow-auto max-h-[60vh] sm:max-h-[75vh] p-2 sm:p-4 bg-slate-900 flex justify-center items-start selection:bg-none"
-      >
+      <div className="overflow-auto max-h-[60vh] sm:max-h-[75vh] p-2 sm:p-4 bg-slate-900 flex justify-center items-start">
         <canvas
           ref={canvasRef}
-          className="rounded-lg shadow-xl bg-white max-w-full"
+          className="rounded-lg shadow-2xl bg-white max-w-full"
         />
       </div>
     </div>

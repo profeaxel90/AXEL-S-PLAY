@@ -469,28 +469,56 @@ function NewAssignmentModal({ defaultGameId, initialAssignment, onClose, onCreat
             </div>
 
             {/* Lectura / Texto de la Guía o Taller (Visible directamente en el celular del estudiante) */}
-            <div className="p-3 rounded-xl bg-slate-900 border border-emerald-500/30 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="block text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Lectura / Guía del Taller (El estudiante la leerá directamente en pantalla)</span>
+            <div className="p-4 rounded-2xl bg-slate-900 border-2 border-emerald-500/40 space-y-2.5 shadow-lg">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <label className="text-xs font-black text-emerald-300 flex items-center gap-1.5 uppercase tracking-wide">
+                  <FileText className="w-4 h-4 text-emerald-400" />
+                  <span>📖 Lectura / Texto Largo del Taller (Lectura Directa en Celular y PC)</span>
                 </label>
-                {documentText && (
-                  <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                    {documentText.length} caracteres
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {documentText && (
+                    <span className="text-[10px] text-emerald-300 font-bold bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
+                      {documentText.length} caracteres · ~{documentText.trim().split(/\s+/).length} palabras
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const clip = await navigator.clipboard.readText();
+                        if (clip) setDocumentText((prev) => (prev ? `${prev}\n\n${clip}` : clip));
+                      } catch {
+                        alert('No se pudo acceder al portapapeles. Pega el texto manualmente con Ctrl+V.');
+                      }
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/30 text-emerald-200 text-[11px] font-bold flex items-center gap-1 transition-all"
+                    title="Pegar texto copiado del portapapeles"
+                  >
+                    <Clipboard className="w-3 h-3" />
+                    <span>Pegar texto</span>
+                  </button>
+                  {documentText && (
+                    <button
+                      type="button"
+                      onClick={() => setDocumentText('')}
+                      className="text-[10px] text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded bg-red-500/10 hover:bg-red-500/20 transition-colors"
+                      title="Borrar texto"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
               </div>
               <textarea
-                rows={4}
+                rows={6}
                 value={documentText}
                 onChange={(e) => setDocumentText(e.target.value)}
-                placeholder="Escribe o pega aquí el contenido de la lectura, taller o guía. Al subir un archivo PDF o Word, se extraerá aquí automáticamente para que el estudiante lo lea en pantalla sin descargarlo."
-                className="input text-xs w-full py-2 bg-slate-950 border-white/10 text-white placeholder-white/30 resize-y font-normal leading-relaxed"
+                placeholder="Escribe o pega aquí el contenido de la lectura, texto largo, taller o guía completa. Al subir un archivo PDF o Word, se extraerá aquí de forma automática. El estudiante podrá leerlo cómodamente en su celular o computador sin descargar archivos."
+                className="input text-xs w-full py-2.5 bg-slate-950 border-white/10 text-white placeholder-white/40 resize-y font-normal leading-relaxed shadow-inner"
               />
-              <p className="text-[10px] text-white/40">
-                💡 Al subir un PDF/Word se auto-extrae aquí. También puedes redactar o pegar el texto directamente.
-              </p>
+              <div className="flex items-center justify-between text-[11px] text-emerald-400/80">
+                <span>⭐ Recomendado: El alumno lee todo directamente en pantalla sin depender de visores externos ni descargas.</span>
+              </div>
             </div>
           </div>
 

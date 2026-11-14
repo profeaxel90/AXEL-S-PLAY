@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2, XCircle, RotateCcw, Send, Home, AlertCircle,
@@ -170,6 +170,12 @@ export default function HomeworkPlayPage() {
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [documentViewMode, setDocumentViewMode] = useState<'canvas' | 'text'>('canvas');
   const [teacherFeedback, setTeacherFeedback] = useState<string | null>(null);
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const summaryCameraRef = useRef<HTMLInputElement | null>(null);
+  const summaryGalleryRef = useRef<HTMLInputElement | null>(null);
 
   const maxCorrections = assignment?.maxCorrections ?? 3;
   const currentQ = questions[currentIndex];
@@ -329,18 +335,79 @@ export default function HomeworkPlayPage() {
     setSubmitted(true);
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSummaryCameraUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (studentPhotos.length >= 6) return;
+    setIsProcessingPhoto(true);
+    try {
+      const compressed = await compressImageToWebP(file);
+      if (compressed) {
+        setStudentPhotos((prev) => [...prev, compressed]);
+      }
+    } catch (err) {
+      console.warn('[Camera] Error procesando imagen:', err);
+    } finally {
+      setIsProcessingPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSummaryGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const remainingSlots = Math.max(0, 6 - studentPhotos.length);
     const selected = Array.from(files).slice(0, remainingSlots);
-    for (const file of selected) {
-      const webpUrl = await compressImageToWebP(file);
-      if (webpUrl) {
-        setStudentPhotos((prev) => [...prev, webpUrl]);
+    setIsProcessingPhoto(true);
+    try {
+      for (const file of selected) {
+        const compressed = await compressImageToWebP(file);
+        if (compressed) {
+          setStudentPhotos((prev) => [...prev, compressed]);
+        }
       }
+    } catch (err) {
+      console.warn('[Gallery] Error procesando fotos:', err);
+    } finally {
+      setIsProcessingPhoto(false);
+      e.target.value = '';
     }
-    e.target.value = '';
+  };
+
+  const handleQuestionCameraUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessingPhoto(true);
+    try {
+      const compressed = await compressImageToWebP(file);
+      if (compressed) {
+        setPhotoAnswer(compressed);
+        setStudentPhotos((prev) => [...prev, compressed]);
+      }
+    } catch (err) {
+      console.warn('[Question Camera] Error procesando imagen:', err);
+    } finally {
+      setIsProcessingPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleQuestionGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessingPhoto(true);
+    try {
+      const compressed = await compressImageToWebP(file);
+      if (compressed) {
+        setPhotoAnswer(compressed);
+        setStudentPhotos((prev) => [...prev, compressed]);
+      }
+    } catch (err) {
+      console.warn('[Question Gallery] Error procesando imagen:', err);
+    } finally {
+      setIsProcessingPhoto(false);
+      e.target.value = '';
+    }
   };
 
   const removePhoto = (indexToRemove: number) => {
@@ -578,36 +645,55 @@ export default function HomeworkPlayPage() {
                     <Camera className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Fotos de tu cuaderno ({studentPhotos.length}/6)</span>
                   </div>
+                  {isProcessingPhoto && (
+                    <span className="flex items-center gap-1.5 text-xs text-amber-300 font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full animate-pulse">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando foto...
+                    </span>
+                  )}
                 </div>
                 <p className="text-[11px] text-white/40 mb-3">
                   Adjunta capturas claras de tus apuntes o procedimientos antes de enviar.
                 </p>
 
+                {/* Inputs nativos ocultos activados por referencia */}
+                <input
+                  ref={summaryCameraRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handleSummaryCameraUpload}
+                />
+                <input
+                  ref={summaryGalleryRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleSummaryGalleryUpload}
+                />
+
                 {/* Botones Nativos de Cámara y Galería */}
                 <div className="grid grid-cols-2 gap-2 mb-3">
-                  <label className="relative flex items-center justify-center gap-1.5 p-3 rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs font-black shadow-md cursor-pointer overflow-hidden transition-all text-center select-none">
+                  <button
+                    type="button"
+                    disabled={isProcessingPhoto || studentPhotos.length >= 6}
+                    onClick={() => summaryCameraRef.current?.click()}
+                    className="flex items-center justify-center gap-1.5 p-3 rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs font-black shadow-md cursor-pointer transition-all text-center select-none disabled:opacity-40"
+                  >
                     <Camera className="w-4 h-4 flex-shrink-0" />
                     <span>📸 Cámara</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
-                      onChange={handlePhotoUpload}
-                    />
-                  </label>
+                  </button>
 
-                  <label className="relative flex items-center justify-center gap-1.5 p-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white text-xs font-black shadow-md cursor-pointer overflow-hidden transition-all text-center select-none">
+                  <button
+                    type="button"
+                    disabled={isProcessingPhoto || studentPhotos.length >= 6}
+                    onClick={() => summaryGalleryRef.current?.click()}
+                    className="flex items-center justify-center gap-1.5 p-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white text-xs font-black shadow-md cursor-pointer transition-all text-center select-none disabled:opacity-40"
+                  >
                     <Plus className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>📁 Galería</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
-                      onChange={handlePhotoUpload}
-                    />
-                  </label>
+                  </button>
                 </div>
                 {studentPhotos.length > 0 ? (
                   <div className="grid grid-cols-4 gap-2">
@@ -778,7 +864,11 @@ export default function HomeworkPlayPage() {
                 </div>
 
                 {documentViewMode === 'canvas' ? (
-                  <PdfCanvasViewer pdfUrl={assignment.pdfUrl} fileName={assignment.pdfName} />
+                  <PdfCanvasViewer
+                    pdfUrl={assignment.pdfUrl}
+                    fileName={assignment.pdfName}
+                    fallbackText={assignment.documentText || assignment.description}
+                  />
                 ) : (
                   <div className="rounded-2xl border border-emerald-500/40 bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 shadow-xl space-y-3">
                     <div className="max-h-64 sm:max-h-80 overflow-y-auto pr-2 text-slate-100 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-normal selection:bg-emerald-500/30">
@@ -861,7 +951,7 @@ export default function HomeworkPlayPage() {
         {(() => {
           const hasChoice = currentQ.allowChoice !== false && (currentQ.options?.length ?? 0) > 0;
           const hasText = Boolean(currentQ.allowTextResponse);
-          const hasPhoto = Boolean(currentQ.allowPhotoUpload);
+          const hasPhoto = Boolean(currentQ.allowPhotoUpload || assignment.allowPhotoUpload !== false);
           const isMultiInput = hasText || hasPhoto;
 
           return (
@@ -961,6 +1051,11 @@ export default function HomeworkPlayPage() {
                         Captura o sube una imagen clara de tu cuaderno
                       </p>
                     </div>
+                    {isProcessingPhoto && (
+                      <span className="flex items-center gap-1.5 text-xs text-amber-300 font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full animate-pulse">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando foto...
+                      </span>
+                    )}
                   </div>
 
                   {photoAnswer ? (
@@ -983,50 +1078,46 @@ export default function HomeworkPlayPage() {
                       )}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                      {/* Botón 1: Cámara Nativa (Android / iOS) */}
-                      <label className="relative flex items-center justify-center gap-2 p-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-purple-600/30 cursor-pointer overflow-hidden transition-all select-none">
-                        <Camera className="w-4 h-4 flex-shrink-0" />
-                        <span>📸 Tomar Foto con Cámara</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            const webpUrl = await compressImageToWebP(file);
-                            if (webpUrl) {
-                              setPhotoAnswer(webpUrl);
-                              setStudentPhotos((prev) => [...prev, webpUrl]);
-                            }
-                            e.target.value = '';
-                          }}
-                        />
-                      </label>
+                    <>
+                      <input
+                        ref={cameraInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={handleQuestionCameraUpload}
+                      />
+                      <input
+                        ref={galleryInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleQuestionGalleryUpload}
+                      />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                        {/* Botón 1: Cámara Nativa (Android / iOS) */}
+                        <button
+                          type="button"
+                          disabled={isProcessingPhoto}
+                          onClick={() => cameraInputRef.current?.click()}
+                          className="flex items-center justify-center gap-2 p-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-purple-600/30 cursor-pointer transition-all select-none disabled:opacity-40"
+                        >
+                          <Camera className="w-4 h-4 flex-shrink-0" />
+                          <span>📸 Tomar Foto con Cámara</span>
+                        </button>
 
-                      {/* Botón 2: Galería / Buscador de Fotos */}
-                      <label className="relative flex items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white font-bold text-xs shadow-md cursor-pointer overflow-hidden transition-all select-none">
-                        <FileText className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                        <span>📁 Elegir de Galería</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            const webpUrl = await compressImageToWebP(file);
-                            if (webpUrl) {
-                              setPhotoAnswer(webpUrl);
-                              setStudentPhotos((prev) => [...prev, webpUrl]);
-                            }
-                            e.target.value = '';
-                          }}
-                        />
-                      </label>
-                    </div>
+                        {/* Botón 2: Galería / Buscador de Fotos */}
+                        <button
+                          type="button"
+                          disabled={isProcessingPhoto}
+                          onClick={() => galleryInputRef.current?.click()}
+                          className="flex items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white font-bold text-xs shadow-md cursor-pointer transition-all select-none disabled:opacity-40"
+                        >
+                          <FileText className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                          <span>📁 Elegir de Galería</span>
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
               )}

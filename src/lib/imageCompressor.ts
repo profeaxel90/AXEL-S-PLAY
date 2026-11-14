@@ -1,52 +1,74 @@
 /**
- * Compresor automático de imágenes a formato WebP ligero (optimizado para celular y PC).
- * Reduce fotos de 4-8 MB a ~80-150 KB manteniendo alta legibilidad para cuadernos y tareas.
+ * Compresor ultra-rápido de fotos para móviles y PC.
+ * Utiliza URL.createObjectURL para evitar bloqueos de memoria en Safari/Chrome móvil.
+ * Reduce fotos de 4-15 MB tomadas con cámara a ~80-150 KB en formato JPEG/WebP de alta nitidez.
  */
-export async function compressImageToWebP(file: File, maxDimension = 1280, quality = 0.78): Promise<string> {
+export async function compressImageToWebP(file: File, maxDimension = 1280, quality = 0.8): Promise<string> {
   return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
+    try {
+      const objectUrl = URL.createObjectURL(file);
       const img = new Image();
+
       img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-
-        if (width > maxDimension || height > maxDimension) {
-          if (width > height) {
-            height = Math.round((height * maxDimension) / width);
-            width = maxDimension;
-          } else {
-            width = Math.round((width * maxDimension) / height);
-            height = maxDimension;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(e.target?.result as string);
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, width, height);
-
-        // Probar compresión WebP, fallback a JPEG
         try {
-          let dataUrl = canvas.toDataURL('image/webp', quality);
-          if (!dataUrl.startsWith('data:image/webp')) {
-            dataUrl = canvas.toDataURL('image/jpeg', quality);
+          URL.revokeObjectURL(objectUrl);
+          let width = img.naturalWidth || img.width;
+          let height = img.naturalHeight || img.height;
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
           }
-          resolve(dataUrl);
-        } catch {
-          resolve(canvas.toDataURL('image/jpeg', quality));
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            const fallbackReader = new FileReader();
+            fallbackReader.onload = () => resolve(fallbackReader.result as string);
+            fallbackReader.onerror = () => resolve('');
+            fallbackReader.readAsDataURL(file);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // image/jpeg es 100% compatible con todos los navegadores móviles y ligero
+          try {
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            resolve(dataUrl);
+          } catch {
+            resolve(canvas.toDataURL());
+          }
+        } catch (e) {
+          console.warn('[Compressor] Error en compresión canvas:', e);
+          const fallbackReader = new FileReader();
+          fallbackReader.onload = () => resolve(fallbackReader.result as string);
+          fallbackReader.onerror = () => resolve('');
+          fallbackReader.readAsDataURL(file);
         }
       };
-      img.onerror = () => resolve(e.target?.result as string);
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = () => resolve('');
-    reader.readAsDataURL(file);
+
+      img.onerror = () => {
+        try { URL.revokeObjectURL(objectUrl); } catch {}
+        const fallbackReader = new FileReader();
+        fallbackReader.onload = () => resolve(fallbackReader.result as string);
+        fallbackReader.onerror = () => resolve('');
+        fallbackReader.readAsDataURL(file);
+      };
+
+      img.src = objectUrl;
+    } catch {
+      const fallbackReader = new FileReader();
+      fallbackReader.onload = () => resolve(fallbackReader.result as string);
+      fallbackReader.onerror = () => resolve('');
+      fallbackReader.readAsDataURL(file);
+    }
   });
 }
