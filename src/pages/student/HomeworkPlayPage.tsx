@@ -178,6 +178,7 @@ export default function HomeworkPlayPage() {
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [cameraTarget, setCameraTarget] = useState<'question' | 'summary'>('question');
   const [dismissBrowserBanner, setDismissBrowserBanner] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isEmbeddedBrowser = useMemo(() => {
     if (typeof navigator === 'undefined') return false;
@@ -315,46 +316,52 @@ export default function HomeworkPlayPage() {
   }, [isLastQuestion]);
 
   const handleSubmit = () => {
-    if (!assignment || !studentData) return;
+    if (!assignment || !studentData || isSubmitting) return;
+    setIsSubmitting(true);
 
-    const finalAnswers: HomeworkAnswerSubmission[] = answers.map((a, i) => {
-      const q = questions[i];
-      const correctOpt = (q.options ?? []).find((o) => o.id === q.correctAnswer);
-      return {
-        questionIndex: i,
-        questionPrompt: q.content,
-        selectedOptionText: a?.selectedOptionText ?? '(sin respuesta)',
-        correctOptionText: correctOpt?.text ?? '',
-        isCorrect: a?.isCorrect ?? false,
-        wasCorrected: (a?.corrections ?? 0) > 0,
-        writtenAnswer: a?.writtenAnswer,
-        studentPhoto: a?.studentPhoto,
-      };
-    });
+    try {
+      const finalAnswers: HomeworkAnswerSubmission[] = answers.map((a, i) => {
+        const q = questions[i];
+        const correctOpt = (q.options ?? []).find((o) => o.id === q.correctAnswer);
+        return {
+          questionIndex: i,
+          questionPrompt: q.content,
+          selectedOptionText: a?.selectedOptionText ?? '(sin respuesta)',
+          correctOptionText: correctOpt?.text ?? '',
+          isCorrect: a?.isCorrect ?? false,
+          wasCorrected: (a?.corrections ?? 0) > 0,
+          writtenAnswer: a?.writtenAnswer,
+          studentPhoto: a?.studentPhoto,
+        };
+      });
 
-    const correctCount = finalAnswers.filter((a) => a.isCorrect).length;
-    const accuracy = Math.round((correctCount / questions.length) * 100);
-    const score = finalAnswers.reduce((acc, a) => acc + (a.isCorrect ? 1000 : 0), 0);
+      const correctCount = finalAnswers.filter((a) => a.isCorrect).length;
+      const accuracy = Math.round((correctCount / questions.length) * 100);
+      const score = finalAnswers.reduce((acc, a) => acc + (a.isCorrect ? 1000 : 0), 0);
 
-    const sub = submitHomework(assignment.id, {
-      assignmentId: assignment.id,
-      studentFullName: studentData.fullName,
-      gradeGroup: studentData.gradeGroup,
-      avatar: studentData.avatar,
-      score,
-      totalQuestions: questions.length,
-      correctAnswers: correctCount,
-      accuracy,
-      correctionsUsed: globalCorrectionsUsed,
-      answers: finalAnswers,
-      studentPhotos: studentPhotos.length > 0 ? studentPhotos : undefined,
-    });
+      const sub = submitHomework(assignment.id, {
+        assignmentId: assignment.id,
+        studentFullName: studentData.fullName,
+        gradeGroup: studentData.gradeGroup,
+        avatar: studentData.avatar,
+        score,
+        totalQuestions: questions.length,
+        correctAnswers: correctCount,
+        accuracy,
+        correctionsUsed: globalCorrectionsUsed,
+        answers: finalAnswers,
+        studentPhotos: studentPhotos.length > 0 ? studentPhotos : undefined,
+      });
 
-    // Enviar a la nube educativa en tiempo real hacia el PC del profesor
-    homeworkSync.sendSubmission(assignment.pin, sub);
+      // Enviar a la nube educativa en tiempo real hacia el PC del profesor
+      homeworkSync.sendSubmission(assignment.pin, sub);
 
-    sessionStorage.removeItem('hw_student');
-    setSubmitted(true);
+      sessionStorage.removeItem('hw_student');
+      setSubmitted(true);
+    } catch (err) {
+      console.error('[Submit] Error al enviar tarea:', err);
+      setIsSubmitting(false);
+    }
   };
 
   const handleSummaryCameraUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -701,22 +708,30 @@ export default function HomeworkPlayPage() {
                   </button>
 
                   {/* Botón 2: Galería / Archivos */}
-                  <label
-                    htmlFor="summary-gallery-input"
-                    className="relative flex items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white text-xs font-black shadow-md cursor-pointer transition-all overflow-hidden"
+                  <button
+                    type="button"
+                    disabled={isProcessingPhoto || studentPhotos.length >= 6}
+                    onClick={() => {
+                      if (summaryGalleryRef.current) {
+                        summaryGalleryRef.current.value = '';
+                        summaryGalleryRef.current.click();
+                      }
+                    }}
+                    className="flex items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white text-xs font-black shadow-md cursor-pointer transition-all disabled:opacity-40"
                   >
                     <Plus className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>📁 Elegir de Galería</span>
-                    <input
-                      id="summary-gallery-input"
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      disabled={isProcessingPhoto || studentPhotos.length >= 6}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                      onChange={handleSummaryGalleryUpload}
-                    />
-                  </label>
+                  </button>
+                  <input
+                    ref={summaryGalleryRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    disabled={isProcessingPhoto || studentPhotos.length >= 6}
+                    className="sr-only"
+                    aria-hidden="true"
+                    onChange={handleSummaryGalleryUpload}
+                  />
                 </div>
                 {studentPhotos.length > 0 ? (
                   <div className="grid grid-cols-4 gap-2">
@@ -755,10 +770,19 @@ export default function HomeworkPlayPage() {
                 ← Revisar
               </button>
               <button
+                type="button"
+                disabled={isSubmitting}
                 onClick={handleSubmit}
-                className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white font-black text-base hover:opacity-95 active:scale-[0.98] transition-all shadow-xl shadow-emerald-500/30 cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white font-black text-base hover:opacity-95 active:scale-[0.98] transition-all shadow-xl shadow-emerald-500/30 cursor-pointer disabled:opacity-50"
               >
-                <span>🚀 ENVIAR TAREA</span>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Enviando tarea...</span>
+                  </>
+                ) : (
+                  <span>🚀 ENVIAR TAREA</span>
+                )}
               </button>
             </div>
           </div>
@@ -1218,21 +1242,28 @@ export default function HomeworkPlayPage() {
                       </button>
 
                       {/* Opción 2: Selector Universal de Galería / Archivos */}
-                      <label
-                        htmlFor="q-gallery-input"
-                        className="relative flex items-center justify-center gap-2 p-3.5 sm:p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white font-bold text-xs sm:text-sm shadow-md cursor-pointer transition-all select-none overflow-hidden"
+                      <button
+                        type="button"
+                        disabled={isProcessingPhoto}
+                        onClick={() => {
+                          if (galleryInputRef.current) {
+                            galleryInputRef.current.value = '';
+                            galleryInputRef.current.click();
+                          }
+                        }}
+                        className="flex items-center justify-center gap-2 p-3.5 sm:p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white font-bold text-xs sm:text-sm shadow-md cursor-pointer transition-all disabled:opacity-40"
                       >
                         <FileText className="w-5 h-5 text-emerald-400 flex-shrink-0" />
                         <span>📁 Elegir de Galería o Archivos</span>
-                        <input
-                          id="q-gallery-input"
-                          type="file"
-                          accept="image/*"
-                          disabled={isProcessingPhoto}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                          onChange={handleQuestionGalleryUpload}
-                        />
-                      </label>
+                      </button>
+                      <input
+                        ref={galleryInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        aria-hidden="true"
+                        onChange={handleQuestionGalleryUpload}
+                      />
                     </div>
                   )}
                 </div>
@@ -1295,10 +1326,19 @@ export default function HomeworkPlayPage() {
                 </div>
               )}
               <button
-                onClick={handleNext}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-sm hover:opacity-90 transition-opacity shadow-lg shadow-emerald-600/25 cursor-pointer"
+                type="button"
+                disabled={isSubmitting}
+                onClick={isLastQuestion ? handleSubmit : handleNext}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-sm hover:opacity-90 transition-opacity shadow-lg shadow-emerald-600/25 cursor-pointer disabled:opacity-50"
               >
-                {isLastQuestion ? '🚀 ENVIAR TAREA' : 'Siguiente →'}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Enviando tarea...</span>
+                  </>
+                ) : (
+                  <span>{isLastQuestion ? '🚀 ENVIAR TAREA' : 'Siguiente →'}</span>
+                )}
               </button>
             </div>
           </div>
@@ -1314,10 +1354,18 @@ export default function HomeworkPlayPage() {
           <div className="pt-2">
             <button
               type="button"
-              onClick={() => setShowSummary(true)}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white font-black text-base hover:opacity-95 active:scale-[0.98] shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              disabled={isSubmitting}
+              onClick={handleSubmit}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white font-black text-base hover:opacity-95 active:scale-[0.98] shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
             >
-              <span>🚀 ENVIAR TAREA</span>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Enviando tarea...</span>
+                </>
+              ) : (
+                <span>🚀 ENVIAR TAREA</span>
+              )}
             </button>
           </div>
         )}

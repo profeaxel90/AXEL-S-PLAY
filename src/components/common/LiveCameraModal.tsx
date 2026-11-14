@@ -16,6 +16,7 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileFallbackRef = useRef<HTMLInputElement | null>(null);
+  const bottomGalleryInputRef = useRef<HTMLInputElement | null>(null);
 
   // Iniciar la cámara en vivo
   const startCamera = async (mode: 'environment' | 'user') => {
@@ -199,21 +200,27 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
             <h4 className="font-black text-base">Acceso a cámara no disponible</h4>
             <p className="text-xs text-white/60 leading-relaxed">{errorMsg}</p>
             <div className="pt-2">
-              <label
-                htmlFor="camera-fallback-file-input"
-                className="relative flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs shadow-lg cursor-pointer hover:opacity-90 active:scale-95 transition-all overflow-hidden"
+              <button
+                type="button"
+                onClick={() => {
+                  if (fileFallbackRef.current) {
+                    fileFallbackRef.current.value = '';
+                    fileFallbackRef.current.click();
+                  }
+                }}
+                className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs shadow-lg cursor-pointer hover:opacity-90 active:scale-95 transition-all w-full"
               >
                 <ImageIcon className="w-4 h-4" />
                 <span>📁 Elegir Foto de mis Archivos / Galería</span>
-                <input
-                  id="camera-fallback-file-input"
-                  ref={fileFallbackRef}
-                  type="file"
-                  accept="image/*"
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  onChange={handleFallbackFile}
-                />
-              </label>
+              </button>
+              <input
+                ref={fileFallbackRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                aria-hidden="true"
+                onChange={handleFallbackFile}
+              />
             </div>
           </div>
         )}
@@ -259,20 +266,27 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
         {!capturedPreview && !errorMsg && (
           <div className="flex items-center justify-center gap-8 w-full">
             {/* Botón de Galería alternativo */}
-            <label
-              htmlFor="live-camera-gallery-input"
-              className="relative p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer active:scale-90 overflow-hidden flex items-center justify-center"
-              title="Subir foto existente"
+            <button
+              type="button"
+              onClick={() => {
+                if (bottomGalleryInputRef.current) {
+                  bottomGalleryInputRef.current.value = '';
+                  bottomGalleryInputRef.current.click();
+                }
+              }}
+              className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer active:scale-90 flex items-center justify-center"
+              title="Subir foto existente desde la galería"
             >
               <ImageIcon className="w-5 h-5 text-emerald-400" />
-              <input
-                id="live-camera-gallery-input"
-                type="file"
-                accept="image/*"
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                onChange={handleFallbackFile}
-              />
-            </label>
+            </button>
+            <input
+              ref={bottomGalleryInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              aria-hidden="true"
+              onChange={handleFallbackFile}
+            />
 
             {/* BOTÓN DISPARADOR PRINCIPAL (Círculo fotográfico grande) */}
             <button
