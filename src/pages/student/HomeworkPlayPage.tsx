@@ -701,15 +701,19 @@ export default function HomeworkPlayPage() {
                   </button>
 
                   {/* Botón 2: Galería / Archivos */}
-                  <label className="flex items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white text-xs font-black shadow-md cursor-pointer transition-all disabled:opacity-40">
+                  <label
+                    htmlFor="summary-gallery-input"
+                    className="relative flex items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white text-xs font-black shadow-md cursor-pointer transition-all overflow-hidden"
+                  >
                     <Plus className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>📁 Elegir de Galería</span>
                     <input
+                      id="summary-gallery-input"
                       type="file"
-                      accept="image/jpeg,image/png,image/webp,image/jpg,image/*"
+                      accept="image/*"
                       multiple
                       disabled={isProcessingPhoto || studentPhotos.length >= 6}
-                      className="hidden"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                       onChange={handleSummaryGalleryUpload}
                     />
                   </label>
@@ -1214,14 +1218,18 @@ export default function HomeworkPlayPage() {
                       </button>
 
                       {/* Opción 2: Selector Universal de Galería / Archivos */}
-                      <label className="flex items-center justify-center gap-2 p-3.5 sm:p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white font-bold text-xs sm:text-sm shadow-md cursor-pointer transition-all select-none">
+                      <label
+                        htmlFor="q-gallery-input"
+                        className="relative flex items-center justify-center gap-2 p-3.5 sm:p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white font-bold text-xs sm:text-sm shadow-md cursor-pointer transition-all select-none overflow-hidden"
+                      >
                         <FileText className="w-5 h-5 text-emerald-400 flex-shrink-0" />
                         <span>📁 Elegir de Galería o Archivos</span>
                         <input
+                          id="q-gallery-input"
                           type="file"
-                          accept="image/jpeg,image/png,image/webp,image/jpg,image/*"
+                          accept="image/*"
                           disabled={isProcessingPhoto}
-                          className="hidden"
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                           onChange={handleQuestionGalleryUpload}
                         />
                       </label>

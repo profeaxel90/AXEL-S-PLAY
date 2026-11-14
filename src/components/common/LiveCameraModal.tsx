@@ -199,14 +199,18 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
             <h4 className="font-black text-base">Acceso a cámara no disponible</h4>
             <p className="text-xs text-white/60 leading-relaxed">{errorMsg}</p>
             <div className="pt-2">
-              <label className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs shadow-lg cursor-pointer hover:opacity-90 active:scale-95 transition-all">
+              <label
+                htmlFor="camera-fallback-file-input"
+                className="relative flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs shadow-lg cursor-pointer hover:opacity-90 active:scale-95 transition-all overflow-hidden"
+              >
                 <ImageIcon className="w-4 h-4" />
                 <span>📁 Elegir Foto de mis Archivos / Galería</span>
                 <input
+                  id="camera-fallback-file-input"
                   ref={fileFallbackRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/jpg,image/*"
-                  className="hidden"
+                  accept="image/*"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                   onChange={handleFallbackFile}
                 />
               </label>
@@ -255,12 +259,17 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
         {!capturedPreview && !errorMsg && (
           <div className="flex items-center justify-center gap-8 w-full">
             {/* Botón de Galería alternativo */}
-            <label className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer active:scale-90" title="Subir foto existente">
+            <label
+              htmlFor="live-camera-gallery-input"
+              className="relative p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer active:scale-90 overflow-hidden flex items-center justify-center"
+              title="Subir foto existente"
+            >
               <ImageIcon className="w-5 h-5 text-emerald-400" />
               <input
+                id="live-camera-gallery-input"
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/jpg,image/*"
-                className="hidden"
+                accept="image/*"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 onChange={handleFallbackFile}
               />
             </label>

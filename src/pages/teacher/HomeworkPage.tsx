@@ -849,6 +849,7 @@ function StudentDetail({
   const { addTeacherFeedback } = useHomeworkStore();
   const [feedbackText, setFeedbackText] = useState(submission.teacherFeedback || '');
   const [savedAlert, setSavedAlert] = useState(false);
+  const [selectedZoomPhoto, setSelectedZoomPhoto] = useState<string | null>(null);
 
   const PRESET_FEEDBACKS = [
     '🌟 ¡Excelente trabajo! Muy bien argumentado.',
@@ -963,24 +964,22 @@ function StudentDetail({
           </h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {submission.studentPhotos.map((photo, pIdx) => (
-              <a
+              <div
                 key={pIdx}
-                href={photo}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group relative rounded-2xl overflow-hidden border border-white/20 bg-black/40 hover:border-purple-400 transition-all shadow-md block"
+                onClick={() => setSelectedZoomPhoto(photo)}
+                className="group relative rounded-2xl overflow-hidden border border-white/20 bg-black/40 hover:border-purple-400 transition-all shadow-md block cursor-pointer"
                 title="Clic para ampliar foto"
               >
                 <img
                   src={photo}
                   alt={`Evidencia ${pIdx + 1}`}
-                  className="w-full h-36 object-cover group-hover:scale-105 transition-transform"
+                  className="w-full h-36 object-cover group-hover:scale-105 transition-transform cursor-pointer"
                 />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1">
-                  <Eye className="w-4 h-4" />
-                  <span>Ampliar</span>
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1.5 backdrop-blur-[2px]">
+                  <Eye className="w-4 h-4 text-emerald-400" />
+                  <span>Ampliar Foto</span>
                 </div>
-              </a>
+              </div>
             ))}
           </div>
         </div>
@@ -1031,9 +1030,17 @@ function StudentDetail({
               {ans.studentPhoto && (
                 <div className="mt-2 p-2.5 rounded-xl bg-slate-900/80 border border-purple-500/30 text-xs">
                   <span className="text-purple-300 font-bold block mb-1">📸 Foto de trabajo adjunta:</span>
-                  <a href={ans.studentPhoto} target="_blank" rel="noopener noreferrer">
-                    <img src={ans.studentPhoto} alt="Evidencia" className="max-h-48 rounded-lg object-contain border border-white/20 hover:scale-105 transition-transform" />
-                  </a>
+                  <div
+                    onClick={() => setSelectedZoomPhoto(ans.studentPhoto!)}
+                    className="cursor-pointer group relative inline-block rounded-lg overflow-hidden border border-white/20 hover:border-purple-400"
+                    title="Clic para ampliar foto"
+                  >
+                    <img src={ans.studentPhoto} alt="Evidencia" className="max-h-48 rounded-lg object-contain group-hover:scale-105 transition-transform" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1">
+                      <Eye className="w-4 h-4 text-emerald-400" />
+                      <span>Ampliar</span>
+                    </div>
+                  </div>
                 </div>
               )}
               {ans.wasCorrected && (
@@ -1043,6 +1050,54 @@ function StudentDetail({
           </div>
         ))}
       </div>
+
+      {/* Modal Lightbox de Zoom de Foto para el Docente */}
+      {selectedZoomPhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in"
+          onClick={() => setSelectedZoomPhoto(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[92vh] flex flex-col items-center w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative w-full flex items-center justify-center bg-black/80 rounded-3xl overflow-hidden border border-white/20 shadow-2xl p-2">
+              <img
+                src={selectedZoomPhoto}
+                alt="Foto ampliada del estudiante"
+                className="max-w-full max-h-[75vh] object-contain rounded-2xl"
+              />
+              <button
+                type="button"
+                onClick={() => setSelectedZoomPhoto(null)}
+                className="absolute top-3 right-3 p-2 bg-black/80 hover:bg-red-600 text-white rounded-full border border-white/20 transition-colors shadow-lg cursor-pointer"
+                title="Cerrar vista ampliada"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3 mt-3">
+              <a
+                href={selectedZoomPhoto}
+                download={`tarea-${submission.studentFullName.replace(/\s+/g, '_')}.jpg`}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white font-bold text-xs shadow-lg transition-all"
+              >
+                <Download className="w-4 h-4" />
+                <span>Descargar Foto en Alta Calidad</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setSelectedZoomPhoto(null)}
+                className="flex items-center gap-1.5 px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+                <span>Cerrar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
