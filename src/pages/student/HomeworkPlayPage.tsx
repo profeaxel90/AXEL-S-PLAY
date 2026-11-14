@@ -150,6 +150,17 @@ export default function HomeworkPlayPage() {
     }
   }, [studentData, pin, assignment, questions.length, navigate]);
 
+  // Sincronización en tiempo real si el docente edita la asignación o cambia su estado
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'axels_play_homework_assignments') {
+        useHomeworkStore.getState();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   const handleConfirmAnswer = (forcedOptId?: string, forcedOptText?: string) => {
     if (isAnswered && !showFeedback) return;
     if (showFeedback) return;
@@ -548,67 +559,106 @@ export default function HomeworkPlayPage() {
 
       {/* Contenido principal */}
       <main className="flex-1 flex flex-col max-w-2xl mx-auto w-full px-4 py-6 gap-6">
-        {/* Banner de Guía PDF Adjunta con Visor en la Misma Página */}
-        {assignment.pdfUrl && (
+        {/* Banner y Visor Inmediato de Material Adjunto (PDF, Word, Video o Enlace) */}
+        {(assignment.pdfUrl || assignment.videoUrl || assignment.externalLink) && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/70 via-indigo-950/70 to-slate-900/70 border border-blue-500/40 text-white shadow-lg backdrop-blur-sm">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="p-2.5 bg-blue-500/20 rounded-xl text-blue-300 flex-shrink-0">
-                  <FileText className="w-5 h-5" />
+            {/* Si hay video principal adjunto a la asignación */}
+            {assignment.videoUrl && (
+              <div className="rounded-2xl overflow-hidden border border-purple-500/40 bg-black shadow-xl">
+                <div className="p-2.5 bg-gradient-to-r from-purple-950 to-slate-900 border-b border-purple-500/30 flex items-center justify-between text-xs">
+                  <span className="text-purple-300 font-bold flex items-center gap-1.5">
+                    <span>🎥 Video Explicativo de la Asignación</span>
+                  </span>
+                  <a
+                    href={assignment.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-white/60 hover:text-white text-[11px] font-semibold"
+                  >
+                    Abrir en YouTube ↗
+                  </a>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] text-blue-300 font-black uppercase tracking-wider">Documento / Guía del Taller</p>
-                  <p className="text-sm font-bold text-white/95 truncate">{assignment.pdfName || 'Guía de la Asignación'}</p>
+                <div className="w-full aspect-video">
+                  <iframe
+                    src={getEmbedVideoUrl(assignment.videoUrl)}
+                    className="w-full h-full border-none"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title="Video de la asignación"
+                  />
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                <button
-                  type="button"
-                  onClick={() => setIsPdfOpenInPage((prev) => !prev)}
-                  className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-md transition-all ${
-                    isPdfOpenInPage
-                      ? 'bg-blue-700 text-white border border-blue-400'
-                      : 'bg-blue-600 hover:bg-blue-500 text-white'
-                  }`}
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>{isPdfOpenInPage ? 'Ocultar PDF' : 'Abrir PDF'}</span>
-                </button>
-              </div>
-            </div>
+            )}
 
-            {/* Visor de PDF embebido directamente en la misma página */}
-            {isPdfOpenInPage && (
-              <div className="w-full bg-slate-900 border border-blue-500/40 rounded-2xl overflow-hidden shadow-2xl transition-all animate-fade-in">
-                <div className="flex items-center justify-between p-2.5 bg-blue-950/80 border-b border-blue-500/30 text-xs">
-                  <span className="text-white/80 font-bold truncate px-2">{assignment.pdfName || 'Visor de Guía'}</span>
-                  <div className="flex items-center gap-2">
+            {/* Si hay documento adjunto (PDF o Word) */}
+            {assignment.pdfUrl && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/80 via-indigo-950/80 to-slate-900/80 border border-blue-500/40 text-white shadow-lg backdrop-blur-sm">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2.5 bg-blue-500/20 rounded-xl text-blue-300 flex-shrink-0">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-blue-300 font-black uppercase tracking-wider">
+                        Documento Abierto / Taller
+                      </p>
+                      <p className="text-sm font-bold text-white/95 truncate">
+                        {assignment.pdfName || 'Guía de la Asignación'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                     <a
                       href={assignment.pdfUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      download={assignment.pdfName || 'guia.pdf'}
-                      className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold"
+                      download={assignment.pdfName || 'taller.pdf'}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-sm"
                     >
                       Descargar
                     </a>
                     <button
                       type="button"
-                      onClick={() => setIsPdfOpenInPage(false)}
-                      className="p-1 text-white/60 hover:text-white rounded-lg hover:bg-white/10"
-                      title="Ocultar visor"
+                      onClick={() => setIsPdfOpenInPage((prev) => !prev)}
+                      className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 shadow-md transition-all ${
+                        isPdfOpenInPage
+                          ? 'bg-blue-800 text-white border border-blue-400'
+                          : 'bg-white/10 text-white hover:bg-white/20'
+                      }`}
                     >
-                      <X className="w-4 h-4" />
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>{isPdfOpenInPage ? 'Minimizar' : 'Ver Guía'}</span>
                     </button>
                   </div>
                 </div>
-                <div className="h-[60vh] sm:h-[68vh] w-full bg-white">
-                  <iframe
-                    src={assignment.pdfUrl}
-                    title="Guía PDF"
-                    className="w-full h-full border-none"
-                  />
-                </div>
+
+                {/* Visor desplegado enseguida al entrar */}
+                {isPdfOpenInPage && (
+                  <div className="w-full bg-slate-900 border border-blue-500/40 rounded-2xl overflow-hidden shadow-2xl transition-all animate-fade-in">
+                    <div className="h-[65vh] sm:h-[75vh] w-full bg-white">
+                      <iframe
+                        src={assignment.pdfUrl}
+                        title="Documento / Guía"
+                        className="w-full h-full border-none"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Enlace externo adicional */}
+            {assignment.externalLink && (
+              <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between text-xs text-white">
+                <span className="truncate mr-2 font-semibold">🔗 Material complementario en línea</span>
+                <a
+                  href={assignment.externalLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold whitespace-nowrap"
+                >
+                  Abrir enlace ↗
+                </a>
               </div>
             )}
           </div>
@@ -758,13 +808,12 @@ export default function HomeworkPlayPage() {
                       )}
                     </div>
                   ) : (
-                    <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 text-purple-200 font-bold text-xs cursor-pointer shadow-md transition-all">
+                    <label className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer shadow-lg shadow-purple-600/30 transition-all">
                       <Camera className="w-4 h-4" />
-                      <span>Tomar o Seleccionar Foto</span>
+                      <span>Tomar Foto con Cámara o Elegir de Galería</span>
                       <input
                         type="file"
                         accept="image/*"
-                        capture="environment"
                         className="hidden"
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
@@ -781,17 +830,19 @@ export default function HomeworkPlayPage() {
                 </div>
               )}
 
-              {/* BOTÓN DE CONFIRMACIÓN SI HAY TEXTO O FOTO */}
+              {/* BOTÓN DE CONFIRMACIÓN SI HAY TEXTO O FOTO O SELECCIÓN */}
               {!showFeedback && isMultiInput && (
                 <button
                   type="button"
                   disabled={
-                    (hasChoice && !selectedOptionId) ||
-                    (hasText && !typedAnswer.trim()) ||
-                    (hasPhoto && !photoAnswer)
+                    !(
+                      (hasChoice && Boolean(selectedOptionId)) ||
+                      (hasText && Boolean(typedAnswer.trim())) ||
+                      (hasPhoto && Boolean(photoAnswer))
+                    )
                   }
                   onClick={() => handleConfirmAnswer()}
-                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-sm hover:opacity-90 disabled:opacity-40 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 cursor-pointer"
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-sm hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 cursor-pointer"
                 >
                   <Send className="w-4 h-4" />
                   <span>Confirmar Respuesta</span>

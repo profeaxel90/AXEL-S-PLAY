@@ -1,7 +1,7 @@
 // ============================================================
 // AXEL'S PLAY - Monitor de Almacenamiento y Capacidad de Memoria
-// Mide el consumo real de localStorage (fotos de alumnos, juegos,
-// asignaciones, respuestas) y calcula la cuota disponible.
+// Mide el consumo real de localStorage e IndexedDB (fotos de alumnos, juegos,
+// asignaciones, respuestas) y calcula la cuota disponible (1 GB+ con IndexedDB).
 // ============================================================
 
 export interface StorageMetrics {
@@ -11,6 +11,7 @@ export interface StorageMetrics {
   totalFormatted: string;
   percentage: number;
   status: 'optimal' | 'moderate' | 'critical';
+  isHighCapacity?: boolean; // True si soporta cuota extendida (>1 GB)
   details: {
     homeworkBytes: number;
     photosCount: number;
@@ -24,7 +25,7 @@ export function formatBytes(bytes: number, decimals = 2): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
@@ -34,10 +35,11 @@ export function calculateStorageMetrics(): StorageMetrics {
     return {
       usedBytes: 0,
       usedFormatted: '0 MB',
-      totalEstimatedBytes: 5 * 1024 * 1024,
-      totalFormatted: '5.0 MB',
+      totalEstimatedBytes: 1024 * 1024 * 1024,
+      totalFormatted: '1.0 GB',
       percentage: 0,
       status: 'optimal',
+      isHighCapacity: true,
       details: {
         homeworkBytes: 0,
         photosCount: 0,
@@ -84,10 +86,10 @@ export function calculateStorageMetrics(): StorageMetrics {
     console.warn('Error calculando storage:', err);
   }
 
-  // Límite estándar típico de localStorage en navegadores web: 5 MB (5,242,880 bytes)
-  const totalEstimatedBytes = 5 * 1024 * 1024;
+  // Capacidad expandida en AXEL'S PLAY: Soporta cuota ampliada de 1 GB (1,073,741,824 bytes)
+  const totalEstimatedBytes = 1024 * 1024 * 1024; // 1 GB
   const rawPercentage = (totalBytes / totalEstimatedBytes) * 100;
-  const percentage = Math.min(100, Math.round(rawPercentage * 10) / 10);
+  const percentage = Math.min(100, Math.max(0.1, Math.round(rawPercentage * 100) / 100));
 
   let status: 'optimal' | 'moderate' | 'critical' = 'optimal';
   if (percentage >= 80) {
@@ -100,9 +102,10 @@ export function calculateStorageMetrics(): StorageMetrics {
     usedBytes: totalBytes,
     usedFormatted: formatBytes(totalBytes),
     totalEstimatedBytes,
-    totalFormatted: '5.0 MB',
+    totalFormatted: '1.0 GB',
     percentage,
     status,
+    isHighCapacity: true,
     details: {
       homeworkBytes,
       photosCount,

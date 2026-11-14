@@ -125,6 +125,9 @@ interface HomeworkState {
     assignmentType?: 'quiz' | 'pdf_guide' | 'exam_review';
     pdfUrl?: string;
     pdfName?: string;
+    docUrl?: string;
+    videoUrl?: string;
+    externalLink?: string;
     allowPhotoUpload?: boolean;
     allowRetries?: boolean;
     customQuestions?: any[];
@@ -245,6 +248,9 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
         assignmentType: data.assignmentType || (data.pdfUrl ? 'pdf_guide' : 'quiz'),
         pdfUrl: data.pdfUrl,
         pdfName: data.pdfName,
+        docUrl: data.docUrl,
+        videoUrl: data.videoUrl,
+        externalLink: data.externalLink,
         allowPhotoUpload: data.allowPhotoUpload ?? true,
         allowRetries: data.allowRetries ?? false,
         customQuestions: data.customQuestions,

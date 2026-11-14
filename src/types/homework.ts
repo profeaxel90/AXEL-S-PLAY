@@ -80,8 +80,11 @@ export interface HomeworkAssignment {
   createdAt: string;
   // Modalidades avanzadas de asignación
   assignmentType?: 'quiz' | 'pdf_guide' | 'exam_review';
-  pdfUrl?: string; // Guía o taller en PDF adjunto por el docente
-  pdfName?: string; // Nombre del archivo PDF
+  pdfUrl?: string; // Guía o taller en PDF o Word (.pdf, .doc, .docx) adjunto por el docente
+  pdfName?: string; // Nombre del archivo documento
+  docUrl?: string; // Documento adicional o enlace
+  videoUrl?: string; // Enlace de video educativo (YouTube, etc.)
+  externalLink?: string; // Enlace externo de consulta pedagógica
   allowPhotoUpload?: boolean; // Permite a los estudiantes subir fotos de su trabajo
   allowRetries?: boolean; // Permite reintentar para mejorar nota (Modo Repaso)
   customQuestions?: HomeworkQuestion[]; // Preguntas creadas directamente por el docente en la asignación
