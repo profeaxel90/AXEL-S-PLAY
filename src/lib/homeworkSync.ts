@@ -239,16 +239,6 @@ class HomeworkSyncManager {
           console.log(`[HomeworkSync] 💬 Retroalimentación enviada para ${studentName} por Profe ${teacherName}`);
         }
       });
-      // También notificar canal general de cambios en tiempo real
-      const changesTopic = `axelsplay/hw/${pin}/changes`;
-      this.client?.publish(changesTopic, JSON.stringify({
-        type: 'FEEDBACK_UPDATED',
-        submissionId,
-        studentName,
-        teacherName: teacherName || 'Axel',
-        feedback,
-        timestamp: new Date().toISOString(),
-      }), { qos: 1 });
     };
 
     if (this.connected) {

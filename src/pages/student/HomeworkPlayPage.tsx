@@ -185,8 +185,8 @@ export default function HomeworkPlayPage() {
   const [teacherPopup, setTeacherPopup] = useState<{
     visible: boolean;
     teacherName: string;
-    feedback?: string;
   } | null>(null);
+  const lastSeenChangeRef = useRef<number>(Date.now());
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [cameraTarget, setCameraTarget] = useState<'question' | 'summary'>('question');
@@ -231,37 +231,29 @@ export default function HomeworkPlayPage() {
         (mySub && data.submissionId === mySub.id);
 
       if (isForMe) {
-        const rawTeacherName = data.teacherName || assignment.teacherName || 'Axel';
-        const cleanName = getCleanTeacherName(rawTeacherName);
-
         if (mySub) {
           useHomeworkStore.getState().addTeacherFeedback(assignment.id, mySub.id, data.feedback);
         }
-
-        setTeacherPopup({
-          visible: true,
-          teacherName: cleanName,
-          feedback: data.feedback,
-        });
+        // La retroalimentación se muestra directamente en pantalla en tiempo real y ya (sin ventana emergente)
+        setTeacherFeedback(data.feedback);
       }
     });
 
     const unsubChanges = homeworkSync.listenForTeacherChanges(assignment.pin, (data) => {
-      const isRelevant =
-        !data.studentName ||
-        data.studentName.toLowerCase() === studentData.fullName.toLowerCase() ||
-        (mySub && data.submissionId === mySub?.id);
+      // El mensaje emergente es EXCLUSIVAMENTE para cambios en los elementos de la tarea (preguntas, contenido, guía)
+      if (data.type !== 'ASSIGNMENT_UPDATED') return;
 
-      if (isRelevant) {
-        const rawTeacherName = data.teacherName || assignment.teacherName || 'Axel';
-        const cleanName = getCleanTeacherName(rawTeacherName);
+      const changeTime = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
+      if (changeTime <= lastSeenChangeRef.current) return;
+      lastSeenChangeRef.current = changeTime;
 
-        setTeacherPopup({
-          visible: true,
-          teacherName: cleanName,
-          feedback: data.feedback,
-        });
-      }
+      const rawTeacherName = data.teacherName || assignment.teacherName || 'Axel';
+      const cleanName = getCleanTeacherName(rawTeacherName);
+
+      setTeacherPopup({
+        visible: true,
+        teacherName: cleanName,
+      });
     });
 
     return () => {
@@ -271,19 +263,11 @@ export default function HomeworkPlayPage() {
   }, [assignment, studentData]);
 
   const handleApplyTeacherUpdates = () => {
-    if (teacherPopup?.feedback) {
-      setTeacherFeedback(teacherPopup.feedback);
-    }
-    if (assignment && studentData) {
-      const latestAsgn = useHomeworkStore.getState().getAssignmentByIdOrPin(assignment.pin);
-      if (latestAsgn) {
-        const mySub = latestAsgn.submissions.find(
-          (s) => s.studentFullName.toLowerCase() === studentData.fullName.toLowerCase()
-        );
-        if (mySub?.teacherFeedback) {
-          setTeacherFeedback(mySub.teacherFeedback);
-        }
-      }
+    // Sincronizar cambios en los elementos de la tarea
+    if (assignment?.pin) {
+      homeworkSync.listenForAssignment(assignment.pin, (updatedHw) => {
+        useHomeworkStore.getState().importAssignment(updatedHw);
+      });
     }
     setTeacherPopup(null);
   };
@@ -583,26 +567,29 @@ export default function HomeworkPlayPage() {
           </p>
         </div>
 
-        {/* Modal Emergente de Notificación en Tiempo Real */}
+        {/* Modal Emergente de Notificación en Tiempo Real (Solo cambios en elementos de la tarea) */}
         {teacherPopup?.visible && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
             <div className="bg-slate-900 border-2 border-emerald-500 rounded-3xl p-6 sm:p-7 max-w-sm w-full text-center shadow-2xl relative animate-scale-up">
+              {/* Botón X para cerrar mensaje emergente */}
+              <button
+                type="button"
+                onClick={() => setTeacherPopup(null)}
+                className="absolute top-4 right-4 p-2 text-white/40 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+                title="Cerrar mensaje"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
               <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4 border border-emerald-500/40 shadow-inner">
                 <Sparkles className="w-7 h-7 text-emerald-400 animate-pulse" />
               </div>
 
               <h3 className="text-lg font-black text-white mb-2">¡Novedad de tu Profesor!</h3>
 
-              <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-2xl p-4 mb-4 text-emerald-100 text-sm font-black leading-relaxed shadow-inner uppercase tracking-wide">
+              <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-2xl p-4 mb-5 text-emerald-100 text-sm font-black leading-relaxed shadow-inner uppercase tracking-wide">
                 📢 PROFE {teacherPopup.teacherName.toUpperCase()} HA REALIZADO CAMBIOS ACTUALIZA PARA VISUALIZARLOS
               </div>
-
-              {teacherPopup.feedback && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4 text-xs text-left max-h-32 overflow-y-auto">
-                  <span className="text-[10px] text-emerald-400 font-bold uppercase block mb-1">Comentario:</span>
-                  <p className="text-white whitespace-pre-wrap font-medium">"{teacherPopup.feedback}"</p>
-                </div>
-              )}
 
               <button
                 type="button"
@@ -1365,26 +1352,29 @@ export default function HomeworkPlayPage() {
         onCapture={handleCameraCapturedPhoto}
       />
 
-      {/* MODAL EMERGENTE DE CAMBIOS EN TIEMPO REAL */}
+      {/* MODAL EMERGENTE DE CAMBIOS EN TIEMPO REAL (Solo para elementos de la tarea) */}
       {teacherPopup?.visible && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
           <div className="bg-slate-900 border-2 border-emerald-500 rounded-3xl p-6 sm:p-7 max-w-sm w-full text-center shadow-2xl relative animate-scale-up">
+            {/* Botón X para cerrar mensaje emergente */}
+            <button
+              type="button"
+              onClick={() => setTeacherPopup(null)}
+              className="absolute top-4 right-4 p-2 text-white/40 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+              title="Cerrar mensaje"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
             <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4 border border-emerald-500/40 shadow-inner">
               <Sparkles className="w-7 h-7 text-emerald-400 animate-pulse" />
             </div>
 
             <h3 className="text-lg font-black text-white mb-2">¡Novedad de tu Profesor!</h3>
 
-            <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-2xl p-4 mb-4 text-emerald-100 text-sm font-black leading-relaxed shadow-inner uppercase tracking-wide">
+            <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-2xl p-4 mb-5 text-emerald-100 text-sm font-black leading-relaxed shadow-inner uppercase tracking-wide">
               📢 PROFE {teacherPopup.teacherName.toUpperCase()} HA REALIZADO CAMBIOS ACTUALIZA PARA VISUALIZARLOS
             </div>
-
-            {teacherPopup.feedback && (
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4 text-xs text-left max-h-32 overflow-y-auto">
-                <span className="text-[10px] text-emerald-400 font-bold uppercase block mb-1">Comentario:</span>
-                <p className="text-white whitespace-pre-wrap font-medium">"{teacherPopup.feedback}"</p>
-              </div>
-            )}
 
             <button
               type="button"
