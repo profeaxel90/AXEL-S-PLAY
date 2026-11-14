@@ -2,14 +2,44 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   CheckCircle2, XCircle, RotateCcw, Send, Home, AlertCircle,
-  FileText, Camera, Eye, Trash2, X, Plus
+  FileText, Camera, Eye, Trash2, X, Plus, Loader2
 } from 'lucide-react';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
 import { SAMPLE_GAMES } from '../../data/mockGames';
 import { compressImageToWebP } from '../../lib/imageCompressor';
+import { homeworkSync } from '../../lib/homeworkSync';
 import type { HomeworkAnswerSubmission } from '../../types/homework';
 import MascotAvatar from '../../components/game/MascotAvatar';
+
+function openDocumentInMobile(dataUrl: string, fileName = 'documento.pdf') {
+  if (!dataUrl) return;
+  if (dataUrl.startsWith('data:')) {
+    try {
+      const arr = dataUrl.split(',');
+      const mime = arr[0].match(/:(.*?);/)?.[1] || 'application/pdf';
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const blob = new Blob([u8arr], { type: mime });
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.target = '_blank';
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch {
+      window.open(dataUrl, '_blank');
+    }
+  } else {
+    window.open(dataUrl, '_blank');
+  }
+}
 
 function getEmbedVideoUrl(url?: string): string {
   if (!url) return '';
@@ -59,7 +89,8 @@ interface DraftAnswer {
 export default function HomeworkPlayPage() {
   const navigate = useNavigate();
   const { pin } = useParams<{ pin: string }>();
-  const { getAssignmentByIdOrPin, submitHomework } = useHomeworkStore();
+  const assignments = useHomeworkStore((state) => state.assignments);
+  const { submitHomework } = useHomeworkStore();
 
   // Recuperar datos del estudiante desde sessionStorage
   const [studentData] = useState<StudentData | null>(() => {
@@ -72,7 +103,34 @@ export default function HomeworkPlayPage() {
     }
   });
 
-  const assignment = pin ? getAssignmentByIdOrPin(pin) : undefined;
+  const assignment = useMemo(() => {
+    return assignments.find((a) => a.pin === pin || a.id === pin);
+  }, [assignments, pin]);
+
+  const [isSyncingRemote, setIsSyncingRemote] = useState(!assignment);
+
+  useEffect(() => {
+    if (assignment) {
+      setIsSyncingRemote(false);
+      return;
+    }
+    if (!pin) return;
+
+    setIsSyncingRemote(true);
+    const unsubscribe = homeworkSync.listenForAssignment(pin, () => {
+      setIsSyncingRemote(false);
+    });
+
+    const timeout = setTimeout(() => {
+      setIsSyncingRemote(false);
+    }, 4000);
+
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe();
+    };
+  }, [assignment, pin]);
+
   const game = assignment ? (useGameStore.getState().getGame(assignment.gameId) || SAMPLE_GAMES[assignment.gameId]) : undefined;
   
   const questions: PlayedQuestion[] = useMemo(() => {
@@ -142,13 +200,14 @@ export default function HomeworkPlayPage() {
     setSelectedOptionId(currentAnswer?.selectedOptionId || null);
   }, [currentIndex, currentAnswer]);
 
-  // Redirigir si no hay datos de estudiante o pin inválido
+  // Redirigir si no hay datos de estudiante o pin inválido (sólo si ya no está sincronizando)
   useEffect(() => {
+    if (isSyncingRemote) return;
     const hasQuestions = questions.length > 0;
-    if (!studentData || !pin || !assignment || !hasQuestions) {
+    if (!studentData || !pin || (!assignment && !isSyncingRemote) || (assignment && !hasQuestions)) {
       navigate(`/homework/${pin || ''}`, { replace: true });
     }
-  }, [studentData, pin, assignment, questions.length, navigate]);
+  }, [studentData, pin, assignment, questions.length, isSyncingRemote, navigate]);
 
   // Sincronización en tiempo real si el docente edita la asignación o cambia su estado
   useEffect(() => {
@@ -239,7 +298,7 @@ export default function HomeworkPlayPage() {
     const accuracy = Math.round((correctCount / questions.length) * 100);
     const score = finalAnswers.reduce((acc, a) => acc + (a.isCorrect ? 1000 : 0), 0);
 
-    submitHomework(assignment.id, {
+    const sub = submitHomework(assignment.id, {
       assignmentId: assignment.id,
       studentFullName: studentData.fullName,
       gradeGroup: studentData.gradeGroup,
@@ -252,6 +311,9 @@ export default function HomeworkPlayPage() {
       answers: finalAnswers,
       studentPhotos: studentPhotos.length > 0 ? studentPhotos : undefined,
     });
+
+    // Enviar a la nube educativa en tiempo real hacia el PC del profesor
+    homeworkSync.sendSubmission(assignment.pin, sub);
 
     sessionStorage.removeItem('hw_student');
     setSubmitted(true);
@@ -284,7 +346,57 @@ export default function HomeworkPlayPage() {
     setSubmitted(false);
   };
 
-  if (!assignment || !currentQ || !studentData) return null;
+  if (isSyncingRemote && !assignment) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-teal-950 to-slate-950 flex flex-col items-center justify-center p-6 text-center">
+        <MascotAvatar seed="Fox" emotion="happy" size="xl" />
+        <h2 className="text-2xl font-black text-white mt-6 mb-2">Conectando con tu actividad...</h2>
+        <p className="text-white/60 text-sm max-w-sm mb-6">
+          Sincronizando preguntas, documentos y material didáctico desde la nube educativa de AXEL'S PLAY.
+        </p>
+        <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs bg-emerald-500/10 border border-emerald-500/30 px-4 py-2 rounded-full animate-pulse">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span>Sincronizando en tiempo real...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!assignment || !studentData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-teal-950 to-slate-950 flex flex-col items-center justify-center p-6 text-center">
+        <AlertCircle className="w-12 h-12 text-yellow-400 mb-4" />
+        <h2 className="text-2xl font-black text-white mb-2">Actividad no encontrada</h2>
+        <p className="text-white/60 text-sm max-w-sm mb-6">
+          No se encontró la asignación con PIN <strong>{pin}</strong>. Pídele a tu docente que abra su panel de actividades.
+        </p>
+        <button
+          onClick={() => navigate(`/homework/${pin || ''}`)}
+          className="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm"
+        >
+          Volver a ingresar PIN
+        </button>
+      </div>
+    );
+  }
+
+  if (!currentQ) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-teal-950 to-slate-950 flex flex-col items-center justify-center p-6 text-center">
+        <AlertCircle className="w-12 h-12 text-yellow-400 mb-4" />
+        <h2 className="text-2xl font-black text-white mb-2">Sin preguntas disponibles</h2>
+        <p className="text-white/60 text-sm max-w-sm mb-6">
+          Esta actividad aún no tiene preguntas configuradas por el docente.
+        </p>
+        <button
+          onClick={() => navigate(`/homework/${pin || ''}`)}
+          className="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm"
+        >
+          Volver
+        </button>
+      </div>
+    );
+  }
 
   const OPTION_COLORS = [
     'from-red-600 to-rose-700',
@@ -438,16 +550,17 @@ export default function HomeworkPlayPage() {
                     <Camera className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Fotos de tu cuaderno ({studentPhotos.length}/6)</span>
                   </div>
-                  <label className="cursor-pointer px-3 py-1.5 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs font-bold flex items-center gap-1 transition-all">
-                    <Plus className="w-3.5 h-3.5" /> Subir fotos
+                  <div className="relative px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-white text-xs font-bold flex items-center gap-1 cursor-pointer overflow-hidden transition-all shadow-md shadow-emerald-600/20">
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Subir fotos</span>
                     <input
                       type="file"
                       accept="image/*"
                       multiple
-                      className="hidden"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                       onChange={handlePhotoUpload}
                     />
-                  </label>
+                  </div>
                 </div>
                 <p className="text-[11px] text-white/40 mb-3">
                   Adjunta capturas claras de tus apuntes o procedimientos antes de entregar.
@@ -773,7 +886,7 @@ export default function HomeworkPlayPage() {
                     onChange={(e) => setTypedAnswer(e.target.value)}
                     disabled={showFeedback}
                     placeholder="Escribe aquí tu respuesta detallada, justificación o procedimiento..."
-                    className="w-full p-3.5 rounded-xl bg-slate-900 border border-white/15 text-white placeholder-white/40 focus:outline-none focus:border-blue-400 text-sm resize-none shadow-inner"
+                    className="w-full p-3.5 rounded-xl bg-slate-900 border border-white/15 text-white placeholder-white/40 focus:outline-none focus:border-blue-400 text-base sm:text-sm resize-none shadow-inner"
                   />
                 </div>
               )}
@@ -808,13 +921,13 @@ export default function HomeworkPlayPage() {
                       )}
                     </div>
                   ) : (
-                    <label className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer shadow-lg shadow-purple-600/30 transition-all">
-                      <Camera className="w-4 h-4" />
+                    <div className="relative inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 cursor-pointer overflow-hidden transition-all">
+                      <Camera className="w-4 h-4 flex-shrink-0" />
                       <span>Tomar Foto con Cámara o Elegir de Galería</span>
                       <input
                         type="file"
                         accept="image/*"
-                        className="hidden"
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
@@ -825,7 +938,7 @@ export default function HomeworkPlayPage() {
                           }
                         }}
                       />
-                    </label>
+                    </div>
                   )}
                 </div>
               )}

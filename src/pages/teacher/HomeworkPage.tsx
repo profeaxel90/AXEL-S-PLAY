@@ -10,6 +10,7 @@ import {
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
 import { encodeAssignmentPayload } from '../../lib/assignmentPayload';
+import { homeworkSync } from '../../lib/homeworkSync';
 import type { HomeworkAssignment, HomeworkSubmission, CourseGroup, HomeworkQuestion } from '../../types/homework';
 import MascotAvatar from '../../components/game/MascotAvatar';
 import StorageUsageBar from '../../components/common/StorageUsageBar';
@@ -873,9 +874,17 @@ function AssignmentDetail({
 // ── Modal de Código QR ──────────────────────────────────────
 function AssignmentQrModal({ assignment, onClose }: { assignment: HomeworkAssignment; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const [copiedVercel, setCopiedVercel] = useState(false);
 
-  // URL directa y limpia: https://axel-s-play.vercel.app/homework/{pin}
+  useEffect(() => {
+    // Difundir a la nube para que cualquier celular sincronice de inmediato
+    homeworkSync.broadcastAssignment(assignment);
+  }, [assignment]);
+
+  // Si el payload cabe en el QR de forma limpia, lo incrustamos como doble garantía
+  const payload = useMemo(() => encodeAssignmentPayload(assignment), [assignment]);
+  const qrUrl = payload && payload.length < 1100
+    ? `https://axel-s-play.vercel.app/homework/${assignment.pin}?hw=${payload}`
+    : `https://axel-s-play.vercel.app/homework/${assignment.pin}`;
   const cleanVercelUrl = `https://axel-s-play.vercel.app/homework/${assignment.pin}`;
 
   const handleCopy = () => {
@@ -894,9 +903,9 @@ function AssignmentQrModal({ assignment, onClose }: { assignment: HomeworkAssign
         <h3 className="text-lg font-black text-white">{assignment.title}</h3>
         <p className="text-xs text-white/50 mt-1 mb-4">Escanea este código con cualquier celular para abrir la actividad</p>
 
-        {/* QR con nivel 'L' y URL ultra limpia que garantiza 100% de éxito en cualquier celular */}
+        {/* QR con nivel 'L' para lectura instantánea en cualquier cámara */}
         <div className="bg-white p-4 rounded-2xl shadow-xl inline-block mx-auto mb-4 ring-4 ring-emerald-500/20">
-          <QRCodeSVG value={cleanVercelUrl} size={200} level="L" includeMargin={true} />
+          <QRCodeSVG value={qrUrl} size={200} level="L" includeMargin={true} />
         </div>
 
         <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4">
@@ -939,8 +948,18 @@ export default function HomeworkPage() {
 
   const defaultGameId = searchParams.get('gameId') || undefined;
 
+  // Sincronizar asignaciones con la nube para que cualquier celular pueda descargarlas con el PIN
+  useEffect(() => {
+    assignments.forEach((hw) => {
+      if (hw.status === 'active') {
+        homeworkSync.broadcastAssignment(hw);
+      }
+    });
+  }, [assignments]);
+
   const handleCreate = (data: Parameters<typeof createAssignment>[0]) => {
     const a = createAssignment(data);
+    homeworkSync.broadcastAssignment(a);
     setShowModal(false);
     setSelectedAssignment(a);
   };
@@ -948,6 +967,10 @@ export default function HomeworkPage() {
   const handleUpdate = (data: Parameters<typeof createAssignment>[0]) => {
     if (!editingAssignment) return;
     updateAssignment(editingAssignment.id, data);
+    const updated = useHomeworkStore.getState().getAssignmentByIdOrPin(editingAssignment.id);
+    if (updated) {
+      homeworkSync.broadcastAssignment(updated);
+    }
     setEditingAssignment(null);
   };
 

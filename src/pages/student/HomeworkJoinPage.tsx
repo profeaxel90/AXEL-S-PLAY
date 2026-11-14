@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { BookOpen, ArrowRight, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BookOpen, ArrowRight, AlertCircle, ChevronLeft, ChevronRight, Loader2, Sparkles } from 'lucide-react';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { decodeAssignmentPayload } from '../../lib/assignmentPayload';
+import { homeworkSync } from '../../lib/homeworkSync';
 import { AVAILABLE_MASCOT_SEEDS } from '../../components/game/MascotAvatar';
 import MascotAvatar from '../../components/game/MascotAvatar';
 
@@ -15,6 +16,7 @@ export default function HomeworkJoinPage() {
   const [step, setStep] = useState<'pin' | 'info'>(paramPin ? 'info' : 'pin');
   const [pin, setPin] = useState(paramPin || '');
   const [pinError, setPinError] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const [fullName, setFullName] = useState('');
   const [gradeGroup, setGradeGroup] = useState('');
@@ -60,18 +62,34 @@ export default function HomeworkJoinPage() {
       }
 
       const found = getAssignmentByIdOrPin(paramPin);
-      if (!found) {
-        // En lugar de bloquear al alumno si abrió en otro celular, le permitimos continuar al paso 'info'
-        // para que pueda ingresar su nombre y el sistema lo redirija al play, donde si hay datos o preguntas
-        // o si es la demo predeterminada, podrá responder sin trabas
-        setPin(paramPin);
-        setStep('info');
-      } else if (found.status === 'closed') {
-        setPinError('Esta asignación ya fue cerrada por el docente.');
-        setStep('pin');
+      if (found) {
+        if (found.status === 'closed') {
+          setPinError('Esta asignación ya fue cerrada por el docente.');
+          setStep('pin');
+        } else {
+          setPin(paramPin);
+          setStep('info');
+        }
       } else {
-        setPin(paramPin);
-        setStep('info');
+        // Conectar a la nube para descargar la asignación del docente
+        setIsSyncing(true);
+        const unsubscribe = homeworkSync.listenForAssignment(paramPin, (remoteHw) => {
+          setIsSyncing(false);
+          setPin(remoteHw.pin);
+          setStep('info');
+        });
+
+        // Dar un timeout de 2.5s antes de pasar a info por si está offline
+        const timer = setTimeout(() => {
+          setIsSyncing(false);
+          setPin(paramPin);
+          setStep('info');
+        }, 2500);
+
+        return () => {
+          clearTimeout(timer);
+          unsubscribe();
+        };
       }
     }
   }, [paramPin, searchParams, getAssignmentByIdOrPin, getGroupByIdOrCode, navigate]);
@@ -94,15 +112,28 @@ export default function HomeworkJoinPage() {
 
     // Comprobar si es el PIN de una asignación individual
     const found = getAssignmentByIdOrPin(trimmed);
-    if (!found) {
-      setPinError('No se encontró ninguna actividad o grupo con ese PIN. Verifica con tu docente.');
+    if (found) {
+      if (found.status === 'closed') {
+        setPinError('Esta asignación ya está cerrada. Consulta a tu docente.');
+        return;
+      }
+      setStep('info');
       return;
     }
-    if (found.status === 'closed') {
-      setPinError('Esta asignación ya está cerrada. Consulta a tu docente.');
-      return;
-    }
-    setStep('info');
+
+    // Si no está localmente en el celular, sincronizar desde la nube
+    setIsSyncing(true);
+    homeworkSync.listenForAssignment(trimmed, (remoteHw) => {
+      setIsSyncing(false);
+      setPin(remoteHw.pin);
+      setStep('info');
+    });
+
+    // Fallback: Si el broker tarda, permitirle avanzar al paso info
+    setTimeout(() => {
+      setIsSyncing(false);
+      setStep('info');
+    }, 1800);
   };
 
   const handleInfoSubmit = (e: React.FormEvent) => {
@@ -164,6 +195,13 @@ export default function HomeworkJoinPage() {
                   className="w-full text-center text-4xl font-black tracking-[0.3em] bg-white/5 border-2 border-white/10 rounded-2xl px-6 py-5 text-white placeholder-white/20 focus:outline-none focus:border-emerald-500 transition-colors"
                   autoFocus
                 />
+
+                {isSyncing && (
+                  <div className="flex items-center justify-center gap-2 text-emerald-300 text-xs font-bold py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl animate-pulse">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Conectando con la actividad del docente en tiempo real...</span>
+                  </div>
+                )}
 
                 {pinError && (
                   <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
