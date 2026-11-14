@@ -11,6 +11,7 @@ import {
 import FormattedTextViewer from '../../components/common/FormattedTextViewer';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
+import { useAuthStore } from '../../stores/authStore';
 import { encodeAssignmentPayload } from '../../lib/assignmentPayload';
 import { homeworkSync } from '../../lib/homeworkSync';
 import { extractTextFromFile } from '../../lib/documentQuestionExtractor';
@@ -859,6 +860,7 @@ function StudentDetail({
   onBack: () => void;
 }) {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const { addTeacherFeedback, deleteSubmission } = useHomeworkStore();
   const [feedbackText, setFeedbackText] = useState(submission.teacherFeedback || '');
   const [savedAlert, setSavedAlert] = useState(false);
@@ -875,8 +877,9 @@ function StudentDetail({
 
   const handleSaveFeedback = () => {
     if (!feedbackText.trim()) return;
+    const teacherName = user?.fullName || 'Axel';
     addTeacherFeedback(assignmentId, submission.id, feedbackText.trim());
-    homeworkSync.sendTeacherFeedback(pin, submission.id, submission.studentFullName, feedbackText.trim());
+    homeworkSync.sendTeacherFeedback(pin, submission.id, submission.studentFullName, feedbackText.trim(), teacherName);
     setSavedAlert(true);
     setTimeout(() => setSavedAlert(false), 3000);
   };
@@ -1482,6 +1485,7 @@ function AssignmentQrModal({ assignment, onClose }: { assignment: HomeworkAssign
 export default function HomeworkPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuthStore();
   const {
     assignments, groups,
     createAssignment, updateAssignment, toggleAssignmentStatus, deleteAssignment,
@@ -1533,8 +1537,10 @@ export default function HomeworkPage() {
   }, []);
 
   const handleCreate = (data: Parameters<typeof createAssignment>[0]) => {
-    const a = createAssignment(data);
+    const teacherName = user?.fullName || 'Axel';
+    const a = createAssignment({ ...data, teacherName });
     homeworkSync.broadcastAssignment(a);
+    homeworkSync.notifyTeacherChanges(a.pin, teacherName);
     setShowModal(false);
     const next = new URLSearchParams(searchParams);
     next.set('id', a.id);
@@ -1543,10 +1549,12 @@ export default function HomeworkPage() {
 
   const handleUpdate = (data: Parameters<typeof createAssignment>[0]) => {
     if (!editingAssignment) return;
-    updateAssignment(editingAssignment.id, data);
+    const teacherName = user?.fullName || 'Axel';
+    updateAssignment(editingAssignment.id, { ...data, teacherName });
     const updated = useHomeworkStore.getState().getAssignmentByIdOrPin(editingAssignment.id);
     if (updated) {
       homeworkSync.broadcastAssignment(updated);
+      homeworkSync.notifyTeacherChanges(updated.pin, teacherName);
     }
     setEditingAssignment(null);
   };
@@ -1569,7 +1577,11 @@ export default function HomeworkPage() {
             setSearchParams(next);
             navigate('/teacher/homework');
           }}
-          onToggleStatus={() => toggleAssignmentStatus(live.id)}
+          onToggleStatus={() => {
+            toggleAssignmentStatus(live.id);
+            const teacherName = user?.fullName || 'Axel';
+            homeworkSync.notifyTeacherChanges(live.pin, teacherName, 'STATUS_CHANGED');
+          }}
           onExport={() => exportCSV(live)}
           onOpenQr={(a) => setQrModalAssignment(a)}
           onEdit={() => setEditingAssignment(live)}

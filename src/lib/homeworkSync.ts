@@ -216,29 +216,88 @@ class HomeworkSyncManager {
   /**
    * El docente envía retroalimentación a una entrega específica de un estudiante.
    */
-  public sendTeacherFeedback(pin: string, submissionId: string, studentName: string, feedback: string) {
+  public sendTeacherFeedback(
+    pin: string,
+    submissionId: string,
+    studentName: string,
+    feedback: string,
+    teacherName?: string
+  ) {
     if (!pin) return;
     const topic = `axelsplay/hw/${pin}/feedback`;
     const payloadStr = JSON.stringify({
       submissionId,
       studentName,
       feedback,
+      teacherName: teacherName || 'Axel',
       timestamp: new Date().toISOString(),
     });
 
     const publishNow = () => {
       this.client?.publish(topic, payloadStr, { retain: true, qos: 1 }, (err) => {
         if (!err) {
-          console.log(`[HomeworkSync] 💬 Retroalimentación enviada para ${studentName}`);
+          console.log(`[HomeworkSync] 💬 Retroalimentación enviada para ${studentName} por Profe ${teacherName}`);
         }
       });
+      // También notificar canal general de cambios en tiempo real
+      const changesTopic = `axelsplay/hw/${pin}/changes`;
+      this.client?.publish(changesTopic, JSON.stringify({
+        type: 'FEEDBACK_UPDATED',
+        submissionId,
+        studentName,
+        teacherName: teacherName || 'Axel',
+        feedback,
+        timestamp: new Date().toISOString(),
+      }), { qos: 1 });
     };
 
     if (this.connected) {
       publishNow();
     } else {
-      setTimeout(publishNow, 1500);
+      setTimeout(publishNow, 1200);
     }
+  }
+
+  /**
+   * Notificar al canal general que el docente ha realizado cambios en la actividad o en la entrega.
+   */
+  public notifyTeacherChanges(pin: string, teacherName?: string, type: 'ASSIGNMENT_UPDATED' | 'STATUS_CHANGED' = 'ASSIGNMENT_UPDATED') {
+    if (!pin) return;
+    const topic = `axelsplay/hw/${pin}/changes`;
+    const payloadStr = JSON.stringify({
+      type,
+      teacherName: teacherName || 'Axel',
+      timestamp: new Date().toISOString(),
+    });
+    if (this.connected) {
+      this.client?.publish(topic, payloadStr, { qos: 1 });
+    } else {
+      setTimeout(() => this.client?.publish(topic, payloadStr, { qos: 1 }), 1200);
+    }
+  }
+
+  /**
+   * El estudiante escucha notificaciones de cambios del docente en tiempo real.
+   */
+  public listenForTeacherChanges(
+    pin: string,
+    onChanges: (data: { type: string; teacherName?: string; submissionId?: string; studentName?: string; feedback?: string; timestamp?: string }) => void
+  ): () => void {
+    const topic = `axelsplay/hw/${pin}/changes`;
+    this.subscribeTopic(topic, (msgStr) => {
+      try {
+        const data = JSON.parse(msgStr);
+        if (data) {
+          onChanges(data);
+        }
+      } catch (err) {
+        console.warn('[HomeworkSync] Error parseando cambios:', err);
+      }
+    });
+
+    return () => {
+      this.unsubscribeTopic(topic);
+    };
   }
 
   /**
@@ -246,7 +305,7 @@ class HomeworkSyncManager {
    */
   public listenForTeacherFeedback(
     pin: string,
-    onFeedback: (data: { submissionId: string; studentName: string; feedback: string; timestamp: string }) => void
+    onFeedback: (data: { submissionId: string; studentName: string; feedback: string; teacherName?: string; timestamp: string }) => void
   ): () => void {
     const topic = `axelsplay/hw/${pin}/feedback`;
     this.subscribeTopic(topic, (msgStr) => {

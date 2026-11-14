@@ -119,6 +119,7 @@ interface HomeworkState {
     gradeGroupTarget?: string;
     groupId?: string;
     gameId?: string;
+    teacherName?: string;
     dueDate?: string;
     dueTime?: string;
     maxCorrections?: number;
@@ -280,6 +281,7 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
         description: data.description || 'Lee con atención y responde la actividad.',
         gradeGroupTarget: data.gradeGroupTarget || 'General',
         gameId: data.gameId || Object.keys(SAMPLE_GAMES)[0] || 'g-1',
+        teacherName: data.teacherName,
         dueDate: data.dueDate,
         dueTime: data.dueTime,
         maxCorrections: data.maxCorrections ?? 3,

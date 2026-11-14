@@ -75,6 +75,7 @@ export interface HomeworkAssignment {
   gradeGroupTarget?: string; // Ahora denominado Categoría en la interfaz
   gameId: string;
   teacherId?: string;
+  teacherName?: string; // Nombre del docente a cargo de la sesión
   dueDate?: string;
   dueTime?: string; // Hora límite (ej: 18:00, 23:59)
   maxCorrections: number; // Por defecto 3

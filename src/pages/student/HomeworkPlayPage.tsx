@@ -23,6 +23,12 @@ function getEmbedVideoUrl(url?: string): string {
   return url;
 }
 
+function getCleanTeacherName(rawName?: string): string {
+  if (!rawName) return 'Axel';
+  const clean = rawName.replace(/^profe(?:sor)?\s+/i, '').trim();
+  return clean || rawName;
+}
+
 interface StudentData {
   pin: string;
   fullName: string;
@@ -163,7 +169,10 @@ export default function HomeworkPlayPage() {
   );
   const [globalCorrectionsUsed, setGlobalCorrectionsUsed] = useState(0);
   const [showFeedback, setShowFeedback] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState<boolean>(() => {
+    if (!pin) return false;
+    return Boolean(sessionStorage.getItem(`hw_submitted_${pin}`));
+  });
   const [showSummary, setShowSummary] = useState(false);
   const [studentPhotos, setStudentPhotos] = useState<string[]>([]);
   const [selectedZoomPhoto, setSelectedZoomPhoto] = useState<string | null>(null);
@@ -173,6 +182,11 @@ export default function HomeworkPlayPage() {
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [documentViewMode, setDocumentViewMode] = useState<'canvas' | 'text'>('canvas');
   const [teacherFeedback, setTeacherFeedback] = useState<string | null>(null);
+  const [teacherPopup, setTeacherPopup] = useState<{
+    visible: boolean;
+    teacherName: string;
+    feedback?: string;
+  } | null>(null);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [cameraTarget, setCameraTarget] = useState<'question' | 'summary'>('question');
@@ -201,7 +215,7 @@ export default function HomeworkPlayPage() {
   const isLastQuestion = currentIndex === questions.length - 1;
   const allAnswered = answers.every((a) => a !== null);
 
-  // Escuchar retroalimentación del docente en tiempo real
+  // Escuchar retroalimentación del docente y cambios en tiempo real
   useEffect(() => {
     if (!assignment || !studentData) return;
     const mySub = assignment.submissions?.find(
@@ -211,17 +225,68 @@ export default function HomeworkPlayPage() {
       setTeacherFeedback(mySub.teacherFeedback);
     }
 
-    const unsub = homeworkSync.listenForTeacherFeedback(assignment.pin, (data) => {
-      if (
+    const unsubFeedback = homeworkSync.listenForTeacherFeedback(assignment.pin, (data) => {
+      const isForMe =
         data.studentName.toLowerCase() === studentData.fullName.toLowerCase() ||
-        data.submissionId === mySub?.id
-      ) {
-        setTeacherFeedback(data.feedback);
+        (mySub && data.submissionId === mySub.id);
+
+      if (isForMe) {
+        const rawTeacherName = data.teacherName || assignment.teacherName || 'Axel';
+        const cleanName = getCleanTeacherName(rawTeacherName);
+
+        if (mySub) {
+          useHomeworkStore.getState().addTeacherFeedback(assignment.id, mySub.id, data.feedback);
+        }
+
+        setTeacherPopup({
+          visible: true,
+          teacherName: cleanName,
+          feedback: data.feedback,
+        });
       }
     });
 
-    return () => unsub();
+    const unsubChanges = homeworkSync.listenForTeacherChanges(assignment.pin, (data) => {
+      const isRelevant =
+        !data.studentName ||
+        data.studentName.toLowerCase() === studentData.fullName.toLowerCase() ||
+        (mySub && data.submissionId === mySub?.id);
+
+      if (isRelevant) {
+        const rawTeacherName = data.teacherName || assignment.teacherName || 'Axel';
+        const cleanName = getCleanTeacherName(rawTeacherName);
+
+        setTeacherPopup({
+          visible: true,
+          teacherName: cleanName,
+          feedback: data.feedback,
+        });
+      }
+    });
+
+    return () => {
+      unsubFeedback();
+      unsubChanges();
+    };
   }, [assignment, studentData]);
+
+  const handleApplyTeacherUpdates = () => {
+    if (teacherPopup?.feedback) {
+      setTeacherFeedback(teacherPopup.feedback);
+    }
+    if (assignment && studentData) {
+      const latestAsgn = useHomeworkStore.getState().getAssignmentByIdOrPin(assignment.pin);
+      if (latestAsgn) {
+        const mySub = latestAsgn.submissions.find(
+          (s) => s.studentFullName.toLowerCase() === studentData.fullName.toLowerCase()
+        );
+        if (mySub?.teacherFeedback) {
+          setTeacherFeedback(mySub.teacherFeedback);
+        }
+      }
+    }
+    setTeacherPopup(null);
+  };
 
   // Sincronizar o reiniciar campos al cambiar de pregunta
   useEffect(() => {
@@ -350,7 +415,7 @@ export default function HomeworkPlayPage() {
       // Enviar a la nube educativa en tiempo real hacia el PC del profesor
       homeworkSync.sendSubmission(assignment.pin, sub);
 
-      sessionStorage.removeItem('hw_student');
+      sessionStorage.setItem(`hw_submitted_${assignment.pin}`, 'true');
       setSubmitted(true);
     } catch (err) {
       console.error('[Submit] Error al enviar tarea:', err);
@@ -485,41 +550,71 @@ export default function HomeworkPlayPage() {
           )}
 
           {/* Retroalimentación del Docente */}
-          {teacherFeedback && (
+          {teacherFeedback ? (
             <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-slate-900 to-teal-950/90 border-2 border-emerald-500/50 text-left shadow-2xl animate-fade-in space-y-2">
               <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
                 <Sparkles className="w-4 h-4 text-emerald-400" />
-                <span>Mensaje / Retroalimentación de tu Docente</span>
+                <span>Mensaje / Retroalimentación de Profe {getCleanTeacherName(assignment.teacherName)}</span>
               </div>
               <p className="text-white text-sm font-semibold leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30">
                 "{teacherFeedback}"
               </p>
               <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-emerald-300/70">
-                <span>✓ Revisado por tu profesor</span>
-                <span>En tiempo real</span>
+                <span>✓ Revisado por Profe {getCleanTeacherName(assignment.teacherName)}</span>
+                <span className="flex items-center gap-1 text-emerald-400 font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> En tiempo real
+                </span>
               </div>
+            </div>
+          ) : (
+            <div className="mb-6 p-5 rounded-3xl bg-slate-900/90 border border-emerald-500/40 text-center shadow-xl space-y-2">
+              <div className="flex items-center justify-center gap-2 text-emerald-300 font-bold text-xs">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                <span>Esperando retroalimentación de Profe {getCleanTeacherName(assignment.teacherName)}...</span>
+              </div>
+              <p className="text-xs text-white/60 leading-relaxed">
+                Por favor espera aquí. Mantén abierta esta pantalla para visualizar las correcciones y observaciones de tu profesor en tiempo real.
+              </p>
             </div>
           )}
 
-          <p className="text-sm text-white/40 mb-6">Tu docente podrá ver tus respuestas y evidencias fotográficas en su panel.</p>
-
-          <div className="flex flex-col gap-3">
-            {allowRetry && (
-              <button
-                onClick={handleRetryExam}
-                className="flex items-center justify-center gap-2 w-full px-6 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black hover:opacity-90 shadow-lg shadow-purple-600/30 transition-all text-sm"
-              >
-                <RotateCcw className="w-4 h-4" /> Repetir actividad para mejorar nota
-              </button>
-            )}
-            <button
-              onClick={() => navigate('/')}
-              className="flex items-center justify-center gap-2 mx-auto px-6 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-white font-bold transition-all w-full text-sm"
-            >
-              <Home className="w-4 h-4" /> Ir al inicio
-            </button>
-          </div>
+          <p className="text-xs text-white/40 mb-2">
+            Tu docente revisa tus respuestas y evidencias fotográficas directamente desde su panel.
+          </p>
         </div>
+
+        {/* Modal Emergente de Notificación en Tiempo Real */}
+        {teacherPopup?.visible && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+            <div className="bg-slate-900 border-2 border-emerald-500 rounded-3xl p-6 sm:p-7 max-w-sm w-full text-center shadow-2xl relative animate-scale-up">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4 border border-emerald-500/40 shadow-inner">
+                <Sparkles className="w-7 h-7 text-emerald-400 animate-pulse" />
+              </div>
+
+              <h3 className="text-lg font-black text-white mb-2">¡Novedad de tu Profesor!</h3>
+
+              <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-2xl p-4 mb-4 text-emerald-100 text-sm font-black leading-relaxed shadow-inner uppercase tracking-wide">
+                📢 PROFE {teacherPopup.teacherName.toUpperCase()} HA REALIZADO CAMBIOS ACTUALIZA PARA VISUALIZARLOS
+              </div>
+
+              {teacherPopup.feedback && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4 text-xs text-left max-h-32 overflow-y-auto">
+                  <span className="text-[10px] text-emerald-400 font-bold uppercase block mb-1">Comentario:</span>
+                  <p className="text-white whitespace-pre-wrap font-medium">"{teacherPopup.feedback}"</p>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleApplyTeacherUpdates}
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 active:scale-95 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Actualizar para visualizarlos</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Modal de zoom fotográfico si hace clic */}
         {selectedZoomPhoto && (
@@ -1269,6 +1364,39 @@ export default function HomeworkPlayPage() {
         onClose={() => setCameraModalOpen(false)}
         onCapture={handleCameraCapturedPhoto}
       />
+
+      {/* MODAL EMERGENTE DE CAMBIOS EN TIEMPO REAL */}
+      {teacherPopup?.visible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="bg-slate-900 border-2 border-emerald-500 rounded-3xl p-6 sm:p-7 max-w-sm w-full text-center shadow-2xl relative animate-scale-up">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4 border border-emerald-500/40 shadow-inner">
+              <Sparkles className="w-7 h-7 text-emerald-400 animate-pulse" />
+            </div>
+
+            <h3 className="text-lg font-black text-white mb-2">¡Novedad de tu Profesor!</h3>
+
+            <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-2xl p-4 mb-4 text-emerald-100 text-sm font-black leading-relaxed shadow-inner uppercase tracking-wide">
+              📢 PROFE {teacherPopup.teacherName.toUpperCase()} HA REALIZADO CAMBIOS ACTUALIZA PARA VISUALIZARLOS
+            </div>
+
+            {teacherPopup.feedback && (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4 text-xs text-left max-h-32 overflow-y-auto">
+                <span className="text-[10px] text-emerald-400 font-bold uppercase block mb-1">Comentario:</span>
+                <p className="text-white whitespace-pre-wrap font-medium">"{teacherPopup.feedback}"</p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleApplyTeacherUpdates}
+              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 active:scale-95 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Actualizar para visualizarlos</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
