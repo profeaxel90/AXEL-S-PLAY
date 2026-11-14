@@ -320,19 +320,24 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
 
     submitHomework: (assignmentId, subData) => {
       const targetAssignment = get().assignments.find((a) => a.id === assignmentId || a.pin === assignmentId);
+      const subId = (subData as any).id || `sub-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const submittedAt = (subData as any).submittedAt || new Date().toISOString();
       const submission: HomeworkSubmission = {
         ...subData,
-        id: `sub-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        assignmentId,
+        id: subId,
+        assignmentId: targetAssignment?.id || assignmentId,
         groupId: targetAssignment?.groupId,
-        submittedAt: new Date().toISOString(),
+        submittedAt,
       };
 
       const updated = get().assignments.map((a) => {
         if (a.id === assignmentId || a.pin === assignmentId) {
+          const filtered = a.submissions.filter(
+            (s) => s.id !== subId && s.studentFullName.toLowerCase() !== submission.studentFullName.toLowerCase()
+          );
           return {
             ...a,
-            submissions: [submission, ...a.submissions],
+            submissions: [submission, ...filtered],
           };
         }
         return a;

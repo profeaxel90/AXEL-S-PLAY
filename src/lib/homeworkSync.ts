@@ -49,9 +49,32 @@ class HomeworkSyncManager {
       });
 
       this.client.on('message', (topic, payload) => {
+        // 1. Coincidencia directa exacta
         const callback = this.callbacks.get(topic);
         if (callback) {
           callback(payload.toString());
+          return;
+        }
+
+        // 2. Coincidencia con comodines MQTT (# o +)
+        for (const [subPattern, cb] of this.callbacks.entries()) {
+          if (subPattern.endsWith('/#')) {
+            const prefix = subPattern.slice(0, -2);
+            if (topic === prefix || topic.startsWith(`${prefix}/`)) {
+              cb(payload.toString());
+              return;
+            }
+          } else if (subPattern.includes('+')) {
+            const patternParts = subPattern.split('/');
+            const topicParts = topic.split('/');
+            if (patternParts.length === topicParts.length) {
+              const matches = patternParts.every((part, idx) => part === '+' || part === topicParts[idx]);
+              if (matches) {
+                cb(payload.toString());
+                return;
+              }
+            }
+          }
         }
       });
 
@@ -104,13 +127,14 @@ class HomeworkSyncManager {
     // El docente también escucha solicitudes directas y entregas de estudiantes
     const reqTopic = `axelsplay/hw/${assignment.pin}/req`;
     const subTopic = `axelsplay/hw/${assignment.pin}/sub`;
+    const subWildcard = `axelsplay/hw/${assignment.pin}/sub/#`;
 
     this.subscribeTopic(reqTopic, () => {
       // Un celular pidió los datos: volver a publicar de inmediato
       publishNow();
     });
 
-    this.subscribeTopic(subTopic, (messageStr) => {
+    const handleSubmission = (messageStr: string) => {
       try {
         const sub = JSON.parse(messageStr) as HomeworkSubmission;
         if (sub && sub.studentFullName) {
@@ -120,7 +144,10 @@ class HomeworkSyncManager {
       } catch (err) {
         console.warn('[HomeworkSync] Error procesando entrega:', err);
       }
-    });
+    };
+
+    this.subscribeTopic(subTopic, handleSubmission);
+    this.subscribeTopic(subWildcard, handleSubmission);
   }
 
   /**
@@ -163,19 +190,27 @@ class HomeworkSyncManager {
 
   /**
    * El estudiante envía su entrega completada desde su celular hacia el docente.
+   * Publica tanto al canal individual con retain (para que no se pierda) como al canal general.
    */
   public sendSubmission(pin: string, submission: HomeworkSubmission) {
     const subTopic = `axelsplay/hw/${pin}/sub`;
+    const subRetained = `axelsplay/hw/${pin}/sub/${submission.id}`;
     const payloadStr = JSON.stringify(submission);
 
-    if (this.client && this.connected) {
-      this.client.publish(subTopic, payloadStr, { qos: 1 });
-    } else {
-      // Reintentar en 1.5s
-      setTimeout(() => {
-        this.client?.publish(subTopic, payloadStr, { qos: 1 });
-      }, 1500);
-    }
+    const publish = () => {
+      if (this.client && this.connected) {
+        // Enviar con retain al canal individual para que el docente lo descargue incluso si estaba offline
+        this.client.publish(subRetained, payloadStr, { qos: 1, retain: true });
+        // Enviar al canal general para recepción inmediata en vivo
+        this.client.publish(subTopic, payloadStr, { qos: 1 });
+        console.log(`[HomeworkSync] 🚀 Entrega enviada a la nube (${submission.id})`);
+      }
+    };
+
+    publish();
+    // Reintentar a los 1.2s y a los 3s para garantizar recepción
+    setTimeout(publish, 1200);
+    setTimeout(publish, 3000);
   }
 
   /**

@@ -3,12 +3,11 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2, XCircle, RotateCcw, Send, Home, AlertCircle,
   FileText, Camera, Eye, Trash2, X, Plus, Loader2, Sparkles,
-  Bold, AlignLeft, AlignCenter, AlignJustify
+  Bold, AlignLeft, AlignCenter, AlignJustify, Clock
 } from 'lucide-react';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
 import { SAMPLE_GAMES } from '../../data/mockGames';
-import { compressImageToWebP } from '../../lib/imageCompressor';
 import { homeworkSync } from '../../lib/homeworkSync';
 import { decodeAssignmentPayload } from '../../lib/assignmentPayload';
 import PdfCanvasViewer from '../../components/common/PdfCanvasViewer';
@@ -195,11 +194,6 @@ export default function HomeworkPlayPage() {
     }
   };
 
-  const cameraInputRef = useRef<HTMLInputElement | null>(null);
-  const galleryInputRef = useRef<HTMLInputElement | null>(null);
-  const summaryCameraRef = useRef<HTMLInputElement | null>(null);
-  const summaryGalleryRef = useRef<HTMLInputElement | null>(null);
-
   const maxCorrections = assignment?.maxCorrections ?? 3;
   const currentQ = questions[currentIndex];
   const currentAnswer = answers[currentIndex];
@@ -364,81 +358,6 @@ export default function HomeworkPlayPage() {
     }
   };
 
-  const handleSummaryCameraUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (studentPhotos.length >= 6) return;
-    setIsProcessingPhoto(true);
-    try {
-      const compressed = await compressImageToWebP(file);
-      if (compressed) {
-        setStudentPhotos((prev) => [...prev, compressed]);
-      }
-    } catch (err) {
-      console.warn('[Camera] Error procesando imagen:', err);
-    } finally {
-      setIsProcessingPhoto(false);
-      e.target.value = '';
-    }
-  };
-
-  const handleSummaryGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    const remainingSlots = Math.max(0, 6 - studentPhotos.length);
-    const selected = Array.from(files).slice(0, remainingSlots);
-    setIsProcessingPhoto(true);
-    try {
-      for (const file of selected) {
-        const compressed = await compressImageToWebP(file);
-        if (compressed) {
-          setStudentPhotos((prev) => [...prev, compressed]);
-        }
-      }
-    } catch (err) {
-      console.warn('[Gallery] Error procesando fotos:', err);
-    } finally {
-      setIsProcessingPhoto(false);
-      e.target.value = '';
-    }
-  };
-
-  const handleQuestionCameraUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsProcessingPhoto(true);
-    try {
-      const compressed = await compressImageToWebP(file);
-      if (compressed) {
-        setPhotoAnswer(compressed);
-        setStudentPhotos((prev) => [...prev, compressed]);
-      }
-    } catch (err) {
-      console.warn('[Question Camera] Error procesando imagen:', err);
-    } finally {
-      setIsProcessingPhoto(false);
-      e.target.value = '';
-    }
-  };
-
-  const handleQuestionGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsProcessingPhoto(true);
-    try {
-      const compressed = await compressImageToWebP(file);
-      if (compressed) {
-        setPhotoAnswer(compressed);
-        setStudentPhotos((prev) => [...prev, compressed]);
-      }
-    } catch (err) {
-      console.warn('[Question Gallery] Error procesando imagen:', err);
-    } finally {
-      setIsProcessingPhoto(false);
-      e.target.value = '';
-    }
-  };
-
   const removePhoto = (indexToRemove: number) => {
     setStudentPhotos((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
@@ -525,7 +444,13 @@ export default function HomeworkPlayPage() {
             <MascotAvatar seed={studentData.avatar} emotion="victory" size="2xl" />
           </div>
           <h1 className="text-4xl font-black text-white mb-2">¡Entregado! 🎉</h1>
-          <p className="text-white/60 mb-6">Tu actividad fue registrada exitosamente</p>
+          <p className="text-white/60 mb-3">Tu actividad fue registrada exitosamente</p>
+
+          {/* Fecha y Hora Exacta de Entrega */}
+          <div className="flex items-center justify-center gap-2 text-xs text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/30 py-2.5 px-4 rounded-xl mb-6 shadow-md">
+            <Clock className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <span>Fecha y Hora de Entrega: <strong>{new Date().toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</strong></span>
+          </div>
 
           <div className="grid grid-cols-3 gap-4 mb-8">
             <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
@@ -691,9 +616,8 @@ export default function HomeworkPlayPage() {
                   Adjunta capturas claras de tus apuntes o procedimientos antes de enviar.
                 </p>
 
-                {/* Botones de Cámara en Vivo y Galería */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-                  {/* Botón 1: Cámara en Pantalla en Vivo (getUserMedia directo) */}
+                {/* Botón único de Cámara en Vivo */}
+                <div className="mb-3">
                   <button
                     type="button"
                     disabled={isProcessingPhoto || studentPhotos.length >= 6}
@@ -701,37 +625,11 @@ export default function HomeworkPlayPage() {
                       setCameraTarget('summary');
                       setCameraModalOpen(true);
                     }}
-                    className="flex items-center justify-center gap-2 p-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white text-xs font-black shadow-md cursor-pointer transition-all border border-purple-400/30 disabled:opacity-40"
+                    className="w-full flex items-center justify-center gap-2 p-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white text-xs font-black shadow-md cursor-pointer transition-all border border-purple-400/30 disabled:opacity-40"
                   >
                     <Camera className="w-4 h-4 flex-shrink-0" />
                     <span>📸 Tomar Foto con Cámara</span>
                   </button>
-
-                  {/* Botón 2: Galería / Archivos */}
-                  <button
-                    type="button"
-                    disabled={isProcessingPhoto || studentPhotos.length >= 6}
-                    onClick={() => {
-                      if (summaryGalleryRef.current) {
-                        summaryGalleryRef.current.value = '';
-                        summaryGalleryRef.current.click();
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white text-xs font-black shadow-md cursor-pointer transition-all disabled:opacity-40"
-                  >
-                    <Plus className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <span>📁 Elegir de Galería</span>
-                  </button>
-                  <input
-                    ref={summaryGalleryRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    disabled={isProcessingPhoto || studentPhotos.length >= 6}
-                    className="sr-only"
-                    aria-hidden="true"
-                    onChange={handleSummaryGalleryUpload}
-                  />
                 </div>
                 {studentPhotos.length > 0 ? (
                   <div className="grid grid-cols-4 gap-2">
@@ -1226,8 +1124,8 @@ export default function HomeworkPlayPage() {
                       )}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                      {/* Opción 1: Cámara en Pantalla en Vivo (getUserMedia directo) */}
+                    <div className="pt-1">
+                      {/* Botón único de Cámara en Pantalla en Vivo (getUserMedia directo) */}
                       <button
                         type="button"
                         disabled={isProcessingPhoto}
@@ -1235,35 +1133,11 @@ export default function HomeworkPlayPage() {
                           setCameraTarget('question');
                           setCameraModalOpen(true);
                         }}
-                        className="flex items-center justify-center gap-2 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-purple-600/30 cursor-pointer transition-all border border-purple-400/30"
+                        className="w-full flex items-center justify-center gap-2 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-purple-600/30 cursor-pointer transition-all border border-purple-400/30 disabled:opacity-40"
                       >
                         <Camera className="w-5 h-5 flex-shrink-0" />
                         <span>📸 Tomar Foto con Cámara</span>
                       </button>
-
-                      {/* Opción 2: Selector Universal de Galería / Archivos */}
-                      <button
-                        type="button"
-                        disabled={isProcessingPhoto}
-                        onClick={() => {
-                          if (galleryInputRef.current) {
-                            galleryInputRef.current.value = '';
-                            galleryInputRef.current.click();
-                          }
-                        }}
-                        className="flex items-center justify-center gap-2 p-3.5 sm:p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white font-bold text-xs sm:text-sm shadow-md cursor-pointer transition-all disabled:opacity-40"
-                      >
-                        <FileText className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                        <span>📁 Elegir de Galería o Archivos</span>
-                      </button>
-                      <input
-                        ref={galleryInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="sr-only"
-                        aria-hidden="true"
-                        onChange={handleQuestionGalleryUpload}
-                      />
                     </div>
                   )}
                 </div>

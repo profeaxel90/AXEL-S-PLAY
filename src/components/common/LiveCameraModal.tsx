@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, RefreshCw, Check, X, AlertCircle, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { compressImageToWebP } from '../../lib/imageCompressor';
+import { Camera, RefreshCw, Check, X, AlertCircle, Loader2 } from 'lucide-react';
 
 interface LiveCameraModalProps {
   isOpen: boolean;
@@ -15,8 +14,6 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const fileFallbackRef = useRef<HTMLInputElement | null>(null);
-  const bottomGalleryInputRef = useRef<HTMLInputElement | null>(null);
 
   // Iniciar la cámara en vivo
   const startCamera = async (mode: 'environment' | 'user') => {
@@ -103,17 +100,31 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
     if (!video || !video.videoWidth || !video.videoHeight) return;
 
     try {
+      // Redimensionar a resolución ultra-liviana y nítida para MQTT (máx 800px)
+      let width = video.videoWidth;
+      let height = video.videoHeight;
+      const MAX_DIM = 800;
+      if (width > MAX_DIM || height > MAX_DIM) {
+        if (width > height) {
+          height = Math.round((height * MAX_DIM) / width);
+          width = MAX_DIM;
+        } else {
+          width = Math.round((width * MAX_DIM) / height);
+          height = MAX_DIM;
+        }
+      }
+
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // Dibujar fotograma del video
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Dibujar fotograma del video redimensionado
+      ctx.drawImage(video, 0, 0, width, height);
 
-      // Convertir a JPEG optimizado
-      const rawDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+      // Convertir a JPEG optimizado ultra-liviano (30-40 KB)
+      const rawDataUrl = canvas.toDataURL('image/jpeg', 0.72);
       setCapturedPreview(rawDataUrl);
 
       // Detener video en vivo para congelar y ahorrar batería
@@ -141,25 +152,6 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
     setCapturedPreview(null);
     setErrorMsg(null);
     onClose();
-  };
-
-  // Fallback de archivo si la cámara no abre
-  const handleFallbackFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsLoading(true);
-    try {
-      const compressed = await compressImageToWebP(file);
-      if (compressed) {
-        onCapture(compressed);
-        handleClose();
-      }
-    } catch (err) {
-      console.warn('[LiveCamera] Error en fallback de archivo:', err);
-    } finally {
-      setIsLoading(false);
-      e.target.value = '';
-    }
   };
 
   if (!isOpen) return null;
@@ -193,7 +185,7 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
           </div>
         )}
 
-        {/* Mensaje de Error / Fallback */}
+        {/* Mensaje de Error / Reintentar */}
         {errorMsg && !capturedPreview && (
           <div className="p-6 text-center max-w-sm space-y-4 text-white z-20">
             <AlertCircle className="w-12 h-12 text-amber-400 mx-auto" />
@@ -202,25 +194,12 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
             <div className="pt-2">
               <button
                 type="button"
-                onClick={() => {
-                  if (fileFallbackRef.current) {
-                    fileFallbackRef.current.value = '';
-                    fileFallbackRef.current.click();
-                  }
-                }}
-                className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs shadow-lg cursor-pointer hover:opacity-90 active:scale-95 transition-all w-full"
+                onClick={() => startCamera(facingMode)}
+                className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black text-xs shadow-lg cursor-pointer hover:opacity-90 active:scale-95 transition-all w-full"
               >
-                <ImageIcon className="w-4 h-4" />
-                <span>📁 Elegir Foto de mis Archivos / Galería</span>
+                <RefreshCw className="w-4 h-4" />
+                <span>Reintentar acceso a cámara</span>
               </button>
-              <input
-                ref={fileFallbackRef}
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                aria-hidden="true"
-                onChange={handleFallbackFile}
-              />
             </div>
           </div>
         )}
@@ -264,43 +243,17 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
       <div className="w-full max-w-lg p-3 z-10 flex flex-col items-center gap-3">
         {/* Caso A: Estamos en vivo apuntando con la cámara */}
         {!capturedPreview && !errorMsg && (
-          <div className="flex items-center justify-center gap-8 w-full">
-            {/* Botón de Galería alternativo */}
-            <button
-              type="button"
-              onClick={() => {
-                if (bottomGalleryInputRef.current) {
-                  bottomGalleryInputRef.current.value = '';
-                  bottomGalleryInputRef.current.click();
-                }
-              }}
-              className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer active:scale-90 flex items-center justify-center"
-              title="Subir foto existente desde la galería"
-            >
-              <ImageIcon className="w-5 h-5 text-emerald-400" />
-            </button>
-            <input
-              ref={bottomGalleryInputRef}
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              aria-hidden="true"
-              onChange={handleFallbackFile}
-            />
-
+          <div className="flex items-center justify-center w-full">
             {/* BOTÓN DISPARADOR PRINCIPAL (Círculo fotográfico grande) */}
             <button
               type="button"
               disabled={isLoading || Boolean(errorMsg)}
               onClick={handleCaptureSnapshot}
-              className="w-18 h-18 rounded-full border-4 border-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-90 shadow-2xl flex items-center justify-center transition-all cursor-pointer disabled:opacity-30"
+              className="w-20 h-20 rounded-full border-4 border-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-90 shadow-2xl flex items-center justify-center transition-all cursor-pointer disabled:opacity-30"
               title="Disparar foto"
             >
-              <div className="w-12 h-12 rounded-full bg-white shadow-inner" />
+              <div className="w-14 h-14 rounded-full bg-white shadow-inner" />
             </button>
-
-            {/* Espacio equilibrador */}
-            <div className="w-11" />
           </div>
         )}
 
