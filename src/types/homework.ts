@@ -80,6 +80,7 @@ export interface HomeworkAssignment {
   createdAt: string;
   // Modalidades avanzadas de asignación
   assignmentType?: 'quiz' | 'pdf_guide' | 'exam_review';
+  documentText?: string; // Texto completo extraído o redactado de la guía/lectura para leer directo en pantalla
   pdfUrl?: string; // Guía o taller en PDF o Word (.pdf, .doc, .docx) adjunto por el docente
   pdfName?: string; // Nombre del archivo documento
   docUrl?: string; // Documento adicional o enlace

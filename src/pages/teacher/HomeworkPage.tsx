@@ -11,6 +11,7 @@ import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
 import { encodeAssignmentPayload } from '../../lib/assignmentPayload';
 import { homeworkSync } from '../../lib/homeworkSync';
+import { extractTextFromFile } from '../../lib/documentQuestionExtractor';
 import type { HomeworkAssignment, HomeworkSubmission, CourseGroup, HomeworkQuestion } from '../../types/homework';
 import MascotAvatar from '../../components/game/MascotAvatar';
 import StorageUsageBar from '../../components/common/StorageUsageBar';
@@ -144,6 +145,7 @@ interface NewAssignmentModalProps {
   onCreate: (data: {
     title: string;
     description: string;
+    documentText?: string;
     gradeGroupTarget: string;
     groupId?: string;
     gameId: string;
@@ -174,6 +176,7 @@ function NewAssignmentModal({ defaultGameId, initialAssignment, onClose, onCreat
   const [description, setDescription] = useState(
     initialAssignment?.description || 'Lee con atención y responde la actividad.'
   );
+  const [documentText, setDocumentText] = useState(initialAssignment?.documentText || '');
   const [gradeGroupTarget, setGradeGroupTarget] = useState(initialAssignment?.gradeGroupTarget || '');
   const [groupId, setGroupId] = useState(initialAssignment?.groupId || '');
   const [gameId, setGameId] = useState(initialAssignment?.gameId || defaultGameId || (games[0]?.id ?? 'g-1'));
@@ -210,10 +213,21 @@ function NewAssignmentModal({ defaultGameId, initialAssignment, onClose, onCreat
     ];
   });
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setPdfName(file.name);
+
+    // Extraer texto plano legible automáticamente del documento para que el alumno lo lea en pantalla
+    try {
+      const extracted = await extractTextFromFile(file);
+      if (extracted && extracted.trim().length > 10) {
+        setDocumentText(extracted.trim());
+      }
+    } catch (err) {
+      console.warn('No se pudo extraer texto automático:', err);
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
@@ -260,6 +274,7 @@ function NewAssignmentModal({ defaultGameId, initialAssignment, onClose, onCreat
     onCreate({
       title: title.trim(),
       description: description.trim() || 'Lee con atención y responde la actividad.',
+      documentText: documentText.trim() || undefined,
       gradeGroupTarget: gradeGroupTarget.trim() || (groups.find(g => g.id === groupId)?.name || 'General'),
       groupId: groupId || undefined,
       gameId: gameId || 'g-1',
@@ -450,6 +465,31 @@ function NewAssignmentModal({ defaultGameId, initialAssignment, onClose, onCreat
                 placeholder="https://docs.google.com/... o enlace de consulta"
                 className="input text-xs w-full py-1.5 bg-slate-950 border-white/10 text-white placeholder-white/30"
               />
+            </div>
+
+            {/* Lectura / Texto de la Guía o Taller (Visible directamente en el celular del estudiante) */}
+            <div className="p-3 rounded-xl bg-slate-900 border border-emerald-500/30 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Lectura / Guía del Taller (El estudiante la leerá directamente en pantalla)</span>
+                </label>
+                {documentText && (
+                  <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                    {documentText.length} caracteres
+                  </span>
+                )}
+              </div>
+              <textarea
+                rows={4}
+                value={documentText}
+                onChange={(e) => setDocumentText(e.target.value)}
+                placeholder="Escribe o pega aquí el contenido de la lectura, taller o guía. Al subir un archivo PDF o Word, se extraerá aquí automáticamente para que el estudiante lo lea en pantalla sin descargarlo."
+                className="input text-xs w-full py-2 bg-slate-950 border-white/10 text-white placeholder-white/30 resize-y font-normal leading-relaxed"
+              />
+              <p className="text-[10px] text-white/40">
+                💡 Al subir un PDF/Word se auto-extrae aquí. También puedes redactar o pegar el texto directamente.
+              </p>
             </div>
           </div>
 
@@ -880,9 +920,9 @@ function AssignmentQrModal({ assignment, onClose }: { assignment: HomeworkAssign
     homeworkSync.broadcastAssignment(assignment);
   }, [assignment]);
 
-  // Si el payload cabe en el QR de forma limpia, lo incrustamos como doble garantía
+  // Incrustamos el payload en el QR para que cualquier celular sin internet previo cargue todo al escanear
   const payload = useMemo(() => encodeAssignmentPayload(assignment), [assignment]);
-  const qrUrl = payload && payload.length < 1100
+  const qrUrl = payload && payload.length < 2400
     ? `https://axel-s-play.vercel.app/homework/${assignment.pin}?hw=${payload}`
     : `https://axel-s-play.vercel.app/homework/${assignment.pin}`;
   const cleanVercelUrl = `https://axel-s-play.vercel.app/homework/${assignment.pin}`;

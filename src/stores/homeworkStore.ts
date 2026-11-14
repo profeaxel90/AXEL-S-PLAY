@@ -123,6 +123,7 @@ interface HomeworkState {
     dueTime?: string;
     maxCorrections?: number;
     assignmentType?: 'quiz' | 'pdf_guide' | 'exam_review';
+    documentText?: string;
     pdfUrl?: string;
     pdfName?: string;
     docUrl?: string;
@@ -246,6 +247,7 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
         status: 'active',
         createdAt: new Date().toISOString(),
         assignmentType: data.assignmentType || (data.pdfUrl ? 'pdf_guide' : 'quiz'),
+        documentText: data.documentText,
         pdfUrl: data.pdfUrl,
         pdfName: data.pdfName,
         docUrl: data.docUrl,

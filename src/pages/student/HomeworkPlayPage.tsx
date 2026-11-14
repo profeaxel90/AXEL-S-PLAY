@@ -1,45 +1,17 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2, XCircle, RotateCcw, Send, Home, AlertCircle,
-  FileText, Camera, Eye, Trash2, X, Plus, Loader2
+  FileText, Camera, Eye, Trash2, X, Plus, Loader2, Sparkles
 } from 'lucide-react';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
 import { SAMPLE_GAMES } from '../../data/mockGames';
 import { compressImageToWebP } from '../../lib/imageCompressor';
 import { homeworkSync } from '../../lib/homeworkSync';
+import { decodeAssignmentPayload } from '../../lib/assignmentPayload';
 import type { HomeworkAnswerSubmission } from '../../types/homework';
 import MascotAvatar from '../../components/game/MascotAvatar';
-
-function openDocumentInMobile(dataUrl: string, fileName = 'documento.pdf') {
-  if (!dataUrl) return;
-  if (dataUrl.startsWith('data:')) {
-    try {
-      const arr = dataUrl.split(',');
-      const mime = arr[0].match(/:(.*?);/)?.[1] || 'application/pdf';
-      const bstr = atob(arr[1]);
-      let n = bstr.length;
-      const u8arr = new Uint8Array(n);
-      while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
-      }
-      const blob = new Blob([u8arr], { type: mime });
-      const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.target = '_blank';
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch {
-      window.open(dataUrl, '_blank');
-    }
-  } else {
-    window.open(dataUrl, '_blank');
-  }
-}
 
 function getEmbedVideoUrl(url?: string): string {
   if (!url) return '';
@@ -89,8 +61,20 @@ interface DraftAnswer {
 export default function HomeworkPlayPage() {
   const navigate = useNavigate();
   const { pin } = useParams<{ pin: string }>();
+  const [searchParams] = useSearchParams();
   const assignments = useHomeworkStore((state) => state.assignments);
   const { submitHomework } = useHomeworkStore();
+
+  // Desempaquetar datos si viene con ?hw= en la URL
+  useEffect(() => {
+    const encodedPayload = searchParams.get('hw') || searchParams.get('data');
+    if (encodedPayload) {
+      const decoded = decodeAssignmentPayload(encodedPayload);
+      if (decoded) {
+        useHomeworkStore.getState().importAssignment(decoded);
+      }
+    }
+  }, [searchParams]);
 
   // Recuperar datos del estudiante desde sessionStorage
   const [studentData] = useState<StudentData | null>(() => {
@@ -179,8 +163,6 @@ export default function HomeworkPlayPage() {
   const [submitted, setSubmitted] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [studentPhotos, setStudentPhotos] = useState<string[]>([]);
-  const [isPdfOpenInPage, setIsPdfOpenInPage] = useState<boolean>(true);
-  const [showPdfModal, setShowPdfModal] = useState<boolean>(false);
   const [selectedZoomPhoto, setSelectedZoomPhoto] = useState<string | null>(null);
   const [typedAnswer, setTypedAnswer] = useState('');
   const [photoAnswer, setPhotoAnswer] = useState<string | null>(null);
@@ -205,7 +187,10 @@ export default function HomeworkPlayPage() {
     if (isSyncingRemote) return;
     const hasQuestions = questions.length > 0;
     if (!studentData || !pin || (!assignment && !isSyncingRemote) || (assignment && !hasQuestions)) {
-      navigate(`/homework/${pin || ''}`, { replace: true });
+      navigate({
+        pathname: `/homework/${pin || ''}`,
+        search: window.location.search,
+      }, { replace: true });
     }
   }, [studentData, pin, assignment, questions.length, isSyncingRemote, navigate]);
 
@@ -330,6 +315,7 @@ export default function HomeworkPlayPage() {
         setStudentPhotos((prev) => [...prev, webpUrl]);
       }
     }
+    e.target.value = '';
   };
 
   const removePhoto = (indexToRemove: number) => {
@@ -550,21 +536,37 @@ export default function HomeworkPlayPage() {
                     <Camera className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Fotos de tu cuaderno ({studentPhotos.length}/6)</span>
                   </div>
-                  <div className="relative px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-white text-xs font-bold flex items-center gap-1 cursor-pointer overflow-hidden transition-all shadow-md shadow-emerald-600/20">
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Subir fotos</span>
+                </div>
+                <p className="text-[11px] text-white/40 mb-3">
+                  Adjunta capturas claras de tus apuntes o procedimientos antes de enviar.
+                </p>
+
+                {/* Botones Nativos de Cámara y Galería */}
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <label className="relative flex items-center justify-center gap-1.5 p-3 rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs font-black shadow-md cursor-pointer overflow-hidden transition-all text-center select-none">
+                    <Camera className="w-4 h-4 flex-shrink-0" />
+                    <span>📸 Cámara</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+                      onChange={handlePhotoUpload}
+                    />
+                  </label>
+
+                  <label className="relative flex items-center justify-center gap-1.5 p-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white text-xs font-black shadow-md cursor-pointer overflow-hidden transition-all text-center select-none">
+                    <Plus className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <span>📁 Galería</span>
                     <input
                       type="file"
                       accept="image/*"
                       multiple
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
                       onChange={handlePhotoUpload}
                     />
-                  </div>
+                  </label>
                 </div>
-                <p className="text-[11px] text-white/40 mb-3">
-                  Adjunta capturas claras de tus apuntes o procedimientos antes de entregar.
-                </p>
                 {studentPhotos.length > 0 ? (
                   <div className="grid grid-cols-4 gap-2">
                     {studentPhotos.map((photo, pIdx) => (
@@ -597,15 +599,15 @@ export default function HomeworkPlayPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => { setShowSummary(false); setCurrentIndex(questions.length - 1); }}
-                className="py-3 px-4 rounded-xl border border-white/10 text-white/60 hover:bg-white/5 text-sm font-semibold"
+                className="py-3.5 px-4 rounded-xl border border-white/10 text-white/60 hover:bg-white/5 text-sm font-semibold"
               >
                 ← Revisar
               </button>
               <button
                 onClick={handleSubmit}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-base hover:opacity-90 transition-all shadow-lg shadow-emerald-600/25"
+                className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white font-black text-base hover:opacity-95 active:scale-[0.98] transition-all shadow-xl shadow-emerald-500/30 cursor-pointer"
               >
-                <Send className="w-4 h-4" /> Entregar tarea
+                <span>🚀 ENVIAR TAREA</span>
               </button>
             </div>
           </div>
@@ -672,24 +674,17 @@ export default function HomeworkPlayPage() {
 
       {/* Contenido principal */}
       <main className="flex-1 flex flex-col max-w-2xl mx-auto w-full px-4 py-6 gap-6">
-        {/* Banner y Visor Inmediato de Material Adjunto (PDF, Word, Video o Enlace) */}
-        {(assignment.pdfUrl || assignment.videoUrl || assignment.externalLink) && (
-          <div className="space-y-3">
-            {/* Si hay video principal adjunto a la asignación */}
+        {/* Banner y Visor Inmediato de Material Didáctico (Video y Lectura de Guía en Pantalla) */}
+        {(assignment.documentText || assignment.pdfUrl || assignment.videoUrl || assignment.externalLink) && (
+          <div className="space-y-4">
+            {/* Si hay video principal adjunto a la asignación (se reproduce en la misma página) */}
             {assignment.videoUrl && (
               <div className="rounded-2xl overflow-hidden border border-purple-500/40 bg-black shadow-xl">
-                <div className="p-2.5 bg-gradient-to-r from-purple-950 to-slate-900 border-b border-purple-500/30 flex items-center justify-between text-xs">
+                <div className="p-3 bg-gradient-to-r from-purple-950 via-slate-900 to-slate-900 border-b border-purple-500/30 flex items-center justify-between text-xs">
                   <span className="text-purple-300 font-bold flex items-center gap-1.5">
                     <span>🎥 Video Explicativo de la Asignación</span>
                   </span>
-                  <a
-                    href={assignment.videoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white/60 hover:text-white text-[11px] font-semibold"
-                  >
-                    Abrir en YouTube ↗
-                  </a>
+                  <span className="text-[10px] text-white/40">Reproducir directamente aquí</span>
                 </div>
                 <div className="w-full aspect-video">
                   <iframe
@@ -703,60 +698,34 @@ export default function HomeworkPlayPage() {
               </div>
             )}
 
-            {/* Si hay documento adjunto (PDF o Word) */}
-            {assignment.pdfUrl && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/80 via-indigo-950/80 to-slate-900/80 border border-blue-500/40 text-white shadow-lg backdrop-blur-sm">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="p-2.5 bg-blue-500/20 rounded-xl text-blue-300 flex-shrink-0">
-                      <FileText className="w-5 h-5" />
+            {/* Lectura directa de la Guía o Taller en la misma pantalla (SIN descargas ni bloqueos) */}
+            {(assignment.documentText || assignment.description) && (
+              <div className="rounded-2xl border border-emerald-500/40 bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 shadow-xl space-y-3">
+                <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                      <FileText className="w-4 h-4" />
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] text-blue-300 font-black uppercase tracking-wider">
-                        Documento Abierto / Taller
-                      </p>
-                      <p className="text-sm font-bold text-white/95 truncate">
-                        {assignment.pdfName || 'Guía de la Asignación'}
+                    <div>
+                      <h3 className="text-xs sm:text-sm font-black text-white">
+                        Guía de Lectura y Contenido del Taller
+                      </h3>
+                      <p className="text-[10px] text-emerald-400 font-semibold">
+                        {assignment.pdfName ? `Documento: ${assignment.pdfName}` : 'Lectura obligatoria para responder la actividad'}
                       </p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                    <a
-                      href={assignment.pdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      download={assignment.pdfName || 'taller.pdf'}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-sm"
-                    >
-                      Descargar
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => setIsPdfOpenInPage((prev) => !prev)}
-                      className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 shadow-md transition-all ${
-                        isPdfOpenInPage
-                          ? 'bg-blue-800 text-white border border-blue-400'
-                          : 'bg-white/10 text-white hover:bg-white/20'
-                      }`}
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>{isPdfOpenInPage ? 'Minimizar' : 'Ver Guía'}</span>
-                    </button>
                   </div>
                 </div>
 
-                {/* Visor desplegado enseguida al entrar */}
-                {isPdfOpenInPage && (
-                  <div className="w-full bg-slate-900 border border-blue-500/40 rounded-2xl overflow-hidden shadow-2xl transition-all animate-fade-in">
-                    <div className="h-[65vh] sm:h-[75vh] w-full bg-white">
-                      <iframe
-                        src={assignment.pdfUrl}
-                        title="Documento / Guía"
-                        className="w-full h-full border-none"
-                      />
-                    </div>
-                  </div>
-                )}
+                {/* Texto completo disponible para leer en pantalla */}
+                <div className="max-h-64 sm:max-h-80 overflow-y-auto pr-2 text-slate-100 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-normal selection:bg-emerald-500/30">
+                  {assignment.documentText || assignment.description}
+                </div>
+
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-white/40">
+                  <span>📖 Lee atentamente antes de responder</span>
+                  <span>Desliza para leer completo ↕</span>
+                </div>
               </div>
             )}
 
@@ -908,7 +877,12 @@ export default function HomeworkPlayPage() {
 
                   {photoAnswer ? (
                     <div className="relative max-w-xs mx-auto rounded-xl overflow-hidden border border-white/20 bg-black/60 shadow-lg">
-                      <img src={photoAnswer} alt="Foto adjunta" className="w-full max-h-48 object-contain" />
+                      <img
+                        src={photoAnswer}
+                        alt="Foto adjunta"
+                        className="w-full max-h-48 object-contain cursor-pointer"
+                        onClick={() => setSelectedZoomPhoto(photoAnswer)}
+                      />
                       {!showFeedback && (
                         <button
                           type="button"
@@ -921,23 +895,49 @@ export default function HomeworkPlayPage() {
                       )}
                     </div>
                   ) : (
-                    <div className="relative inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 cursor-pointer overflow-hidden transition-all">
-                      <Camera className="w-4 h-4 flex-shrink-0" />
-                      <span>Tomar Foto con Cámara o Elegir de Galería</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          const webpUrl = await compressImageToWebP(file);
-                          if (webpUrl) {
-                            setPhotoAnswer(webpUrl);
-                            setStudentPhotos((prev) => [...prev, webpUrl]);
-                          }
-                        }}
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      {/* Botón 1: Cámara Nativa (Android / iOS) */}
+                      <label className="relative flex items-center justify-center gap-2 p-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-purple-600/30 cursor-pointer overflow-hidden transition-all select-none">
+                        <Camera className="w-4 h-4 flex-shrink-0" />
+                        <span>📸 Tomar Foto con Cámara</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const webpUrl = await compressImageToWebP(file);
+                            if (webpUrl) {
+                              setPhotoAnswer(webpUrl);
+                              setStudentPhotos((prev) => [...prev, webpUrl]);
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+
+                      {/* Botón 2: Galería / Buscador de Fotos */}
+                      <label className="relative flex items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white font-bold text-xs shadow-md cursor-pointer overflow-hidden transition-all select-none">
+                        <FileText className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        <span>📁 Elegir de Galería</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const webpUrl = await compressImageToWebP(file);
+                            if (webpUrl) {
+                              setPhotoAnswer(webpUrl);
+                              setStudentPhotos((prev) => [...prev, webpUrl]);
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
                     </div>
                   )}
                 </div>
@@ -1001,9 +1001,9 @@ export default function HomeworkPlayPage() {
               )}
               <button
                 onClick={handleNext}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-sm hover:opacity-90 transition-opacity"
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-sm hover:opacity-90 transition-opacity shadow-lg shadow-emerald-600/25 cursor-pointer"
               >
-                {isLastQuestion ? 'Ver resumen' : 'Siguiente →'}
+                {isLastQuestion ? '🚀 ENVIAR TAREA' : 'Siguiente →'}
               </button>
             </div>
           </div>
@@ -1013,44 +1013,20 @@ export default function HomeworkPlayPage() {
         {!showFeedback && !isAnswered && (
           <p className="text-center text-white/30 text-sm">👆 Toca una respuesta para continuar</p>
         )}
-      </main>
 
-      {/* MODAL VISOR DE PDF GUÍA */}
-      {showPdfModal && assignment.pdfUrl && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col p-3 sm:p-6 animate-fade-in">
-          <div className="max-w-4xl w-full mx-auto flex items-center justify-between mb-3 text-white">
-            <div className="flex items-center gap-2 min-w-0">
-              <FileText className="w-5 h-5 text-blue-400 flex-shrink-0" />
-              <span className="font-bold text-sm truncate">{assignment.pdfName || 'Guía de la actividad'}</span>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <a
-                href={assignment.pdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                download={assignment.pdfName || 'guia.pdf'}
-                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold"
-              >
-                Descargar
-              </a>
-              <button
-                onClick={() => setShowPdfModal(false)}
-                className="p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
-                title="Cerrar visor"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+        {/* Botón destacado cuando todo esté respondido */}
+        {allAnswered && !showFeedback && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setShowSummary(true)}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white font-black text-base hover:opacity-95 active:scale-[0.98] shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <span>🚀 ENVIAR TAREA</span>
+            </button>
           </div>
-          <div className="max-w-4xl w-full mx-auto flex-1 bg-white rounded-2xl overflow-hidden shadow-2xl">
-            <iframe
-              src={assignment.pdfUrl}
-              title="Guía PDF"
-              className="w-full h-full border-none"
-            />
-          </div>
-        </div>
-      )}
+        )}
+      </main>
 
       {/* MODAL ZOOM FOTO EVIDENCIA */}
       {selectedZoomPhoto && (

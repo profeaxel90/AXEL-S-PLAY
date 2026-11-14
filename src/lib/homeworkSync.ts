@@ -9,8 +9,8 @@ import type { HomeworkAssignment, HomeworkSubmission } from '../types/homework';
 import { useHomeworkStore } from '../stores/homeworkStore';
 
 const BROKERS = [
-  'wss://broker.hivemq.com:8884/mqtt',
   'wss://broker.emqx.io:8084/mqtt',
+  'wss://broker.hivemq.com:8884/mqtt',
 ];
 
 class HomeworkSyncManager {
