@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2, XCircle, RotateCcw, Send, Home, AlertCircle,
-  FileText, Camera, Eye, Trash2, X, Plus, Loader2, Sparkles
+  FileText, Camera, Eye, Trash2, X, Plus, Loader2, Sparkles,
+  Bold, AlignLeft, AlignCenter, AlignJustify
 } from 'lucide-react';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
@@ -11,6 +12,7 @@ import { compressImageToWebP } from '../../lib/imageCompressor';
 import { homeworkSync } from '../../lib/homeworkSync';
 import { decodeAssignmentPayload } from '../../lib/assignmentPayload';
 import PdfCanvasViewer from '../../components/common/PdfCanvasViewer';
+import FormattedTextViewer from '../../components/common/FormattedTextViewer';
 import type { HomeworkAnswerSubmission } from '../../types/homework';
 import MascotAvatar from '../../components/game/MascotAvatar';
 
@@ -166,6 +168,7 @@ export default function HomeworkPlayPage() {
   const [studentPhotos, setStudentPhotos] = useState<string[]>([]);
   const [selectedZoomPhoto, setSelectedZoomPhoto] = useState<string | null>(null);
   const [typedAnswer, setTypedAnswer] = useState('');
+  const [typedAnswerAlign, setTypedAnswerAlign] = useState<'left' | 'center' | 'justify'>('left');
   const [photoAnswer, setPhotoAnswer] = useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [documentViewMode, setDocumentViewMode] = useState<'canvas' | 'text'>('canvas');
@@ -655,45 +658,35 @@ export default function HomeworkPlayPage() {
                   Adjunta capturas claras de tus apuntes o procedimientos antes de enviar.
                 </p>
 
-                {/* Inputs nativos ocultos activados por referencia */}
-                <input
-                  ref={summaryCameraRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={handleSummaryCameraUpload}
-                />
-                <input
-                  ref={summaryGalleryRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleSummaryGalleryUpload}
-                />
+                {/* Botones de Cámara y Galería con Interacción Táctil Directa Inmune a Bloqueos */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                  {/* Botón 1: Cámara Nativa con captura directa */}
+                  <div className="relative overflow-hidden rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs font-black shadow-md p-3.5 flex items-center justify-center gap-2 cursor-pointer transition-all select-none border border-purple-400/30">
+                    <Camera className="w-4 h-4 flex-shrink-0 pointer-events-none" />
+                    <span className="pointer-events-none">📸 Tomar Foto con Cámara</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/jpg,image/*"
+                      capture="environment"
+                      disabled={isProcessingPhoto || studentPhotos.length >= 6}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+                      onChange={handleSummaryCameraUpload}
+                    />
+                  </div>
 
-                {/* Botones Nativos de Cámara y Galería */}
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  <button
-                    type="button"
-                    disabled={isProcessingPhoto || studentPhotos.length >= 6}
-                    onClick={() => summaryCameraRef.current?.click()}
-                    className="flex items-center justify-center gap-1.5 p-3 rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs font-black shadow-md cursor-pointer transition-all text-center select-none disabled:opacity-40"
-                  >
-                    <Camera className="w-4 h-4 flex-shrink-0" />
-                    <span>📸 Cámara</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={isProcessingPhoto || studentPhotos.length >= 6}
-                    onClick={() => summaryGalleryRef.current?.click()}
-                    className="flex items-center justify-center gap-1.5 p-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white text-xs font-black shadow-md cursor-pointer transition-all text-center select-none disabled:opacity-40"
-                  >
-                    <Plus className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <span>📁 Galería</span>
-                  </button>
+                  {/* Botón 2: Galería / Archivos */}
+                  <div className="relative overflow-hidden rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white text-xs font-black shadow-md p-3.5 flex items-center justify-center gap-2 cursor-pointer transition-all select-none">
+                    <Plus className="w-4 h-4 text-emerald-400 flex-shrink-0 pointer-events-none" />
+                    <span className="pointer-events-none">📁 Elegir de Galería</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/jpg,image/*"
+                      multiple
+                      disabled={isProcessingPhoto || studentPhotos.length >= 6}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+                      onChange={handleSummaryGalleryUpload}
+                    />
+                  </div>
                 </div>
                 {studentPhotos.length > 0 ? (
                   <div className="grid grid-cols-4 gap-2">
@@ -871,9 +864,11 @@ export default function HomeworkPlayPage() {
                   />
                 ) : (
                   <div className="rounded-2xl border border-emerald-500/40 bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 shadow-xl space-y-3">
-                    <div className="max-h-64 sm:max-h-80 overflow-y-auto pr-2 text-slate-100 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-normal selection:bg-emerald-500/30">
-                      {assignment.documentText || assignment.description}
-                    </div>
+                    <FormattedTextViewer
+                      text={assignment.documentText || assignment.description || ''}
+                      initialAlign={assignment.documentTextAlign || 'justify'}
+                      showControls={true}
+                    />
                   </div>
                 )}
               </div>
@@ -889,16 +884,18 @@ export default function HomeworkPlayPage() {
                         Guía de Lectura y Contenido del Taller
                       </h3>
                       <p className="text-[10px] text-emerald-400 font-semibold">
-                        {assignment.pdfName ? `Documento: ${assignment.pdfName}` : 'Lectura obligatoria para responder la actividad'}
+                        {assignment.pdfName ? `Documento: ${assignment.pdfName}` : 'Lectura en pantalla (Justificada, centrada y con formato)'}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Texto completo disponible para leer en pantalla */}
-                <div className="max-h-64 sm:max-h-80 overflow-y-auto pr-2 text-slate-100 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-normal selection:bg-emerald-500/30">
-                  {assignment.documentText || assignment.description}
-                </div>
+                {/* Texto formateado para leer en pantalla */}
+                <FormattedTextViewer
+                  text={assignment.documentText || assignment.description || ''}
+                  initialAlign={assignment.documentTextAlign || 'justify'}
+                  showControls={true}
+                />
 
                 <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-white/40">
                   <span>📖 Lee atentamente antes de responder</span>
@@ -950,8 +947,8 @@ export default function HomeworkPlayPage() {
         {/* ── SECCIONES DE RESPUESTA MODULARES Y FLEXIBLES (SELECCIÓN MÚLTIPLE, TEXTO Y/O FOTO) ── */}
         {(() => {
           const hasChoice = currentQ.allowChoice !== false && (currentQ.options?.length ?? 0) > 0;
-          const hasText = Boolean(currentQ.allowTextResponse);
-          const hasPhoto = Boolean(currentQ.allowPhotoUpload || assignment.allowPhotoUpload !== false);
+          const hasText = currentQ.allowTextResponse !== false;
+          const hasPhoto = currentQ.allowPhotoUpload !== false && assignment.allowPhotoUpload !== false;
           const isMultiInput = hasText || hasPhoto;
 
           return (
@@ -1021,24 +1018,78 @@ export default function HomeworkPlayPage() {
                 </div>
               )}
 
-              {/* 2. ESPACIO PARA ESCRIBIR TEXTO (SI ESTÁ HABILITADO POR EL DOCENTE) */}
+              {/* 2. ESPACIO PARA ESCRIBIR TEXTO CON FORMATO (NEGRITA, JUSTIFICAR, CENTRAR) */}
               {hasText && (
                 <div className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 space-y-2.5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-blue-300 flex items-center gap-2">
-                    <span>✍️ Tu Respuesta Escrita / Justificación</span>
-                  </label>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-blue-300 flex items-center gap-1.5">
+                      <span>✍️ Tu Respuesta Escrita / Justificación</span>
+                    </label>
+
+                    {/* Barra de formato rápido para el estudiante */}
+                    <div className="flex items-center gap-1 bg-slate-950/90 border border-white/10 rounded-lg p-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTypedAnswer((prev) => (prev ? `${prev} **negrita**` : '**negrita**'));
+                        }}
+                        className="px-2 py-0.5 rounded text-[11px] font-black text-white hover:bg-white/10 transition-colors flex items-center gap-0.5"
+                        title="Insertar negrita (**texto**)"
+                      >
+                        <Bold className="w-3 h-3" />
+                        <span>B</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTypedAnswerAlign('justify')}
+                        className={`p-1 rounded text-[10px] transition-colors ${
+                          typedAnswerAlign === 'justify' ? 'bg-blue-600 text-white font-bold' : 'text-white/50 hover:text-white'
+                        }`}
+                        title="Justificar texto"
+                      >
+                        <AlignJustify className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTypedAnswerAlign('center')}
+                        className={`p-1 rounded text-[10px] transition-colors ${
+                          typedAnswerAlign === 'center' ? 'bg-blue-600 text-white font-bold' : 'text-white/50 hover:text-white'
+                        }`}
+                        title="Centrar texto"
+                      >
+                        <AlignCenter className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTypedAnswerAlign('left')}
+                        className={`p-1 rounded text-[10px] transition-colors ${
+                          typedAnswerAlign === 'left' ? 'bg-blue-600 text-white font-bold' : 'text-white/50 hover:text-white'
+                        }`}
+                        title="Alinear a la izquierda"
+                      >
+                        <AlignLeft className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+
                   <textarea
                     rows={3}
                     value={typedAnswer}
                     onChange={(e) => setTypedAnswer(e.target.value)}
                     disabled={showFeedback}
                     placeholder="Escribe aquí tu respuesta detallada, justificación o procedimiento..."
-                    className="w-full p-3.5 rounded-xl bg-slate-900 border border-white/15 text-white placeholder-white/40 focus:outline-none focus:border-blue-400 text-base sm:text-sm resize-none shadow-inner"
+                    className={`w-full p-3.5 rounded-xl bg-slate-900 border border-white/15 text-white placeholder-white/40 focus:outline-none focus:border-blue-400 text-base sm:text-sm resize-none shadow-inner ${
+                      typedAnswerAlign === 'center'
+                        ? 'text-center'
+                        : typedAnswerAlign === 'justify'
+                        ? 'text-justify [text-align-last:left]'
+                        : 'text-left'
+                    }`}
                   />
                 </div>
               )}
 
-              {/* 3. ESPACIO PARA SUBIR FOTO DEL TRABAJO / CUADERNO (SI ESTÁ HABILITADO) */}
+              {/* 3. ESPACIO PARA SUBIR FOTO DEL TRABAJO / CUADERNO (INTERACCIÓN TÁCTIL DIRECTA) */}
               {hasPhoto && (
                 <div className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3 text-center">
                   <div className="flex items-center justify-between text-left">
@@ -1078,46 +1129,34 @@ export default function HomeworkPlayPage() {
                       )}
                     </div>
                   ) : (
-                    <>
-                      <input
-                        ref={cameraInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="hidden"
-                        onChange={handleQuestionCameraUpload}
-                      />
-                      <input
-                        ref={galleryInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleQuestionGalleryUpload}
-                      />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                        {/* Botón 1: Cámara Nativa (Android / iOS) */}
-                        <button
-                          type="button"
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      {/* Botón 1: Cámara Nativa con captura directa (Táctil Directo) */}
+                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-purple-600/30 p-4 flex items-center justify-center gap-2 cursor-pointer transition-all select-none border border-purple-400/30">
+                        <Camera className="w-5 h-5 flex-shrink-0 pointer-events-none" />
+                        <span className="pointer-events-none">📸 Tomar Foto con Cámara</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/jpg,image/*"
+                          capture="environment"
                           disabled={isProcessingPhoto}
-                          onClick={() => cameraInputRef.current?.click()}
-                          className="flex items-center justify-center gap-2 p-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-purple-600/30 cursor-pointer transition-all select-none disabled:opacity-40"
-                        >
-                          <Camera className="w-4 h-4 flex-shrink-0" />
-                          <span>📸 Tomar Foto con Cámara</span>
-                        </button>
-
-                        {/* Botón 2: Galería / Buscador de Fotos */}
-                        <button
-                          type="button"
-                          disabled={isProcessingPhoto}
-                          onClick={() => galleryInputRef.current?.click()}
-                          className="flex items-center justify-center gap-2 p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white font-bold text-xs shadow-md cursor-pointer transition-all select-none disabled:opacity-40"
-                        >
-                          <FileText className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                          <span>📁 Elegir de Galería</span>
-                        </button>
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+                          onChange={handleQuestionCameraUpload}
+                        />
                       </div>
-                    </>
+
+                      {/* Botón 2: Galería / Buscador de Fotos */}
+                      <div className="relative overflow-hidden rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-white/20 text-white font-bold text-xs sm:text-sm shadow-md p-4 flex items-center justify-center gap-2 cursor-pointer transition-all select-none">
+                        <FileText className="w-5 h-5 text-emerald-400 flex-shrink-0 pointer-events-none" />
+                        <span className="pointer-events-none">📁 Elegir de Galería o Archivos</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/jpg,image/*"
+                          disabled={isProcessingPhoto}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+                          onChange={handleQuestionGalleryUpload}
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

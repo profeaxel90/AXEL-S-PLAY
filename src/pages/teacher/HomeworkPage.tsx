@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -6,8 +6,9 @@ import {
   Trash2, Users, ChevronRight, Download, ArrowLeft,
   Calendar, Hash, ToggleLeft, ToggleRight, Eye, Award, FileText, Camera, Image as ImageIcon,
   QrCode, X, Clock, ExternalLink, Pencil, FolderPlus, Layers, Shield, Sparkles, Send, Video,
-  MessageSquare, Check
+  MessageSquare, Check, Bold, AlignLeft, AlignCenter, AlignJustify
 } from 'lucide-react';
+import FormattedTextViewer from '../../components/common/FormattedTextViewer';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
 import { encodeAssignmentPayload } from '../../lib/assignmentPayload';
@@ -147,6 +148,7 @@ interface NewAssignmentModalProps {
     title: string;
     description: string;
     documentText?: string;
+    documentTextAlign?: 'left' | 'center' | 'justify';
     gradeGroupTarget: string;
     groupId?: string;
     gameId: string;
@@ -178,6 +180,59 @@ function NewAssignmentModal({ defaultGameId, initialAssignment, onClose, onCreat
     initialAssignment?.description || 'Lee con atención y responde la actividad.'
   );
   const [documentText, setDocumentText] = useState(initialAssignment?.documentText || '');
+  const [documentTextAlign, setDocumentTextAlign] = useState<'left' | 'center' | 'justify'>(
+    initialAssignment?.documentTextAlign || 'justify'
+  );
+  const [textTab, setTextTab] = useState<'edit' | 'preview'>('edit');
+  const documentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const applyBoldToDocumentText = () => {
+    const ta = documentTextareaRef.current;
+    if (!ta) {
+      setDocumentText((prev) => (prev ? `${prev} **texto en negrita**` : '**texto en negrita**'));
+      return;
+    }
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const val = ta.value;
+    if (start !== end) {
+      const selected = val.substring(start, end);
+      const replacement = `**${selected}**`;
+      const nextVal = val.substring(0, start) + replacement + val.substring(end);
+      setDocumentText(nextVal);
+      setTimeout(() => {
+        ta.focus();
+        ta.setSelectionRange(start + 2, start + 2 + selected.length);
+      }, 0);
+    } else {
+      const nextVal = val.substring(0, start) + '**texto en negrita**' + val.substring(end);
+      setDocumentText(nextVal);
+      setTimeout(() => {
+        ta.focus();
+        ta.setSelectionRange(start + 2, start + 18);
+      }, 0);
+    }
+  };
+
+  const applyCenterToDocumentText = () => {
+    const ta = documentTextareaRef.current;
+    if (!ta) {
+      setDocumentTextAlign('center');
+      return;
+    }
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const val = ta.value;
+    if (start !== end) {
+      const selected = val.substring(start, end);
+      const replacement = `\n[center]${selected}[/center]\n`;
+      const nextVal = val.substring(0, start) + replacement + val.substring(end);
+      setDocumentText(nextVal);
+    } else {
+      setDocumentTextAlign((prev) => (prev === 'center' ? 'justify' : 'center'));
+    }
+  };
+
   const [gradeGroupTarget, setGradeGroupTarget] = useState(initialAssignment?.gradeGroupTarget || '');
   const [groupId, setGroupId] = useState(initialAssignment?.groupId || '');
   const [gameId, setGameId] = useState(initialAssignment?.gameId || defaultGameId || (games[0]?.id ?? 'g-1'));
@@ -276,6 +331,7 @@ function NewAssignmentModal({ defaultGameId, initialAssignment, onClose, onCreat
       title: title.trim(),
       description: description.trim() || 'Lee con atención y responde la actividad.',
       documentText: documentText.trim() || undefined,
+      documentTextAlign,
       gradeGroupTarget: gradeGroupTarget.trim() || (groups.find(g => g.id === groupId)?.name || 'General'),
       groupId: groupId || undefined,
       gameId: gameId || 'g-1',
@@ -469,18 +525,99 @@ function NewAssignmentModal({ defaultGameId, initialAssignment, onClose, onCreat
             </div>
 
             {/* Lectura / Texto de la Guía o Taller (Visible directamente en el celular del estudiante) */}
-            <div className="p-4 rounded-2xl bg-slate-900 border-2 border-emerald-500/40 space-y-2.5 shadow-lg">
+            <div className="p-4 rounded-2xl bg-slate-900 border-2 border-emerald-500/40 space-y-3 shadow-lg">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <label className="text-xs font-black text-emerald-300 flex items-center gap-1.5 uppercase tracking-wide">
                   <FileText className="w-4 h-4 text-emerald-400" />
                   <span>📖 Lectura / Texto Largo del Taller (Lectura Directa en Celular y PC)</span>
                 </label>
-                <div className="flex items-center gap-2">
-                  {documentText && (
-                    <span className="text-[10px] text-emerald-300 font-bold bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
-                      {documentText.length} caracteres · ~{documentText.trim().split(/\s+/).length} palabras
-                    </span>
-                  )}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setTextTab('edit')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                      textTab === 'edit'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'bg-white/5 text-white/50 hover:text-white'
+                    }`}
+                  >
+                    ✏️ Editor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTextTab('preview')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                      textTab === 'preview'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-white/5 text-white/50 hover:text-white'
+                    }`}
+                  >
+                    👁️ Vista Previa
+                  </button>
+                </div>
+              </div>
+
+              {/* Barra de Formato: Negrita, Justificar, Centrar, Izquierda, Pegar */}
+              <div className="flex items-center justify-between flex-wrap gap-2 p-2 rounded-xl bg-slate-950 border border-white/10">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={applyBoldToDocumentText}
+                    className="p-1.5 px-2.5 rounded-lg bg-white/10 hover:bg-emerald-500/20 hover:text-emerald-300 text-white text-xs font-black flex items-center gap-1 transition-all"
+                    title="Poner en negrita texto seleccionado (**texto**)"
+                  >
+                    <Bold className="w-3.5 h-3.5" />
+                    <span>Negrita</span>
+                  </button>
+
+                  <div className="h-4 w-px bg-white/15 mx-1" />
+
+                  <span className="text-[10px] text-white/40 uppercase font-bold mr-1 hidden sm:inline">Alineación:</span>
+
+                  <button
+                    type="button"
+                    onClick={() => setDocumentTextAlign('justify')}
+                    className={`p-1.5 rounded-lg flex items-center gap-1 text-xs transition-all ${
+                      documentTextAlign === 'justify'
+                        ? 'bg-emerald-600 text-white font-bold'
+                        : 'hover:bg-white/5 text-white/60'
+                    }`}
+                    title="Justificar texto"
+                  >
+                    <AlignJustify className="w-3.5 h-3.5" />
+                    <span className="text-[10px] hidden xs:inline">Justificar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={applyCenterToDocumentText}
+                    className={`p-1.5 rounded-lg flex items-center gap-1 text-xs transition-all ${
+                      documentTextAlign === 'center'
+                        ? 'bg-emerald-600 text-white font-bold'
+                        : 'hover:bg-white/5 text-white/60'
+                    }`}
+                    title="Centrar texto"
+                  >
+                    <AlignCenter className="w-3.5 h-3.5" />
+                    <span className="text-[10px] hidden xs:inline">Centrar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDocumentTextAlign('left')}
+                    className={`p-1.5 rounded-lg flex items-center gap-1 text-xs transition-all ${
+                      documentTextAlign === 'left'
+                        ? 'bg-emerald-600 text-white font-bold'
+                        : 'hover:bg-white/5 text-white/60'
+                    }`}
+                    title="Alinear a la izquierda"
+                  >
+                    <AlignLeft className="w-3.5 h-3.5" />
+                    <span className="text-[10px] hidden xs:inline">Izquierda</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={async () => {
@@ -488,36 +625,55 @@ function NewAssignmentModal({ defaultGameId, initialAssignment, onClose, onCreat
                         const clip = await navigator.clipboard.readText();
                         if (clip) setDocumentText((prev) => (prev ? `${prev}\n\n${clip}` : clip));
                       } catch {
-                        alert('No se pudo acceder al portapapeles. Pega el texto manualmente con Ctrl+V.');
+                        alert('Pega el texto directamente con Ctrl+V dentro de la caja.');
                       }
                     }}
-                    className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/30 text-emerald-200 text-[11px] font-bold flex items-center gap-1 transition-all"
-                    title="Pegar texto copiado del portapapeles"
+                    className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/30 text-emerald-200 text-xs font-bold flex items-center gap-1 transition-all"
                   >
-                    <Clipboard className="w-3 h-3" />
+                    <Clipboard className="w-3.5 h-3.5" />
                     <span>Pegar texto</span>
                   </button>
+
                   {documentText && (
                     <button
                       type="button"
                       onClick={() => setDocumentText('')}
-                      className="text-[10px] text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded bg-red-500/10 hover:bg-red-500/20 transition-colors"
-                      title="Borrar texto"
+                      className="text-[11px] text-red-400 hover:text-red-300 px-2 py-1 rounded bg-red-500/10 hover:bg-red-500/20"
                     >
                       Limpiar
                     </button>
                   )}
                 </div>
               </div>
-              <textarea
-                rows={6}
-                value={documentText}
-                onChange={(e) => setDocumentText(e.target.value)}
-                placeholder="Escribe o pega aquí el contenido de la lectura, texto largo, taller o guía completa. Al subir un archivo PDF o Word, se extraerá aquí de forma automática. El estudiante podrá leerlo cómodamente en su celular o computador sin descargar archivos."
-                className="input text-xs w-full py-2.5 bg-slate-950 border-white/10 text-white placeholder-white/40 resize-y font-normal leading-relaxed shadow-inner"
-              />
-              <div className="flex items-center justify-between text-[11px] text-emerald-400/80">
-                <span>⭐ Recomendado: El alumno lee todo directamente en pantalla sin depender de visores externos ni descargas.</span>
+
+              {textTab === 'edit' ? (
+                <textarea
+                  ref={documentTextareaRef}
+                  rows={6}
+                  value={documentText}
+                  onChange={(e) => setDocumentText(e.target.value)}
+                  placeholder="Escribe o pega aquí la lectura o taller. Puedes seleccionar palabras y presionar 'Negrita' (**palabra**), justificar o centrar párrafos."
+                  className="input text-xs w-full py-2.5 bg-slate-950 border-white/10 text-white placeholder-white/40 resize-y font-normal leading-relaxed shadow-inner"
+                />
+              ) : (
+                <div className="p-3.5 rounded-xl bg-slate-950 border border-emerald-500/30 max-h-60 overflow-y-auto">
+                  <FormattedTextViewer
+                    text={documentText}
+                    initialAlign={documentTextAlign}
+                    showControls={false}
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-[11px] text-white/50">
+                <span>
+                  💡 Selecciona texto y presiona <strong>Negrita</strong> para resaltarlo. Usa <strong>Justificar</strong> o <strong>Centrar</strong> para darle el formato deseado.
+                </span>
+                {documentText && (
+                  <span className="font-mono text-emerald-400 shrink-0 ml-2">
+                    {documentText.length} car. · ~{documentText.trim().split(/\s+/).length} palabras
+                  </span>
+                )}
               </div>
             </div>
           </div>

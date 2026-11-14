@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, FileText, AlertCircle } from 'lucide-react';
+import FormattedTextViewer from './FormattedTextViewer';
 
 interface PdfCanvasViewerProps {
   pdfUrl: string;
@@ -137,9 +138,7 @@ export default function PdfCanvasViewer({ pdfUrl, fileName, fallbackText }: PdfC
           <span>Vista de lectura directa activa</span>
         </div>
         {fallbackText ? (
-          <div className="max-h-72 overflow-y-auto text-xs text-slate-100 leading-relaxed whitespace-pre-line p-3 bg-slate-950 rounded-xl border border-white/5 font-normal">
-            {fallbackText}
-          </div>
+          <FormattedTextViewer text={fallbackText} initialAlign="justify" showControls={true} />
         ) : (
           <p className="text-xs text-white/50">
             Documento: {fileName || 'Guía de la asignación'}. Puedes leer las instrucciones y resolver las preguntas abajo.
