@@ -134,6 +134,7 @@ interface HomeworkState {
   submitHomework: (assignmentId: string, submission: Omit<HomeworkSubmission, 'id' | 'submittedAt'>) => HomeworkSubmission;
   toggleAssignmentStatus: (id: string) => void;
   deleteAssignment: (id: string) => void;
+  importAssignment: (assignment: HomeworkAssignment) => void;
 
   // Mantenimiento y Liberación de Memoria
   cleanStoragePhotos: () => number;
@@ -310,6 +311,20 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
 
     deleteAssignment: (id) => {
       const updated = get().assignments.filter((a) => a.id !== id);
+      set({ assignments: updated });
+      persistAssignments(updated);
+    },
+
+    importAssignment: (assignment) => {
+      const existing = get().assignments;
+      const index = existing.findIndex((a) => a.id === assignment.id || a.pin === assignment.pin);
+      let updated: HomeworkAssignment[];
+      if (index >= 0) {
+        updated = [...existing];
+        updated[index] = { ...existing[index], ...assignment };
+      } else {
+        updated = [assignment, ...existing];
+      }
       set({ assignments: updated });
       persistAssignments(updated);
     },

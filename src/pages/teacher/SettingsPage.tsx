@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { audioEngine, OFFICIAL_TRACK_NAME, OFFICIAL_TRACK_URL } from '../../lib/audio';
 import { useAuthStore, type StoredAccount } from '../../stores/authStore';
 import { useHomeworkStore } from '../../stores/homeworkStore';
+import { useSessionHistoryStore } from '../../stores/sessionHistoryStore';
 import StorageUsageBar from '../../components/common/StorageUsageBar';
 import {
   Volume2, VolumeX, Music, Sliders, CheckCircle2,
@@ -88,7 +89,9 @@ export default function SettingsPage() {
 
   const handleExecuteResetStats = () => {
     try {
-      // Limpiar historial de sesiones de juego
+      // Limpiar historial real de partidas
+      useSessionHistoryStore.getState().clearHistory();
+      localStorage.removeItem('axels_play_session_history');
       localStorage.removeItem('axelplay_session_history');
       localStorage.removeItem('axels_play_recent_sessions');
       // Limpiar tareas y entregas

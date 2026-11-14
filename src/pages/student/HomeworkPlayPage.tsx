@@ -7,6 +7,7 @@ import {
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
 import { SAMPLE_GAMES } from '../../data/mockGames';
+import { compressImageToWebP } from '../../lib/imageCompressor';
 import type { HomeworkAnswerSubmission } from '../../types/homework';
 import MascotAvatar from '../../components/game/MascotAvatar';
 
@@ -245,20 +246,17 @@ export default function HomeworkPlayPage() {
     setSubmitted(true);
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const remainingSlots = Math.max(0, 6 - studentPhotos.length);
-    Array.from(files).slice(0, remainingSlots).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const base64 = ev.target?.result as string;
-        if (base64) {
-          setStudentPhotos((prev) => [...prev, base64]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    const selected = Array.from(files).slice(0, remainingSlots);
+    for (const file of selected) {
+      const webpUrl = await compressImageToWebP(file);
+      if (webpUrl) {
+        setStudentPhotos((prev) => [...prev, webpUrl]);
+      }
+    }
   };
 
   const removePhoto = (indexToRemove: number) => {
@@ -768,16 +766,14 @@ export default function HomeworkPlayPage() {
                         accept="image/*"
                         capture="environment"
                         className="hidden"
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            const dataUrl = ev.target?.result as string;
-                            setPhotoAnswer(dataUrl);
-                            setStudentPhotos((prev) => [...prev, dataUrl]);
-                          };
-                          reader.readAsDataURL(file);
+                          const webpUrl = await compressImageToWebP(file);
+                          if (webpUrl) {
+                            setPhotoAnswer(webpUrl);
+                            setStudentPhotos((prev) => [...prev, webpUrl]);
+                          }
                         }}
                       />
                     </label>

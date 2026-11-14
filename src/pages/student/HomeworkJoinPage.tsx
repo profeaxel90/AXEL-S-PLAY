@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { BookOpen, ArrowRight, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useHomeworkStore } from '../../stores/homeworkStore';
+import { decodeAssignmentPayload } from '../../lib/assignmentPayload';
 import { AVAILABLE_MASCOT_SEEDS } from '../../components/game/MascotAvatar';
 import MascotAvatar from '../../components/game/MascotAvatar';
 
 export default function HomeworkJoinPage() {
   const navigate = useNavigate();
   const { pin: paramPin } = useParams<{ pin?: string }>();
+  const [searchParams] = useSearchParams();
   const { getAssignmentByIdOrPin, getGroupByIdOrCode } = useHomeworkStore();
 
   const [step, setStep] = useState<'pin' | 'info'>(paramPin ? 'info' : 'pin');
@@ -24,13 +26,37 @@ export default function HomeworkJoinPage() {
   const totalPages = Math.ceil(AVAILABLE_MASCOT_SEEDS.length / AVATARS_PER_PAGE);
   const visibleAvatars = AVAILABLE_MASCOT_SEEDS.slice(avatarPage * AVATARS_PER_PAGE, (avatarPage + 1) * AVATARS_PER_PAGE);
 
-  // Si viene con param pin, validarlo directo
+  // Si viene con param pin o payload QR (?hw=...), importarlo y validarlo directo
   useEffect(() => {
+    // 1. Desempaquetar datos de asignación embebidos en el QR
+    const encodedPayload = searchParams.get('hw') || searchParams.get('data');
+    if (encodedPayload) {
+      const decoded = decodeAssignmentPayload(encodedPayload);
+      if (decoded) {
+        useHomeworkStore.getState().importAssignment(decoded);
+      }
+    }
+
     if (paramPin) {
       const groupFound = getGroupByIdOrCode(paramPin);
       if (groupFound) {
         navigate(`/homework/group/${groupFound.code}`, { replace: true });
         return;
+      }
+
+      // 2. Si es modo preview del docente, omitir registro de estudiante e iniciar
+      if (searchParams.get('preview') === 'true') {
+        const found = getAssignmentByIdOrPin(paramPin);
+        if (found) {
+          sessionStorage.setItem('hw_student', JSON.stringify({
+            pin: paramPin,
+            fullName: 'Vista Previa Docente',
+            gradeGroup: 'Profesor / Administrador',
+            avatar: 'Lion',
+          }));
+          navigate(`/homework/play/${paramPin}`);
+          return;
+        }
       }
 
       const found = getAssignmentByIdOrPin(paramPin);
@@ -42,7 +68,7 @@ export default function HomeworkJoinPage() {
         setStep('info');
       }
     }
-  }, [paramPin, getAssignmentByIdOrPin, getGroupByIdOrCode, navigate]);
+  }, [paramPin, searchParams, getAssignmentByIdOrPin, getGroupByIdOrCode, navigate]);
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();

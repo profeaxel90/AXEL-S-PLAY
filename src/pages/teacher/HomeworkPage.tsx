@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
+import { encodeAssignmentPayload } from '../../lib/assignmentPayload';
 import type { HomeworkAssignment, HomeworkSubmission, CourseGroup, HomeworkQuestion } from '../../types/homework';
 import MascotAvatar from '../../components/game/MascotAvatar';
 import StorageUsageBar from '../../components/common/StorageUsageBar';
@@ -761,27 +762,52 @@ function AssignmentDetail({
 
 // ── Modal de Código QR ──────────────────────────────────────
 function AssignmentQrModal({ assignment, onClose }: { assignment: HomeworkAssignment; onClose: () => void }) {
-  const shareUrl = `${window.location.origin}/homework/${assignment.pin}`;
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const [useVercelDomain, setUseVercelDomain] = useState(isLocal);
+  const [copied, setCopied] = useState(false);
+
+  const payload = useMemo(() => encodeAssignmentPayload(assignment), [assignment]);
+  const origin = useVercelDomain ? 'https://axel-s-play.vercel.app' : window.location.origin;
+  const shareUrl = `${origin}/homework/${assignment.pin}${payload ? `?hw=${payload}` : ''}`;
+
+  const handleCopy = () => {
+    copyToClipboard(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+      <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 sm:p-7 max-w-sm w-full text-center shadow-2xl relative">
         <button onClick={onClose} className="absolute top-4 right-4 p-2 text-white/40 hover:text-white rounded-full bg-white/5">
           <X className="w-5 h-5" />
         </button>
+
         <h3 className="text-lg font-black text-white">{assignment.title}</h3>
-        <p className="text-xs text-white/50 mt-1 mb-5">Escanea este código con cualquier celular</p>
-        <div className="bg-white p-4 rounded-2xl shadow-xl inline-block mx-auto mb-4">
+        <p className="text-xs text-white/50 mt-1 mb-4">Escanea este código con cualquier celular para abrir la actividad</p>
+
+        {isLocal && (
+          <div className="mb-4 p-2.5 rounded-xl bg-purple-500/15 border border-purple-400/30 text-left text-[11px] text-purple-200">
+            <span className="font-bold block text-yellow-300 mb-0.5">🌐 Escaneo móvil optimizado:</span>
+            Los celulares no pueden acceder a <em>localhost</em>. El QR abre directamente en el enlace público de Vercel con las preguntas listas.
+          </div>
+        )}
+
+        <div className="bg-white p-4 rounded-2xl shadow-xl inline-block mx-auto mb-4 ring-4 ring-emerald-500/20">
           <QRCodeSVG value={shareUrl} size={190} level="M" />
         </div>
+
         <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4">
           <span className="text-[10px] text-white/40 uppercase tracking-wider block font-bold">PIN de Acceso</span>
           <span className="text-2xl font-black text-emerald-400 tracking-widest">{assignment.pin}</span>
         </div>
+
         <button
-          onClick={() => copyToClipboard(shareUrl)}
-          className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+          onClick={handleCopy}
+          className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-lg shadow-emerald-600/30"
         >
-          <Clipboard className="w-4 h-4" /> Copiar enlace directo
+          <Clipboard className="w-4 h-4" />
+          <span>{copied ? '¡Enlace copiado!' : 'Copiar enlace directo'}</span>
         </button>
       </div>
     </div>
