@@ -18,6 +18,59 @@ export interface ExtractedQuestion {
 }
 
 /**
+ * Extrae texto formateado de un PDF usando pdfjs-dist
+ */
+export async function extractTextFromPdf(bytes: ArrayBuffer): Promise<string> {
+  try {
+    const pdfjsLib = await import('pdfjs-dist');
+    if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.js`;
+    }
+
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(bytes),
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    });
+
+    const pdf = await loadingTask.promise;
+    let fullText = '';
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const pageLines: string[] = [];
+      let lastY: number | null = null;
+      let currentLine = '';
+
+      for (const item of textContent.items as any[]) {
+        if (!('str' in item)) continue;
+        const y = item.transform ? item.transform[5] : null;
+        if (lastY !== null && y !== null && Math.abs(y - lastY) > 5) {
+          if (currentLine.trim()) pageLines.push(currentLine.trim());
+          currentLine = item.str;
+        } else {
+          currentLine += (currentLine ? ' ' : '') + item.str;
+        }
+        lastY = y;
+      }
+      if (currentLine.trim()) pageLines.push(currentLine.trim());
+
+      const pageText = pageLines.join('\n');
+      if (pageText.trim()) {
+        fullText += (pdf.numPages > 1 ? `\n--- PÁGINA ${pageNum} ---\n\n` : '') + pageText + '\n\n';
+      }
+    }
+
+    return fullText.trim();
+  } catch (err) {
+    console.warn('[PDF Extractor] Error leyendo PDF con pdfjs:', err);
+    return '';
+  }
+}
+
+/**
  * Extrae texto legible a partir de un archivo subido (.txt, .docx, .pdf)
  */
 export async function extractTextFromFile(file: File): Promise<string> {
@@ -27,10 +80,15 @@ export async function extractTextFromFile(file: File): Promise<string> {
     return await file.text();
   }
 
-  // Para archivos .docx o .pdf en el navegador:
-  // Intentamos leer el texto binario buscando bloques de texto imprimibles
-  // o XML en caso de .docx
   const arrayBuffer = await file.arrayBuffer();
+
+  if (extension === 'pdf') {
+    const pdfText = await extractTextFromPdf(arrayBuffer);
+    if (pdfText && pdfText.trim().length > 10) {
+      return pdfText.trim();
+    }
+  }
+
   const bytes = new Uint8Array(arrayBuffer);
 
   if (extension === 'docx') {
@@ -53,7 +111,7 @@ export async function extractTextFromFile(file: File): Promise<string> {
     }
   }
 
-  // Fallback para PDF o binario: extraer secuencias de texto legibles (ASCII / UTF-8)
+  // Fallback para binario o archivos simples: extraer secuencias de texto legibles (ASCII / UTF-8)
   const decoder = new TextDecoder('utf-8', { fatal: false });
   const rawText = decoder.decode(bytes);
 

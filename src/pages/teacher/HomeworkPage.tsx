@@ -5,7 +5,8 @@ import {
   BookOpen, Plus, Clipboard, CheckCircle2, XCircle,
   Trash2, Users, ChevronRight, Download, ArrowLeft,
   Calendar, Hash, ToggleLeft, ToggleRight, Eye, Award, FileText, Camera, Image as ImageIcon,
-  QrCode, X, Clock, ExternalLink, Pencil, FolderPlus, Layers, Shield, Sparkles, Send, Video
+  QrCode, X, Clock, ExternalLink, Pencil, FolderPlus, Layers, Shield, Sparkles, Send, Video,
+  MessageSquare, Check
 } from 'lucide-react';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useGameStore } from '../../stores/gameStore';
@@ -650,7 +651,38 @@ function NewAssignmentModal({ defaultGameId, initialAssignment, onClose, onCreat
 }
 
 // ── Componente: Detalle de un estudiante ─────────────────────
-function StudentDetail({ submission, onBack }: { submission: HomeworkSubmission; onBack: () => void }) {
+function StudentDetail({
+  assignmentId,
+  pin,
+  submission,
+  onBack,
+}: {
+  assignmentId: string;
+  pin: string;
+  submission: HomeworkSubmission;
+  onBack: () => void;
+}) {
+  const { addTeacherFeedback } = useHomeworkStore();
+  const [feedbackText, setFeedbackText] = useState(submission.teacherFeedback || '');
+  const [savedAlert, setSavedAlert] = useState(false);
+
+  const PRESET_FEEDBACKS = [
+    '🌟 ¡Excelente trabajo! Muy bien argumentado.',
+    '👏 Procedimiento claro, ordenado y respuestas bien justificadas.',
+    '💡 Buen intento. Revisa los conceptos señalados en la guía.',
+    '📝 Faltó profundizar y justificar algunas de tus respuestas.',
+    '🚀 ¡Felicitaciones por tu esfuerzo y dedicación! Sigue así.',
+    '🔍 Presta más atención a los detalles de la lectura.',
+  ];
+
+  const handleSaveFeedback = () => {
+    if (!feedbackText.trim()) return;
+    addTeacherFeedback(assignmentId, submission.id, feedbackText.trim());
+    homeworkSync.sendTeacherFeedback(pin, submission.id, submission.studentFullName, feedbackText.trim());
+    setSavedAlert(true);
+    setTimeout(() => setSavedAlert(false), 3000);
+  };
+
   return (
     <div>
       <button onClick={onBack} className="flex items-center gap-2 text-sm text-white/50 hover:text-white mb-6 transition-colors">
@@ -668,6 +700,70 @@ function StudentDetail({ submission, onBack }: { submission: HomeworkSubmission;
           <div className="text-3xl font-black text-emerald-400">{submission.accuracy}%</div>
           <div className="text-xs text-white/50">{submission.correctAnswers}/{submission.totalQuestions} correctas</div>
           <div className="text-xs text-purple-400 mt-0.5">🔄 {submission.correctionsUsed} correcciones usadas</div>
+        </div>
+      </div>
+
+      {/* ── RETROALIMENTACIÓN DEL DOCENTE AL ESTUDIANTE ── */}
+      <div className="p-5 rounded-3xl bg-slate-900 border border-emerald-500/40 shadow-xl mb-6 space-y-3.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+              <MessageSquare className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-white">Retroalimentación para {submission.studentFullName}</h4>
+              <p className="text-[11px] text-white/50">El estudiante verá este comentario directamente en su pantalla</p>
+            </div>
+          </div>
+          {submission.teacherFeedback && (
+            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2.5 py-1 rounded-full border border-emerald-500/30 flex items-center gap-1">
+              <Check className="w-3 h-3" /> Retroalimentado
+            </span>
+          )}
+        </div>
+
+        {/* Opciones predeterminadas rápidas */}
+        <div>
+          <span className="text-[10px] uppercase font-bold text-white/50 block mb-1.5 tracking-wider">
+            Respuestas rápidas predeterminadas (toca para insertar):
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {PRESET_FEEDBACKS.map((preset, pIdx) => (
+              <button
+                key={pIdx}
+                type="button"
+                onClick={() => setFeedbackText((prev) => (prev ? `${prev} ${preset}` : preset))}
+                className="text-xs px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 border border-white/10 hover:border-emerald-400/40 text-white/80 hover:text-emerald-200 transition-all text-left font-medium"
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Caja de texto para feedback personalizado */}
+        <textarea
+          rows={3}
+          value={feedbackText}
+          onChange={(e) => setFeedbackText(e.target.value)}
+          placeholder="Escribe aquí tu retroalimentación, observaciones o felicitaciones para el estudiante..."
+          className="input text-xs w-full py-2.5 bg-slate-950 border-white/10 text-white placeholder-white/30 resize-y leading-relaxed font-normal"
+        />
+
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-[10px] text-white/40">
+            {submission.teacherFeedbackDate
+              ? `Último envío: ${new Date(submission.teacherFeedbackDate).toLocaleString('es-CO')}`
+              : 'Escribe un comentario y presiona Enviar'}
+          </p>
+          <button
+            type="button"
+            onClick={handleSaveFeedback}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 active:scale-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer transition-all"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>{savedAlert ? '✓ ¡Retroalimentación Enviada!' : 'Enviar Retroalimentación'}</span>
+          </button>
         </div>
       </div>
 
@@ -787,7 +883,14 @@ function AssignmentDetail({
   const shareUrl = `${window.location.origin}/homework/${assignment.pin}`;
 
   if (selectedStudent) {
-    return <StudentDetail submission={selectedStudent} onBack={() => setSelectedStudent(null)} />;
+    return (
+      <StudentDetail
+        assignmentId={assignment.id}
+        pin={assignment.pin}
+        submission={selectedStudent}
+        onBack={() => setSelectedStudent(null)}
+      />
+    );
   }
 
   const sorted = [...assignment.submissions].sort((a, b) => b.score - a.score);
@@ -914,18 +1017,19 @@ function AssignmentDetail({
 // ── Modal de Código QR ──────────────────────────────────────
 function AssignmentQrModal({ assignment, onClose }: { assignment: HomeworkAssignment; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
+  const [usePayload, setUsePayload] = useState(false);
 
   useEffect(() => {
-    // Difundir a la nube para que cualquier celular sincronice de inmediato
+    // Difundir a la nube para que cualquier celular sincronice de inmediato con el PIN
     homeworkSync.broadcastAssignment(assignment);
   }, [assignment]);
 
-  // Incrustamos el payload en el QR para que cualquier celular sin internet previo cargue todo al escanear
-  const payload = useMemo(() => encodeAssignmentPayload(assignment), [assignment]);
-  const qrUrl = payload && payload.length < 2400
-    ? `https://axel-s-play.vercel.app/homework/${assignment.pin}?hw=${payload}`
-    : `https://axel-s-play.vercel.app/homework/${assignment.pin}`;
   const cleanVercelUrl = `https://axel-s-play.vercel.app/homework/${assignment.pin}`;
+  const payload = useMemo(() => encodeAssignmentPayload(assignment), [assignment]);
+
+  // Por defecto el QR genera el enlace corto y limpio (43 caracteres).
+  // La nube educativa entrega todas las preguntas y guía al celular de inmediato.
+  const qrUrl = usePayload && payload ? `${cleanVercelUrl}?hw=${payload}` : cleanVercelUrl;
 
   const handleCopy = () => {
     copyToClipboard(cleanVercelUrl);
@@ -941,17 +1045,43 @@ function AssignmentQrModal({ assignment, onClose }: { assignment: HomeworkAssign
         </button>
 
         <h3 className="text-lg font-black text-white">{assignment.title}</h3>
-        <p className="text-xs text-white/50 mt-1 mb-4">Escanea este código con cualquier celular para abrir la actividad</p>
+        <p className="text-xs text-white/50 mt-1 mb-3">Escanea este código con cualquier celular para abrir la actividad</p>
 
-        {/* QR con nivel 'L' para lectura instantánea en cualquier cámara */}
+        {/* Selector de modo de QR: Enlace Corto vs Autónomo */}
+        <div className="inline-flex p-1 rounded-xl bg-white/5 border border-white/10 mb-4 text-[11px] font-bold">
+          <button
+            type="button"
+            onClick={() => setUsePayload(false)}
+            className={`px-3 py-1 rounded-lg transition-all ${
+              !usePayload
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-white/50 hover:text-white'
+            }`}
+          >
+            🔗 Enlace Corto
+          </button>
+          <button
+            type="button"
+            onClick={() => setUsePayload(true)}
+            className={`px-3 py-1 rounded-lg transition-all ${
+              usePayload
+                ? 'bg-purple-600 text-white shadow-md'
+                : 'text-white/50 hover:text-white'
+            }`}
+          >
+            📦 QR Autónomo
+          </button>
+        </div>
+
+        {/* QR con nivel 'M' para lectura ultra rápida y nítida */}
         <div className="bg-white p-4 rounded-2xl shadow-xl inline-block mx-auto mb-4 ring-4 ring-emerald-500/20">
-          <QRCodeSVG value={qrUrl} size={200} level="L" includeMargin={true} />
+          <QRCodeSVG value={qrUrl} size={190} level={usePayload ? 'L' : 'M'} includeMargin={true} />
         </div>
 
         <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4">
           <span className="text-[10px] text-white/40 uppercase tracking-wider block font-bold">PIN de Acceso</span>
           <span className="text-2xl font-black text-emerald-400 tracking-widest">{assignment.pin}</span>
-          <span className="text-[11px] text-white/50 block mt-1 truncate">{cleanVercelUrl}</span>
+          <span className="text-[11px] text-white/60 block mt-1 truncate font-mono">{cleanVercelUrl}</span>
         </div>
 
         <button

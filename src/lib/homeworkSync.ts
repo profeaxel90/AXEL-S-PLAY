@@ -48,6 +48,13 @@ class HomeworkSyncManager {
         });
       });
 
+      this.client.on('message', (topic, payload) => {
+        const callback = this.callbacks.get(topic);
+        if (callback) {
+          callback(payload.toString());
+        }
+      });
+
       this.client.on('error', (err) => {
         console.warn('[HomeworkSync] Error en broker MQTT:', err);
         this.client?.end(true);
@@ -71,10 +78,10 @@ class HomeworkSyncManager {
   public broadcastAssignment(assignment: HomeworkAssignment) {
     if (!this.client || !assignment.pin) return;
 
-    // Evitar saturar el broker con base64 masivos de PDFs gigantes; preservar texto, preguntas, videos y URLs
+    // Preservar texto, preguntas, videos y URLs; admitir PDFs de tamaño razonable
     const safePayload = {
       ...assignment,
-      pdfUrl: assignment.pdfUrl && assignment.pdfUrl.length > 50000 ? undefined : assignment.pdfUrl,
+      pdfUrl: assignment.pdfUrl && assignment.pdfUrl.length > 250000 ? undefined : assignment.pdfUrl,
     };
 
     const topic = `axelsplay/hw/${assignment.pin}/data`;
@@ -171,6 +178,58 @@ class HomeworkSyncManager {
     }
   }
 
+  /**
+   * El docente envía retroalimentación a una entrega específica de un estudiante.
+   */
+  public sendTeacherFeedback(pin: string, submissionId: string, studentName: string, feedback: string) {
+    if (!pin) return;
+    const topic = `axelsplay/hw/${pin}/feedback`;
+    const payloadStr = JSON.stringify({
+      submissionId,
+      studentName,
+      feedback,
+      timestamp: new Date().toISOString(),
+    });
+
+    const publishNow = () => {
+      this.client?.publish(topic, payloadStr, { retain: true, qos: 1 }, (err) => {
+        if (!err) {
+          console.log(`[HomeworkSync] 💬 Retroalimentación enviada para ${studentName}`);
+        }
+      });
+    };
+
+    if (this.connected) {
+      publishNow();
+    } else {
+      setTimeout(publishNow, 1500);
+    }
+  }
+
+  /**
+   * El estudiante escucha la retroalimentación de su docente en tiempo real.
+   */
+  public listenForTeacherFeedback(
+    pin: string,
+    onFeedback: (data: { submissionId: string; studentName: string; feedback: string; timestamp: string }) => void
+  ): () => void {
+    const topic = `axelsplay/hw/${pin}/feedback`;
+    this.subscribeTopic(topic, (msgStr) => {
+      try {
+        const data = JSON.parse(msgStr);
+        if (data && data.feedback) {
+          onFeedback(data);
+        }
+      } catch (err) {
+        console.warn('[HomeworkSync] Error parseando feedback:', err);
+      }
+    });
+
+    return () => {
+      this.unsubscribeTopic(topic);
+    };
+  }
+
   private callbacks = new Map<string, (msg: string) => void>();
 
   private subscribeTopic(topic: string, callback: (msg: string) => void) {
@@ -180,12 +239,6 @@ class HomeworkSyncManager {
     if (this.client && this.connected) {
       this.client.subscribe(topic, { qos: 1 });
     }
-
-    this.client?.on('message', (msgTopic, payload) => {
-      if (msgTopic === topic) {
-        callback(payload.toString());
-      }
-    });
   }
 
   private unsubscribeTopic(topic: string) {

@@ -10,6 +10,7 @@ import { SAMPLE_GAMES } from '../../data/mockGames';
 import { compressImageToWebP } from '../../lib/imageCompressor';
 import { homeworkSync } from '../../lib/homeworkSync';
 import { decodeAssignmentPayload } from '../../lib/assignmentPayload';
+import PdfCanvasViewer from '../../components/common/PdfCanvasViewer';
 import type { HomeworkAnswerSubmission } from '../../types/homework';
 import MascotAvatar from '../../components/game/MascotAvatar';
 
@@ -167,6 +168,8 @@ export default function HomeworkPlayPage() {
   const [typedAnswer, setTypedAnswer] = useState('');
   const [photoAnswer, setPhotoAnswer] = useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+  const [documentViewMode, setDocumentViewMode] = useState<'canvas' | 'text'>('canvas');
+  const [teacherFeedback, setTeacherFeedback] = useState<string | null>(null);
 
   const maxCorrections = assignment?.maxCorrections ?? 3;
   const currentQ = questions[currentIndex];
@@ -174,6 +177,28 @@ export default function HomeworkPlayPage() {
   const isAnswered = currentAnswer !== null;
   const isLastQuestion = currentIndex === questions.length - 1;
   const allAnswered = answers.every((a) => a !== null);
+
+  // Escuchar retroalimentación del docente en tiempo real
+  useEffect(() => {
+    if (!assignment || !studentData) return;
+    const mySub = assignment.submissions?.find(
+      (s) => s.studentFullName.toLowerCase() === studentData.fullName.toLowerCase()
+    );
+    if (mySub?.teacherFeedback) {
+      setTeacherFeedback(mySub.teacherFeedback);
+    }
+
+    const unsub = homeworkSync.listenForTeacherFeedback(assignment.pin, (data) => {
+      if (
+        data.studentName.toLowerCase() === studentData.fullName.toLowerCase() ||
+        data.submissionId === mySub?.id
+      ) {
+        setTeacherFeedback(data.feedback);
+      }
+    });
+
+    return () => unsub();
+  }, [assignment, studentData]);
 
   // Sincronizar o reiniciar campos al cambiar de pregunta
   useEffect(() => {
@@ -438,6 +463,23 @@ export default function HomeworkPlayPage() {
             </div>
           )}
 
+          {/* Retroalimentación del Docente */}
+          {teacherFeedback && (
+            <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-slate-900 to-teal-950/90 border-2 border-emerald-500/50 text-left shadow-2xl animate-fade-in space-y-2">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <span>Mensaje / Retroalimentación de tu Docente</span>
+              </div>
+              <p className="text-white text-sm font-semibold leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30">
+                "{teacherFeedback}"
+              </p>
+              <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-emerald-300/70">
+                <span>✓ Revisado por tu profesor</span>
+                <span>En tiempo real</span>
+              </div>
+            </div>
+          )}
+
           <p className="text-sm text-white/40 mb-6">Tu docente podrá ver tus respuestas y evidencias fotográficas en su panel.</p>
 
           <div className="flex flex-col gap-3">
@@ -698,8 +740,54 @@ export default function HomeworkPlayPage() {
               </div>
             )}
 
-            {/* Lectura directa de la Guía o Taller en la misma pantalla (SIN descargas ni bloqueos) */}
-            {(assignment.documentText || assignment.description) && (
+            {/* Visualizador de Documento (Canvas Nativo si hay PDF o Visor de Texto) */}
+            {assignment.pdfUrl ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900 border border-white/10 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setDocumentViewMode('canvas')}
+                      className={`px-3 py-1.5 rounded-lg transition-all ${
+                        documentViewMode === 'canvas'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'text-white/50 hover:text-white'
+                      }`}
+                    >
+                      📄 Documento Original
+                    </button>
+                    {assignment.documentText && (
+                      <button
+                        type="button"
+                        onClick={() => setDocumentViewMode('text')}
+                        className={`px-3 py-1.5 rounded-lg transition-all ${
+                          documentViewMode === 'text'
+                            ? 'bg-emerald-600 text-white shadow-md'
+                            : 'text-white/50 hover:text-white'
+                        }`}
+                      >
+                        📝 Texto de Lectura
+                      </button>
+                    )}
+                  </div>
+                  {assignment.pdfName && (
+                    <span className="text-[11px] text-white/40 truncate max-w-[140px] hidden sm:block">
+                      {assignment.pdfName}
+                    </span>
+                  )}
+                </div>
+
+                {documentViewMode === 'canvas' ? (
+                  <PdfCanvasViewer pdfUrl={assignment.pdfUrl} fileName={assignment.pdfName} />
+                ) : (
+                  <div className="rounded-2xl border border-emerald-500/40 bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 shadow-xl space-y-3">
+                    <div className="max-h-64 sm:max-h-80 overflow-y-auto pr-2 text-slate-100 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-normal selection:bg-emerald-500/30">
+                      {assignment.documentText || assignment.description}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (assignment.documentText || assignment.description) ? (
               <div className="rounded-2xl border border-emerald-500/40 bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 shadow-xl space-y-3">
                 <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
                   <div className="flex items-center gap-2">
@@ -727,7 +815,7 @@ export default function HomeworkPlayPage() {
                   <span>Desliza para leer completo ↕</span>
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* Enlace externo adicional */}
             {assignment.externalLink && (

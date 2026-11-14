@@ -62,6 +62,8 @@ export interface HomeworkSubmission {
   submittedAt: string;
   answers: HomeworkAnswerSubmission[];
   studentPhotos?: string[]; // Fotos tomadas/subidas por el estudiante (procedimientos o cuaderno)
+  teacherFeedback?: string; // Retroalimentación escrita por el docente
+  teacherFeedbackDate?: string; // Fecha y hora en que el docente envió la retroalimentación
 }
 
 export interface HomeworkAssignment {
