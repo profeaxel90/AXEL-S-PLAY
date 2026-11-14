@@ -140,6 +140,8 @@ interface HomeworkState {
   deleteAssignment: (id: string) => void;
   importAssignment: (assignment: HomeworkAssignment) => void;
   addTeacherFeedback: (assignmentId: string, submissionId: string, feedback: string) => void;
+  deleteSubmission: (assignmentId: string, submissionId: string) => void;
+  clearAllSubmissions: (assignmentId: string) => void;
 
   // Mantenimiento y Liberación de Memoria
   cleanStoragePhotos: () => number;
@@ -393,6 +395,34 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
             return s;
           });
           return { ...a, submissions: updatedSubs };
+        }
+        return a;
+      });
+      set({ assignments: updated });
+      persistAssignments(updated);
+    },
+
+    deleteSubmission: (assignmentId, submissionId) => {
+      const updated = get().assignments.map((a) => {
+        if (a.id === assignmentId || a.pin === assignmentId) {
+          return {
+            ...a,
+            submissions: a.submissions.filter((s) => s.id !== submissionId),
+          };
+        }
+        return a;
+      });
+      set({ assignments: updated });
+      persistAssignments(updated);
+    },
+
+    clearAllSubmissions: (assignmentId) => {
+      const updated = get().assignments.map((a) => {
+        if (a.id === assignmentId || a.pin === assignmentId) {
+          return {
+            ...a,
+            submissions: [],
+          };
         }
         return a;
       });

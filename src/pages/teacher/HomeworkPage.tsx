@@ -858,7 +858,8 @@ function StudentDetail({
   submission: HomeworkSubmission;
   onBack: () => void;
 }) {
-  const { addTeacherFeedback } = useHomeworkStore();
+  const navigate = useNavigate();
+  const { addTeacherFeedback, deleteSubmission } = useHomeworkStore();
   const [feedbackText, setFeedbackText] = useState(submission.teacherFeedback || '');
   const [savedAlert, setSavedAlert] = useState(false);
   const [selectedZoomPhoto, setSelectedZoomPhoto] = useState<string | null>(null);
@@ -880,11 +881,46 @@ function StudentDetail({
     setTimeout(() => setSavedAlert(false), 3000);
   };
 
+  const handleDeleteThisSubmission = () => {
+    if (window.confirm(`¿Estás seguro de que deseas eliminar la entrega de ${submission.studentFullName}? Esta acción no se puede deshacer.`)) {
+      deleteSubmission(assignmentId, submission.id);
+      onBack();
+    }
+  };
+
   return (
     <div>
-      <button onClick={onBack} className="flex items-center gap-2 text-sm text-white/50 hover:text-white mb-6 transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Volver a la asignación
-      </button>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => navigate('/teacher/homework')}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-200 text-xs font-bold transition-all shadow-md cursor-pointer"
+            title="Volver al panel general de tareas"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Volver a Tareas (/teacher/homework)</span>
+          </button>
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+          >
+            <span>Volver a la asignación</span>
+          </button>
+        </div>
+
+        {/* Botón para eliminar esta entrega individual */}
+        <button
+          type="button"
+          onClick={handleDeleteThisSubmission}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 text-red-300 text-xs font-bold transition-all cursor-pointer shadow-sm"
+          title="Eliminar entrega de este estudiante"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span>Eliminar esta entrega</span>
+        </button>
+      </div>
 
       <div className="flex items-center gap-4 mb-6">
         <MascotAvatar seed={submission.avatar} emotion="happy" size="lg" />
@@ -1133,7 +1169,15 @@ function AssignmentDetail({
   onOpenQr?: (assignment: HomeworkAssignment) => void;
   onEdit?: () => void;
 }) {
-  const [selectedStudent, setSelectedStudent] = useState<HomeworkSubmission | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { deleteSubmission, clearAllSubmissions } = useHomeworkStore();
+  const studentIdParam = searchParams.get('studentId');
+
+  const selectedStudent = useMemo(() => {
+    if (!studentIdParam) return null;
+    return assignment.submissions.find((s) => s.id === studentIdParam) || null;
+  }, [assignment.submissions, studentIdParam]);
+
   const shareUrl = `${window.location.origin}/homework/${assignment.pin}`;
 
   if (selectedStudent) {
@@ -1142,7 +1186,11 @@ function AssignmentDetail({
         assignmentId={assignment.id}
         pin={assignment.pin}
         submission={selectedStudent}
-        onBack={() => setSelectedStudent(null)}
+        onBack={() => {
+          const next = new URLSearchParams(searchParams);
+          next.delete('studentId');
+          setSearchParams(next);
+        }}
       />
     );
   }
@@ -1151,7 +1199,7 @@ function AssignmentDetail({
 
   return (
     <div>
-      <button onClick={onBack} className="flex items-center gap-2 text-sm text-white/50 hover:text-white mb-6 transition-colors">
+      <button onClick={onBack} className="flex items-center gap-2 text-sm text-white/50 hover:text-white mb-6 transition-colors cursor-pointer">
         <ArrowLeft className="w-4 h-4" /> Volver a Asignación de Deberes
       </button>
 
@@ -1229,7 +1277,27 @@ function AssignmentDetail({
       </div>
 
       {/* Entregas */}
-      <h3 className="text-lg font-black text-white mb-3">Entregas de Estudiantes ({assignment.submissions.length})</h3>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 className="text-lg font-black text-white">
+          Entregas de Estudiantes ({assignment.submissions.length})
+        </h3>
+        {assignment.submissions.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm(`¿Estás seguro de que deseas eliminar TODAS las ${assignment.submissions.length} entregas de esta tarea? Esta acción limpiará la lista por completo.`)) {
+                clearAllSubmissions(assignment.id);
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 text-xs font-bold transition-all cursor-pointer"
+            title="Borrar todas las entregas para reiniciar"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Vaciar todas las entregas</span>
+          </button>
+        )}
+      </div>
+
       {sorted.length === 0 ? (
         <div className="p-8 text-center text-white/40 bg-white/5 rounded-2xl border border-white/5">
           No hay entregas todavía. Comparte el PIN con tus estudiantes.
@@ -1237,30 +1305,90 @@ function AssignmentDetail({
       ) : (
         <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10">
           {sorted.map((sub, idx) => (
-            <button
+            <div
               key={sub.id}
-              onClick={() => setSelectedStudent(sub)}
-              className="w-full grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-0 items-center px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 text-left"
+              className="w-full grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-2 items-center px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 text-left"
             >
-              <div className="flex items-center gap-3">
+              <div
+                className="flex items-center gap-3 cursor-pointer min-w-0"
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.set('id', assignment.id);
+                  next.set('studentId', sub.id);
+                  setSearchParams(next);
+                }}
+              >
                 {idx === 0 && <Award className="w-4 h-4 text-yellow-400 flex-shrink-0" />}
                 <MascotAvatar seed={sub.avatar} emotion="idle" size="xs" />
-                <div>
-                  <p className="text-sm font-semibold text-white">{sub.studentFullName}</p>
-                  <p className="text-xs text-white/50">{sub.gradeGroup} · 🕒 {fmtDateTime(sub.submittedAt)}</p>
+                <div className="min-w-0 truncate">
+                  <p className="text-sm font-semibold text-white hover:text-purple-300 transition-colors truncate">{sub.studentFullName}</p>
+                  <p className="text-xs text-white/50 truncate">{sub.gradeGroup} · 🕒 {fmtDateTime(sub.submittedAt)}</p>
                 </div>
               </div>
-              <div className="text-center font-bold text-white">{sub.score.toLocaleString()}</div>
-              <div className="text-center">
+              <div
+                className="text-center font-bold text-white cursor-pointer"
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.set('id', assignment.id);
+                  next.set('studentId', sub.id);
+                  setSearchParams(next);
+                }}
+              >
+                {sub.score.toLocaleString()}
+              </div>
+              <div
+                className="text-center cursor-pointer"
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.set('id', assignment.id);
+                  next.set('studentId', sub.id);
+                  setSearchParams(next);
+                }}
+              >
                 <span className={`text-sm font-bold ${sub.accuracy >= 80 ? 'text-emerald-400' : sub.accuracy >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
                   {sub.accuracy}%
                 </span>
               </div>
-              <div className="text-center text-sm text-purple-300">
+              <div
+                className="text-center text-sm text-purple-300 cursor-pointer"
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.set('id', assignment.id);
+                  next.set('studentId', sub.id);
+                  setSearchParams(next);
+                }}
+              >
                 🔄 {sub.correctionsUsed}/{assignment.maxCorrections}
               </div>
-              <ChevronRight className="w-4 h-4 text-white/30" />
-            </button>
+              <div className="flex items-center gap-1.5 ml-auto">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm(`¿Estás seguro de eliminar la entrega de ${sub.studentFullName}?`)) {
+                      deleteSubmission(assignment.id, sub.id);
+                    }
+                  }}
+                  className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300 transition-all cursor-pointer"
+                  title="Eliminar entrega de este alumno"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set('id', assignment.id);
+                    next.set('studentId', sub.id);
+                    setSearchParams(next);
+                  }}
+                  className="p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                  title="Ver detalle"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -1353,18 +1481,24 @@ function AssignmentQrModal({ assignment, onClose }: { assignment: HomeworkAssign
 // ── Página principal de Asignación de Deberes ─────────────────
 export default function HomeworkPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     assignments, groups,
     createAssignment, updateAssignment, toggleAssignmentStatus, deleteAssignment,
-    createGroup, deleteGroup
+    createGroup, deleteGroup, deleteSubmission, clearAllSubmissions
   } = useHomeworkStore();
 
   const [activeTab, setActiveTab] = useState<'assignments' | 'groups'>('assignments');
   const [showModal, setShowModal] = useState(searchParams.has('gameId'));
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<HomeworkAssignment | null>(null);
-  const [selectedAssignment, setSelectedAssignment] = useState<HomeworkAssignment | null>(null);
+
+  const urlAssignmentId = searchParams.get('id');
+  const selectedAssignment = useMemo(() => {
+    if (!urlAssignmentId) return null;
+    return assignments.find((a) => a.id === urlAssignmentId || a.pin === urlAssignmentId) || null;
+  }, [assignments, urlAssignmentId]);
+
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
   const [qrModalAssignment, setQrModalAssignment] = useState<HomeworkAssignment | null>(null);
@@ -1402,7 +1536,9 @@ export default function HomeworkPage() {
     const a = createAssignment(data);
     homeworkSync.broadcastAssignment(a);
     setShowModal(false);
-    setSelectedAssignment(a);
+    const next = new URLSearchParams(searchParams);
+    next.set('id', a.id);
+    setSearchParams(next);
   };
 
   const handleUpdate = (data: Parameters<typeof createAssignment>[0]) => {
@@ -1426,7 +1562,13 @@ export default function HomeworkPage() {
       <div>
         <AssignmentDetail
           assignment={live}
-          onBack={() => setSelectedAssignment(null)}
+          onBack={() => {
+            const next = new URLSearchParams(searchParams);
+            next.delete('id');
+            next.delete('studentId');
+            setSearchParams(next);
+            navigate('/teacher/homework');
+          }}
           onToggleStatus={() => toggleAssignmentStatus(live.id)}
           onExport={() => exportCSV(live)}
           onOpenQr={(a) => setQrModalAssignment(a)}
@@ -1498,36 +1640,88 @@ export default function HomeworkPage() {
         </div>
 
         {/* Tabla de alumnos */}
-        <h3 className="text-base font-black text-white">Entregas de los Estudiantes</h3>
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+          <h3 className="text-base font-black text-white">Entregas de los Estudiantes ({allSubs.length})</h3>
+          {allSubs.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`¿Estás seguro de que deseas eliminar TODAS las ${allSubs.length} entregas de este grupo? Esta acción limpiará las entregas de todas las actividades del grupo.`)) {
+                  groupHws.forEach((a) => clearAllSubmissions(a.id));
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 text-xs font-bold transition-all cursor-pointer"
+              title="Borrar todas las entregas del grupo"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Vaciar todas las entregas del grupo</span>
+            </button>
+          )}
+        </div>
         {allSubs.length === 0 ? (
           <div className="p-8 text-center text-white/40 bg-white/5 rounded-2xl">
             Aún no hay entregas de estudiantes en este grupo.
           </div>
         ) : (
           <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10">
-            {allSubs.map((sub) => (
-              <div
-                key={sub.id}
-                className="p-4 border-b border-white/5 last:border-0 flex items-center justify-between gap-3 hover:bg-white/[0.02]"
-              >
-                <div className="flex items-center gap-3">
-                  <MascotAvatar seed={sub.avatar} size="xs" />
-                  <div>
-                    <p className="text-sm font-bold text-white">{sub.studentFullName}</p>
-                    <p className="text-xs text-white/50 flex items-center gap-1"><Clock className="w-3 h-3 text-emerald-400" /> {fmtDateTime(sub.submittedAt)}</p>
+            {allSubs.map((sub) => {
+              const parentAsgn = groupHws.find((a) => a.submissions.some((s) => s.id === sub.id));
+              return (
+                <div
+                  key={sub.id}
+                  className="p-4 border-b border-white/5 last:border-0 flex items-center justify-between gap-3 hover:bg-white/[0.02]"
+                >
+                  <div className="flex items-center gap-3">
+                    <MascotAvatar seed={sub.avatar} size="xs" />
+                    <div>
+                      <p className="text-sm font-bold text-white">{sub.studentFullName}</p>
+                      <p className="text-xs text-white/50 flex items-center gap-1"><Clock className="w-3 h-3 text-emerald-400" /> {fmtDateTime(sub.submittedAt)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4 text-xs font-bold mr-2">
+                      <span className="text-emerald-400">{sub.accuracy}%</span>
+                      <span className="text-white">{sub.score} pts</span>
+                      {sub.studentPhotos && sub.studentPhotos.length > 0 && (
+                        <span className="text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-full">
+                          📸 {sub.studentPhotos.length} fotos
+                        </span>
+                      )}
+                    </div>
+                    {parentAsgn && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = new URLSearchParams(searchParams);
+                          next.set('id', parentAsgn.id);
+                          next.set('studentId', sub.id);
+                          setSearchParams(next);
+                          setViewingGroupSubmissions(null);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/30 text-purple-200 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                        title="Revisar entrega"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-purple-300" />
+                        <span className="hidden sm:inline">Revisar</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!parentAsgn) return;
+                        if (window.confirm(`¿Estás seguro de eliminar la entrega de ${sub.studentFullName}?`)) {
+                          deleteSubmission(parentAsgn.id, sub.id);
+                        }
+                      }}
+                      className="p-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300 transition-all cursor-pointer"
+                      title="Eliminar entrega de este alumno"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 text-xs font-bold">
-                  <span className="text-emerald-400">{sub.accuracy}%</span>
-                  <span className="text-white">{sub.score} pts</span>
-                  {sub.studentPhotos && sub.studentPhotos.length > 0 && (
-                    <span className="text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-full">
-                      📸 {sub.studentPhotos.length} fotos
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -1612,7 +1806,11 @@ export default function HomeworkPage() {
               {sortedAssignments.map((hw) => (
                 <div
                   key={hw.id}
-                  onClick={() => setSelectedAssignment(hw)}
+                  onClick={() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set('id', hw.id);
+                    setSearchParams(next);
+                  }}
                   className="bg-white/5 border border-white/10 rounded-2xl p-5 hover:border-emerald-500/50 hover:bg-white/[0.07] transition-all flex flex-col justify-between cursor-pointer group shadow-lg"
                 >
                   <div>
@@ -1693,7 +1891,11 @@ export default function HomeworkPage() {
                         <Eye className="w-3 h-3" /> Ver
                       </a>
                       <button
-                        onClick={() => setSelectedAssignment(hw)}
+                        onClick={() => {
+                          const next = new URLSearchParams(searchParams);
+                          next.set('id', hw.id);
+                          setSearchParams(next);
+                        }}
                         className="py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[10px] font-bold text-white flex items-center justify-center gap-1 shadow-sm"
                       >
                         Entregas
