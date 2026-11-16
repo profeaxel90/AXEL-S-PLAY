@@ -630,8 +630,8 @@ export default function SessionPage() {
     prevRanksRef.current = new Map(initialSorted.map((p, idx) => [p.id, idx + 1]));
     roundStartScoresRef.current = new Map(updatedParticipants.map((p) => [p.id, p.score]));
 
-    // Iniciar la música repetitiva de la pregunta (se detiene cuando todos responden)
-    audioEngine.playQuestionMusic();
+    // Iniciar la música repetitiva de la pregunta (con regla de 30s y bucle continuo)
+    audioEngine.playQuestionMusic(firstQ.timeLimit || 20);
 
     // Transmitir primera pregunta a todos los celulares con datos de modalidad
     hostSyncRef.current?.broadcast('START_GAME');
@@ -679,8 +679,8 @@ export default function SessionPage() {
     prevRanksRef.current = new Map(prevSorted.map((p, idx) => [p.id, idx + 1]));
     roundStartScoresRef.current = new Map(liveParticipants.map((p) => [p.id, p.score]));
 
-    // Iniciar la música de la siguiente pregunta
-    audioEngine.playQuestionMusic();
+    // Iniciar la música de la siguiente pregunta (con regla de 30s y bucle continuo)
+    audioEngine.playQuestionMusic(nextQ.timeLimit || 20);
 
     // Transmitir nueva pregunta a los celulares
     hostSyncRef.current?.broadcast('QUESTION', {

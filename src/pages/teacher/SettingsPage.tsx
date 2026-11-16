@@ -1,18 +1,24 @@
-import { useState } from 'react';
-import { audioEngine, OFFICIAL_TRACK_NAME, OFFICIAL_TRACK_URL } from '../../lib/audio';
+import { useState, useEffect } from 'react';
+import {
+  audioEngine,
+  SOUND_SLOTS,
+  type SoundSlot,
+  type CustomSoundItem,
+} from '../../lib/audio';
 import { useAuthStore, type StoredAccount } from '../../stores/authStore';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useSessionHistoryStore } from '../../stores/sessionHistoryStore';
 import StorageUsageBar from '../../components/common/StorageUsageBar';
 import {
   Volume2, VolumeX, Music, Sliders, CheckCircle2,
-  Sparkles, Play, Pause, Square, Upload, ShieldCheck, Zap,
-  UserPlus, Users, Trash2, Shield, RotateCcw, AlertTriangle, X
+  Sparkles, Play, Pause, Upload, ShieldCheck, Zap,
+  UserPlus, Trash2, Shield, RotateCcw, AlertTriangle, X,
+  Clock, Repeat, RefreshCw, AudioWaveform, Headphones, FileAudio, Check, Info
 } from 'lucide-react';
 
 export default function SettingsPage() {
   const currentSettings = audioEngine.getSettings();
-  const { user, getAllTeachers, createTeacher, deleteTeacher } = useAuthStore();
+  const { getAllTeachers, createTeacher, deleteTeacher } = useAuthStore();
   const { clearAllHomeworkData } = useHomeworkStore();
 
   const [musicEnabled, setMusicEnabled] = useState(currentSettings.musicEnabled ?? true);
@@ -20,12 +26,14 @@ export default function SettingsPage() {
   const [musicVolume, setMusicVolume] = useState(currentSettings.musicVolume ?? 0.75);
   const [effectsVolume, setEffectsVolume] = useState(currentSettings.effectsVolume ?? 0.85);
   const [effectsEnabled, setEffectsEnabled] = useState(currentSettings.effectsEnabled ?? true);
-  const [trackName, setTrackName] = useState(currentSettings.defaultTrackName || OFFICIAL_TRACK_NAME);
-  const [trackUrl, setTrackUrl] = useState(currentSettings.defaultTrackUrl || OFFICIAL_TRACK_URL);
 
-  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [customFileLoaded, setCustomFileLoaded] = useState(false);
+  // Estados del Gestor de Sonidos de Super Admin
+  const [customSounds, setCustomSounds] = useState<Record<string, CustomSoundItem>>({});
+  const [soundFilter, setSoundFilter] = useState<'all' | 'bgm' | 'sfx'>('all');
+  const [previewingSlotId, setPreviewingSlotId] = useState<string | null>(null);
+  const [soundSaveSuccess, setSoundSaveSuccess] = useState<string>('');
+  const [showResetAllSoundsModal, setShowResetAllSoundsModal] = useState<boolean>(false);
+  const [loadingSlotId, setLoadingSlotId] = useState<string | null>(null);
 
   // Estados de Super Admin para Docentes
   const [teachersList, setTeachersList] = useState<StoredAccount[]>(() => getAllTeachers());
@@ -40,6 +48,23 @@ export default function SettingsPage() {
   // Estado para confirmación de reseteo de estadísticas
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
+
+  useEffect(() => {
+    // Sincronizar sonidos personalizados al montar
+    audioEngine.loadCustomSounds().then(() => {
+      setCustomSounds(audioEngine.getAllCustomSounds());
+    });
+
+    const handleSoundsUpdated = () => {
+      setCustomSounds(audioEngine.getAllCustomSounds());
+    };
+
+    window.addEventListener('axels_play_sounds_updated', handleSoundsUpdated);
+    return () => {
+      window.removeEventListener('axels_play_sounds_updated', handleSoundsUpdated);
+      audioEngine.stopPreview();
+    };
+  }, []);
 
   const refreshTeachers = () => {
     setTeachersList(getAllTeachers());
@@ -89,12 +114,10 @@ export default function SettingsPage() {
 
   const handleExecuteResetStats = () => {
     try {
-      // Limpiar historial real de partidas
       useSessionHistoryStore.getState().clearHistory();
       localStorage.removeItem('axels_play_session_history');
       localStorage.removeItem('axelplay_session_history');
       localStorage.removeItem('axels_play_recent_sessions');
-      // Limpiar tareas y entregas
       clearAllHomeworkData();
       setShowResetModal(false);
       setResetSuccess(true);
@@ -104,66 +127,91 @@ export default function SettingsPage() {
     }
   };
 
-  // Manejar reproducción previa
-  const handleTogglePreview = () => {
-    if (isPreviewPlaying) {
-      audioEngine.stopMusic();
-      setIsPreviewPlaying(false);
+  // ── Manejo de Preescucha de Sonidos ──
+  const handleTogglePreview = (slotId: string) => {
+    if (previewingSlotId === slotId) {
+      audioEngine.stopPreview();
+      setPreviewingSlotId(null);
     } else {
-      audioEngine.playTrackByUrl(trackUrl, trackName);
-      setIsPreviewPlaying(true);
+      setPreviewingSlotId(slotId);
+      audioEngine.playPreview(slotId, () => {
+        setPreviewingSlotId((curr) => (curr === slotId ? null : curr));
+      });
     }
   };
 
-  // Guardar configuración general
-  const handleSave = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  // ── Cargar Audio Personalizado para una Ranura Específica ──
+  const handleUploadSoundSlot = (slot: SoundSlot, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLoadingSlotId(slot.id);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const dataUrl = reader.result as string;
+        await audioEngine.saveCustomSound(slot.id, dataUrl, file.name);
+        setCustomSounds(audioEngine.getAllCustomSounds());
+        setSoundSaveSuccess(`Sonido para "${slot.name}" cargado exitosamente.`);
+        setTimeout(() => setSoundSaveSuccess(''), 3500);
+      } catch (err) {
+        console.error('Error guardando audio:', err);
+      } finally {
+        setLoadingSlotId(null);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // ── Restablecer una Ranura Específica a por Defecto ──
+  const handleResetSoundSlot = async (slot: SoundSlot) => {
+    if (previewingSlotId === slot.id) {
+      audioEngine.stopPreview();
+      setPreviewingSlotId(null);
+    }
+    await audioEngine.resetCustomSound(slot.id);
+    setCustomSounds(audioEngine.getAllCustomSounds());
+    setSoundSaveSuccess(`Sonido de "${slot.name}" restablecido al original por defecto.`);
+    setTimeout(() => setSoundSaveSuccess(''), 3000);
+  };
+
+  // ── Restablecer Todos los Sonidos a Predeterminados ──
+  const handleResetAllSoundsConfirm = async () => {
+    audioEngine.stopPreview();
+    setPreviewingSlotId(null);
+    await audioEngine.resetAllCustomSounds();
+    setCustomSounds({});
+    setShowResetAllSoundsModal(false);
+    setSoundSaveSuccess('¡Todos los sonidos se han restablecido a los originales por defecto!');
+    setTimeout(() => setSoundSaveSuccess(''), 4500);
+  };
+
+  // ── Guardar Toda la Configuración de Sonidos (Aplica a Todos los Juegos) ──
+  const handleSaveSoundConfig = () => {
     audioEngine.updateAudioSettings({
       musicEnabled,
-      applyToAllGames,
+      applyToAllGames: true,
       musicVolume,
       effectsVolume,
       effectsEnabled,
-      defaultTrackName: trackName,
-      defaultTrackUrl: trackUrl,
     });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    window.dispatchEvent(new CustomEvent('axels_play_sounds_updated'));
+    setSoundSaveSuccess('¡Configuración de sonidos guardada exitosamente! Se ha sincronizado para todos los juegos.');
+    setTimeout(() => setSoundSaveSuccess(''), 4000);
   };
 
-  // Subir otra canción si el profesor lo desea
-  const handleUploadCustomSong = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setTrackUrl(url);
-      setTrackName(file.name);
-      setCustomFileLoaded(true);
-      audioEngine.updateAudioSettings({
-        defaultTrackName: file.name,
-        defaultTrackUrl: url,
-        applyToAllGames: true,
-      });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    }
-  };
+  // Filtrado de Ranuras de Sonido
+  const filteredSlots = SOUND_SLOTS.filter((s) => {
+    if (soundFilter === 'bgm') return s.category === 'bgm';
+    if (soundFilter === 'sfx') return s.category === 'sfx';
+    return true;
+  });
 
-  const handleRestoreStrangerThings = () => {
-    setTrackUrl(OFFICIAL_TRACK_URL);
-    setTrackName(OFFICIAL_TRACK_NAME);
-    setCustomFileLoaded(false);
-    audioEngine.updateAudioSettings({
-      defaultTrackName: OFFICIAL_TRACK_NAME,
-      defaultTrackUrl: OFFICIAL_TRACK_URL,
-      applyToAllGames: true,
-    });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-  };
+  const customCount = Object.keys(customSounds).length;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-8 pb-12">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-black text-white flex items-center gap-3">
@@ -175,123 +223,117 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {saved && (
-        <div className="p-4 rounded-2xl bg-green-500/10 border border-green-500/30 flex items-center gap-3 text-green-300 text-sm animate-fade-in shadow-lg">
-          <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-green-400" />
-          <span className="font-semibold">
-            ¡Configuración guardada exitosamente! Se aplicará automáticamente a todas tus partidas.
-          </span>
+      {soundSaveSuccess && (
+        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 flex items-center gap-3 text-emerald-300 text-sm animate-fade-in shadow-xl backdrop-blur-sm">
+          <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-400" />
+          <span className="font-bold">{soundSaveSuccess}</span>
         </div>
       )}
 
-      {/* SECCIÓN PRINCIPAL: MÚSICA PARA TODOS LOS JUEGOS */}
-      <div className="card p-8 border-purple-500/30 bg-slate-900/80 shadow-2xl space-y-6">
-        <div className="flex items-center justify-between pb-5 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-purple-600/30 border border-purple-500/40 flex items-center justify-center">
-              <Music className="w-6 h-6 text-purple-300" />
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* ── SECCIÓN SUPER ADMIN: CONFIGURACIÓN DE SONIDOS DE LOS JUEGOS ── */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      <div className="card p-6 sm:p-8 border-purple-500/40 bg-gradient-to-b from-slate-900 via-slate-900/95 to-indigo-950/40 shadow-2xl space-y-6 rounded-3xl">
+        
+        {/* Cabecera del Módulo de Sonidos */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-white/10">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600/40 to-indigo-600/30 border border-purple-500/50 flex items-center justify-center shadow-lg shadow-purple-900/30">
+              <Headphones className="w-6 h-6 text-purple-300" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-white">Música Oficial para Todas las Partidas</h2>
-              <p className="text-xs text-purple-300 font-medium">
-                No necesitas subir archivos en cada ronda. El sistema la carga automáticamente.
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl font-black text-white">Configuración de Sonidos</h2>
+                <span className="text-[11px] font-bold text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
+                  <Shield className="w-3 h-3" />
+                  Super Admin
+                </span>
+              </div>
+              <p className="text-xs text-purple-200/80 font-medium mt-0.5">
+                Carga y personaliza todos los sonidos de los juegos. Si no cargas uno, se conserva el sonido por defecto sin alterar nada.
               </p>
             </div>
           </div>
 
-          <span className="text-xs font-bold text-yellow-400 bg-yellow-400/10 px-3 py-1 rounded-full border border-yellow-400/30">
-            Control Exclusivo del Administrador
-          </span>
-        </div>
-
-        {/* Tarjeta de la Canción Aprobada */}
-        <div className="p-5 rounded-2xl bg-gradient-to-r from-purple-950/60 to-indigo-950/60 border border-purple-500/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-yellow-400" />
-              <span className="text-xs font-bold uppercase tracking-wider text-purple-300">
-                Canción Seleccionada para todos los juegos:
-              </span>
-            </div>
-            <h3 className="text-lg font-black text-white">{trackName}</h3>
-            <p className="text-xs text-white/60">
-              Reproducción automática en tu PC como Docente · Los celulares de los estudiantes permanecen en silencio.
-            </p>
-          </div>
-
-          {/* Botones de Preescucha y Restaurar */}
+          {/* Botones Globales de Guardar y Resetear */}
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={handleTogglePreview}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-md ${
-                isPreviewPlaying
-                  ? 'bg-amber-600 text-white hover:bg-amber-700'
-                  : 'bg-purple-600 text-white hover:bg-purple-500 shadow-purple-600/30'
-              }`}
+              onClick={() => setShowResetAllSoundsModal(true)}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold text-red-300 bg-red-950/40 hover:bg-red-900/50 border border-red-500/40 flex items-center gap-1.5 transition-all shadow-md"
+              title="Restablece todos los sonidos al sintetizador u oficial por defecto"
             >
-              {isPreviewPlaying ? (
-                <>
-                  <Pause className="w-4 h-4" />
-                  <span>Detener Escucha</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4" />
-                  <span>Escuchar Pista</span>
-                </>
-              )}
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Resetear Todos</span>
             </button>
 
-            {customFileLoaded && (
-              <button
-                type="button"
-                onClick={handleRestoreStrangerThings}
-                className="px-3 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
-              >
-                Volver a "Stranger Things"
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleSaveSoundConfig}
+              className="px-5 py-2 rounded-xl text-xs font-black text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 flex items-center gap-2 transition-all shadow-lg shadow-emerald-700/30"
+            >
+              <Check className="w-4 h-4" />
+              <span>Guardar Sonidos</span>
+            </button>
           </div>
         </div>
 
-        {/* Interruptor: Aplicar la misma música a todos los juegos */}
-        <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/10">
-          <div>
-            <p className="font-bold text-white text-sm">
-              Poner la misma música a todos los juegos automáticamente
-            </p>
-            <p className="text-xs text-white/60 mt-0.5">
-              Al activar esta opción, cada vez que abras una sala de juego, esta canción estará lista sin pedirte subir nada.
-            </p>
+        {/* Banner Informativo con Reglas Específicas Solicitadas */}
+        <div className="p-4 rounded-2xl bg-purple-950/40 border border-purple-500/30 space-y-2 text-xs">
+          <div className="flex items-center gap-2 text-purple-300 font-black uppercase tracking-wider">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span>Reglas de Sonido en Todas las Partidas:</span>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={applyToAllGames}
-              onChange={(e) => {
-                setApplyToAllGames(e.target.checked);
-                audioEngine.updateAudioSettings({ applyToAllGames: e.target.checked });
-                setSaved(true);
-                setTimeout(() => setSaved(false), 2000);
-              }}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600" />
-          </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-white/80">
+            <div className="flex items-start gap-2 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
+              <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-white block">Regla de Preguntas de 30s o Más:</strong>
+                Preguntas de &lt; 30s usan la <em>Música de Preguntas Estándar</em>. Preguntas de 30s o más activan la pista adicional <em>Música de Preguntas Largas</em>.
+              </div>
+            </div>
+            <div className="flex items-start gap-2 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
+              <Repeat className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-white block">Repetición en Bucle de Audios Cortos:</strong>
+                Si el sonido cargado es más corto que el tiempo de la pregunta, se repetirá continuamente hasta terminar el tiempo o responder.
+              </div>
+            </div>
+          </div>
+          <div className="text-[11px] text-white/60 flex items-center gap-1.5 pt-1">
+            <Info className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+            <span>
+              Estos sonidos se aplican a <strong>todos los juegos</strong>. Los sonidos por defecto permanecen activos siempre que no se haya subido un audio propio.
+            </span>
+          </div>
         </div>
 
-        {/* Deslizadores de Volumen */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-          {/* Volumen de Música */}
-          <div className="space-y-2 p-4 rounded-xl bg-white/[0.02] border border-white/10">
+        {/* Controles Maestros de Volumen */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-white/[0.02] border border-white/10">
+          {/* Volumen Música */}
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Volume2 className="w-4 h-4 text-purple-400" />
-                <span>Volumen de la Música (PC Administrador)</span>
-              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !musicEnabled;
+                    setMusicEnabled(next);
+                    audioEngine.setMusicEnabled(next);
+                  }}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                    musicEnabled ? 'bg-purple-600/30 text-purple-300' : 'bg-white/10 text-white/40'
+                  }`}
+                  title={musicEnabled ? 'Silenciar Música' : 'Activar Música'}
+                >
+                  {musicEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                </button>
+                <span className="text-xs font-bold text-white uppercase tracking-wider">
+                  Música de Fondo (PC Docente)
+                </span>
+              </div>
               <span className="text-xs font-mono font-bold text-purple-300">
-                {Math.round(musicVolume * 100)}%
+                {musicEnabled ? `${Math.round(musicVolume * 100)}%` : 'Silenciado'}
               </span>
             </div>
             <input
@@ -300,24 +342,40 @@ export default function SettingsPage() {
               max="1"
               step="0.05"
               value={musicVolume}
+              disabled={!musicEnabled}
               onChange={(e) => {
                 const vol = parseFloat(e.target.value);
                 setMusicVolume(vol);
                 audioEngine.setMusicVolume(vol);
               }}
-              className="w-full accent-purple-500 cursor-pointer"
+              className="w-full accent-purple-500 cursor-pointer disabled:opacity-30"
             />
           </div>
 
-          {/* Volumen de Efectos SFX (Bips de estudiantes) */}
-          <div className="space-y-2 p-4 rounded-xl bg-white/[0.02] border border-white/10">
+          {/* Volumen Efectos SFX */}
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Zap className="w-4 h-4 text-yellow-400" />
-                <span>Efectos de Sonido / Bips Celulares</span>
-              </label>
-              <span className="text-xs font-mono font-bold text-yellow-300">
-                {Math.round(effectsVolume * 100)}%
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !effectsEnabled;
+                    setEffectsEnabled(next);
+                    audioEngine.setEffectsEnabled(next);
+                  }}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                    effectsEnabled ? 'bg-amber-600/30 text-amber-300' : 'bg-white/10 text-white/40'
+                  }`}
+                  title={effectsEnabled ? 'Silenciar Efectos' : 'Activar Efectos'}
+                >
+                  {effectsEnabled ? <Zap className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                </button>
+                <span className="text-xs font-bold text-white uppercase tracking-wider">
+                  Efectos de Sonido / SFX
+                </span>
+              </div>
+              <span className="text-xs font-mono font-bold text-amber-300">
+                {effectsEnabled ? `${Math.round(effectsVolume * 100)}%` : 'Silenciado'}
               </span>
             </div>
             <input
@@ -326,46 +384,208 @@ export default function SettingsPage() {
               max="1"
               step="0.05"
               value={effectsVolume}
+              disabled={!effectsEnabled}
               onChange={(e) => {
                 const vol = parseFloat(e.target.value);
                 setEffectsVolume(vol);
                 audioEngine.setSfxVolume(vol);
               }}
-              className="w-full accent-yellow-400 cursor-pointer"
+              className="w-full accent-amber-400 cursor-pointer disabled:opacity-30"
             />
           </div>
         </div>
 
-        {/* Opción Adicional: Subir un archivo personalizado para sustituir el tema */}
-        <div className="pt-4 border-t border-white/10">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-white/70">
-              ¿Deseas cambiar la música oficial por un archivo propio?
-            </span>
+        {/* Pestañas de Filtro y Contador */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.04] border border-white/10 w-fit">
+            <button
+              type="button"
+              onClick={() => setSoundFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                soundFilter === 'all'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                  : 'text-white/60 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              Todos los Sonidos ({SOUND_SLOTS.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSoundFilter('bgm')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                soundFilter === 'bgm'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                  : 'text-white/60 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Music className="w-3.5 h-3.5" />
+              <span>Música de Fondo (4)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSoundFilter('sfx')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                soundFilter === 'sfx'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                  : 'text-white/60 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>Efectos SFX (17)</span>
+            </button>
           </div>
-          <label className="flex items-center justify-center gap-2 p-3 border border-dashed border-white/20 hover:border-purple-500/50 rounded-xl cursor-pointer hover:bg-white/[0.02] transition-colors">
-            <Upload className="w-4 h-4 text-purple-400" />
-            <span className="text-xs text-white/70 font-semibold">
-              Cargar archivo local (MP3, WAV, OGG) como música predeterminada
-            </span>
-            <input
-              type="file"
-              accept="audio/*,.mp3,.ogg,.wav,.m4a"
-              className="hidden"
-              onChange={handleUploadCustomSong}
-            />
-          </label>
+
+          <div className="text-xs text-white/50 font-medium">
+            Personalizados: <span className="font-bold text-emerald-400">{customCount}</span> de {SOUND_SLOTS.length}
+          </div>
         </div>
 
-        {/* Botón Guardar Cambios */}
-        <div className="pt-2">
+        {/* ── LISTA DE RANURAS DE SONIDO ── */}
+        <div className="space-y-3 pt-1">
+          {filteredSlots.map((slot) => {
+            const custom = customSounds[slot.id];
+            const isCustom = !!custom;
+            const isPlayingThis = previewingSlotId === slot.id;
+            const isLoadingThis = loadingSlotId === slot.id;
+
+            return (
+              <div
+                key={slot.id}
+                className={`p-4 rounded-2xl transition-all border ${
+                  isCustom
+                    ? 'bg-emerald-950/20 border-emerald-500/40 hover:border-emerald-500/60'
+                    : 'bg-white/[0.02] border-white/10 hover:border-white/20'
+                }`}
+              >
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  {/* Información Principal del Sonido */}
+                  <div className="space-y-1.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className={`p-1.5 rounded-lg ${
+                        slot.category === 'bgm' ? 'bg-purple-600/30 text-purple-300' : 'bg-amber-500/20 text-yellow-300'
+                      }`}>
+                        {slot.category === 'bgm' ? <Music className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+                      </div>
+
+                      <h3 className="text-sm font-black text-white">{slot.name}</h3>
+
+                      {slot.isSpecialRule && (
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400/20 text-yellow-300 border border-amber-400/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Repeat className="w-3 h-3" />
+                          Bucle Continuo
+                        </span>
+                      )}
+
+                      {isCustom ? (
+                        <span className="text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          <span>Personalizado: {custom.fileName}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-medium bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded-full">
+                          Por Defecto
+                        </span>
+                      )}
+                    </div>
+
+                    {/* DÓNDE SUENA EL SONIDO (Requisito Explícito del Usuario) */}
+                    <div className="p-2.5 rounded-xl bg-purple-950/30 border border-purple-500/20 text-xs text-purple-200/90 flex items-start gap-2">
+                      <span className="font-bold text-purple-300 shrink-0">📍 Dónde suena:</span>
+                      <span>{slot.location}</span>
+                    </div>
+
+                    {!isCustom && (
+                      <p className="text-[11px] text-white/40 pl-1">
+                        🔊 Sonido predeterminado: {slot.defaultDescription}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Acciones: Preescuchar, Cargar Audio, Restablecer */}
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    {/* Botón de Preescucha */}
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePreview(slot.id)}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md ${
+                        isPlayingThis
+                          ? 'bg-amber-600 text-white hover:bg-amber-500 animate-pulse'
+                          : 'bg-white/10 hover:bg-white/20 text-white'
+                      }`}
+                      title={isPlayingThis ? 'Detener preescucha' : 'Escuchar cómo suena este sonido'}
+                    >
+                      {isPlayingThis ? (
+                        <>
+                          <Pause className="w-3.5 h-3.5" />
+                          <span>Detener</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-3.5 h-3.5" />
+                          <span>{isCustom ? 'Probar Audio' : 'Escuchar Default'}</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Botón Cargar Audio */}
+                    <label
+                      className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-md ${
+                        isLoadingThis
+                          ? 'bg-purple-800 text-white opacity-60 cursor-wait'
+                          : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30'
+                      }`}
+                    >
+                      {isLoadingThis ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Cargando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>{isCustom ? 'Cambiar Audio' : 'Cargar Audio'}</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="audio/*,.mp3,.ogg,.wav,.m4a"
+                        disabled={isLoadingThis}
+                        className="hidden"
+                        onChange={(e) => handleUploadSoundSlot(slot, e)}
+                      />
+                    </label>
+
+                    {/* Botón Restablecer Ranura (Solo si es personalizado) */}
+                    {isCustom && (
+                      <button
+                        type="button"
+                        onClick={() => handleResetSoundSlot(slot)}
+                        className="p-2 rounded-xl text-white/50 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-all"
+                        title="Restablecer este sonido al valor por defecto"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Pie del Panel de Sonidos con Botón Guardar Principal */}
+        <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <p className="text-xs text-white/50">
+            Al pulsar <strong>Guardar Configuración de Sonidos</strong>, todas las salas de juego actuales y futuras se actualizarán inmediatamente.
+          </p>
+
           <button
             type="button"
-            onClick={() => handleSave()}
-            className="w-full btn-primary py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30"
+            onClick={handleSaveSoundConfig}
+            className="btn-primary py-3 px-6 rounded-xl text-xs font-black flex items-center justify-center gap-2 self-start sm:self-auto shadow-lg shadow-purple-600/30"
           >
-            <CheckCircle2 className="w-5 h-5" />
-            <span>Guardar Configuración de Música</span>
+            <CheckCircle2 className="w-4 h-4" />
+            <span>Guardar Configuración de Sonidos</span>
           </button>
         </div>
       </div>
@@ -377,8 +597,9 @@ export default function SettingsPage() {
           <span>Reglas Activas en AXEL'S PLAY</span>
         </h3>
         <ul className="text-xs text-white/70 space-y-1.5 list-disc pl-5">
-          <li><strong>Música Exclusiva:</strong> Suena únicamente en el computador del docente; los celulares nunca reproducen música.</li>
-          <li><strong>Detención Automática:</strong> La música se apaga en cuanto termina la animación del podio final.</li>
+          <li><strong>Música Exclusiva:</strong> Suena únicamente en el computador del docente; los celulares nunca reproducen música de fondo.</li>
+          <li><strong>Detención Automática:</strong> La música de fondo se apaga en cuanto termina la animación del podio final.</li>
+          <li><strong>Preguntas con Cuenta Regresiva:</strong> Si el audio es corto, se repite automáticamente hasta agotar el tiempo.</li>
           <li><strong>Robo de Puntos:</strong> 50 puntos fijos por robo, máximo 2 robos por estudiante, solo a rivales con 50+ puntos.</li>
           <li><strong>Clasificación Top 7:</strong> Se muestra en pantalla tras cada pregunta con puntuación por velocidad de respuesta.</li>
           <li><strong>Podio de Ganadores:</strong> Animación sincronizada revelando el 3.er puesto, 2.º puesto y el 1.er puesto campeón con confeti.</li>
@@ -496,6 +717,53 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ── MODAL: CONFIRMAR RESETEO DE TODOS LOS SONIDOS A DEFECTO ── */}
+      {showResetAllSoundsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="bg-slate-900 border border-red-500/40 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative space-y-4">
+            <button
+              onClick={() => setShowResetAllSoundsModal(false)}
+              className="absolute top-4 right-4 p-2 text-white/40 hover:text-white rounded-full bg-white/5"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-red-600/20 border border-red-500/40 flex items-center justify-center text-red-400">
+              <RotateCcw className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-black text-white">¿Restablecer Todos los Sonidos?</h3>
+              <p className="text-xs text-white/60 mt-1">
+                Esta acción eliminará todos los archivos de audio personalizados que hayas subido y restablecerá todas las ranuras de música y efectos a los sonidos originales por defecto del sistema.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>Los sonidos procedurales del sintetizador y pistas oficiales continuarán funcionando con normalidad.</span>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowResetAllSoundsModal(false)}
+                className="w-1/2 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleResetAllSoundsConfirm}
+                className="w-1/2 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs transition-colors shadow-lg shadow-red-700/30"
+              >
+                Sí, Restablecer Todo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Crear Docente */}
       {showNewTeacherModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
@@ -549,7 +817,7 @@ export default function SettingsPage() {
                 <input
                   type="password"
                   required
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="••••••••"
                   value={newTeacherPassword}
                   onChange={(e) => setNewTeacherPassword(e.target.value)}
                   className="input text-xs w-full py-2 bg-slate-950 border-white/10"
@@ -560,7 +828,7 @@ export default function SettingsPage() {
                 <label className="block text-xs font-bold text-white/70 mb-1">Institución Educativa (Opcional)</label>
                 <input
                   type="text"
-                  placeholder="Colegio Experimental AXEL"
+                  placeholder="Ej: Colegio Experimental AXEL"
                   value={newTeacherSchool}
                   onChange={(e) => setNewTeacherSchool(e.target.value)}
                   className="input text-xs w-full py-2 bg-slate-950 border-white/10"
@@ -571,13 +839,13 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => setShowNewTeacherModal(false)}
-                  className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs"
+                  className="btn-secondary w-1/2 py-2 text-xs"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30"
+                  className="btn-primary w-1/2 py-2 text-xs font-bold"
                 >
                   Crear Docente
                 </button>
@@ -587,29 +855,44 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Modal Confirmación de Reseteo */}
+      {/* Modal Confirmar Reseteo Estadísticas */}
       {showResetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
-          <div className="bg-slate-900 border border-red-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl">
-            <div className="w-14 h-14 rounded-2xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400 mx-auto mb-3">
-              <AlertTriangle className="w-7 h-7" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-slate-900 border border-red-500/40 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative space-y-4">
+            <button
+              onClick={() => setShowResetModal(false)}
+              className="absolute top-4 right-4 p-2 text-white/40 hover:text-white rounded-full bg-white/5"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-red-600/20 border border-red-500/40 flex items-center justify-center text-red-400">
+              <AlertTriangle className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-black text-white">¿Resetear Todas las Estadísticas?</h3>
-            <p className="text-xs text-white/60 mt-1 mb-5">
-              Se eliminarán los historiales de partidas en vivo y entregas acumuladas para dejar el panel en blanco. Tus juegos creados NO se borrarán.
-            </p>
-            <div className="flex gap-2">
+
+            <div>
+              <h3 className="text-lg font-black text-white">¿Resetear Todas las Estadísticas?</h3>
+              <p className="text-xs text-white/60 mt-1">
+                Esta acción borrará el historial de partidas, ranking acumulado de alumnos y registros de entregas de tareas escolares para comenzar un ciclo completamente limpio.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs font-semibold">
+              ⚠️ Esta acción no se puede deshacer. Los juegos creados y preguntas NO serán borrados.
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setShowResetModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs"
+                className="w-1/2 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleExecuteResetStats}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-lg shadow-red-600/30"
+                className="w-1/2 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs transition-colors shadow-lg shadow-red-700/30"
               >
                 Sí, Resetear Todo
               </button>
