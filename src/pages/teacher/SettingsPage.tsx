@@ -5,6 +5,7 @@ import {
   type SoundSlot,
   type CustomSoundItem,
 } from '../../lib/audio';
+import { backupManager, type AxelsPlayBackup } from '../../lib/backupManager';
 import { useAuthStore, type StoredAccount } from '../../stores/authStore';
 import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useSessionHistoryStore } from '../../stores/sessionHistoryStore';
@@ -13,7 +14,8 @@ import {
   Volume2, VolumeX, Music, Sliders, CheckCircle2,
   Sparkles, Play, Pause, Upload, ShieldCheck, Zap,
   UserPlus, Trash2, Shield, RotateCcw, AlertTriangle, X,
-  Clock, Repeat, RefreshCw, AudioWaveform, Headphones, FileAudio, Check, Info
+  Clock, Repeat, RefreshCw, AudioWaveform, Headphones, FileAudio, Check, Info,
+  Download, Database, Save, HardDrive, FileJson, AlertCircle
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -47,6 +49,14 @@ export default function SettingsPage() {
   // Estado para confirmación de reseteo de estadísticas
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
+
+  // Estados de Copia de Seguridad y Respaldo (Backup & Restore)
+  const [isExportingBackup, setIsExportingBackup] = useState(false);
+  const [backupExportSuccess, setBackupExportSuccess] = useState('');
+  const [backupImportError, setBackupImportError] = useState('');
+  const [pendingBackupToRestore, setPendingBackupToRestore] = useState<AxelsPlayBackup | null>(null);
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const [backupRestoreSuccess, setBackupRestoreSuccess] = useState('');
 
   useEffect(() => {
     // Sincronizar sonidos personalizados al montar
@@ -123,6 +133,57 @@ export default function SettingsPage() {
       setTimeout(() => setResetSuccess(false), 4000);
     } catch (e) {
       console.warn('Error resetting stats:', e);
+    }
+  };
+
+  // ── Manejo de Copia de Seguridad Completa (Backup & Restore) ──
+  const handleExportBackup = async () => {
+    try {
+      setIsExportingBackup(true);
+      setBackupExportSuccess('');
+      setBackupImportError('');
+      const res = await backupManager.exportCompleteBackup();
+      setBackupExportSuccess(`Copia de seguridad "${res.fileName}" generada con éxito (${res.stats.gamesCount} juegos, ${res.stats.homeworkCount} tareas, ${res.stats.mediaCount} fotos/audios, ${res.stats.teachersCount} docentes).`);
+      setTimeout(() => setBackupExportSuccess(''), 7000);
+    } catch (err: any) {
+      setBackupImportError(err.message || 'Error al exportar la copia de seguridad.');
+    } finally {
+      setIsExportingBackup(false);
+    }
+  };
+
+  const handleSelectBackupFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBackupImportError('');
+    try {
+      const validated = await backupManager.validateBackupFile(file);
+      setPendingBackupToRestore(validated);
+    } catch (err: any) {
+      setBackupImportError(err.message || 'El archivo seleccionado no es válido.');
+    }
+    e.target.value = '';
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!pendingBackupToRestore) return;
+    try {
+      setIsRestoringBackup(true);
+      const ok = await backupManager.restoreBackup(pendingBackupToRestore);
+      if (ok) {
+        setBackupRestoreSuccess('¡Copia de seguridad restaurada con éxito! Todos los datos han sido recuperados. Actualizando...');
+        setPendingBackupToRestore(null);
+        refreshTeachers();
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        setBackupImportError('Ocurrió un error al procesar la restauración.');
+      }
+    } catch (err: any) {
+      setBackupImportError(err.message || 'Error en la restauración.');
+    } finally {
+      setIsRestoringBackup(false);
     }
   };
 
@@ -566,6 +627,109 @@ export default function SettingsPage() {
       {/* ── BARRA DE CAPACIDAD DE MEMORIA Y ALMACENAMIENTO ── */}
       <StorageUsageBar />
 
+      {/* ── PANEL DE SUPER ADMIN: COPIA DE SEGURIDAD Y RESPALDO (BACKUP & RESTORE) ── */}
+      <div className="card p-6 sm:p-8 border-cyan-500/40 bg-gradient-to-r from-slate-900 via-cyan-950/20 to-slate-900 rounded-3xl space-y-5 shadow-2xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-cyan-600/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shadow-lg shadow-cyan-950/50">
+              <Database className="w-6 h-6 text-cyan-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-lg font-black text-white">Copia de Seguridad y Respaldo Completo</h3>
+                <span className="text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2.5 py-0.5 rounded-full font-bold">
+                  Anti-Fallo & Migración
+                </span>
+              </div>
+              <p className="text-xs text-white/60 mt-0.5">
+                Genera un archivo descargable con todos tus juegos, tareas, fotos de cuadernos, docentes y audios para nunca perder información.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {backupExportSuccess && (
+          <div className="p-3.5 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2.5 animate-fade-in">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span>{backupExportSuccess}</span>
+          </div>
+        )}
+
+        {backupImportError && (
+          <div className="p-3.5 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-bold flex items-center gap-2.5 animate-fade-in">
+            <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+            <span>{backupImportError}</span>
+          </div>
+        )}
+
+        {backupRestoreSuccess && (
+          <div className="p-3.5 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2.5 animate-fade-in">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span>{backupRestoreSuccess}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+          {/* Tarjeta 1: Exportar Respaldo */}
+          <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-cyan-500/40 transition-all flex flex-col justify-between space-y-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs uppercase tracking-wider">
+                <Download className="w-4 h-4 text-cyan-400" />
+                <span>Exportar Datos a Archivo</span>
+              </div>
+              <h4 className="text-base font-black text-white">Descargar Respaldo Total (.json)</h4>
+              <p className="text-xs text-white/60">
+                Empaqueta y descarga todos tus juegos creados, tareas y entregas escolares, fotos de cuadernos en IndexedDB, docentes y configuraciones de audio.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleExportBackup}
+              disabled={isExportingBackup}
+              className="w-full py-3 px-4 rounded-xl text-xs font-black text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 flex items-center justify-center gap-2 transition-all shadow-lg shadow-cyan-900/40 disabled:opacity-50"
+            >
+              {isExportingBackup ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Empaquetando datos...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Descargar Copia de Seguridad</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Tarjeta 2: Restaurar Respaldo */}
+          <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-purple-500/40 transition-all flex flex-col justify-between space-y-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-purple-300 font-bold text-xs uppercase tracking-wider">
+                <Upload className="w-4 h-4 text-purple-400" />
+                <span>Restaurar Datos desde Archivo</span>
+              </div>
+              <h4 className="text-base font-black text-white">Importar Copia de Seguridad</h4>
+              <p className="text-xs text-white/60">
+                Selecciona un archivo <code>.json</code> previamente exportado para recuperar todos tus datos instantáneamente en este o cualquier otro computador.
+              </p>
+            </div>
+
+            <label className="w-full py-3 px-4 rounded-xl text-xs font-black text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-900/40 cursor-pointer">
+              <Upload className="w-4 h-4" />
+              <span>Seleccionar Archivo de Respaldo (.json)</span>
+              <input
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleSelectBackupFile}
+              />
+            </label>
+          </div>
+        </div>
+      </div>
+
       {/* ── PANEL DE SUPER ADMIN: GESTIÓN DE DOCENTES ── */}
       <div className="card p-6 border-purple-500/40 bg-gradient-to-r from-purple-950/40 via-slate-900 to-indigo-950/30 rounded-3xl space-y-4 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -852,6 +1016,75 @@ export default function SettingsPage() {
                 className="w-1/2 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs transition-colors shadow-lg shadow-red-700/30"
               >
                 Sí, Resetear Todo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: CONFIRMAR RESTAURACIÓN DE COPIA DE SEGURIDAD ── */}
+      {pendingBackupToRestore && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative space-y-5">
+            <button
+              onClick={() => setPendingBackupToRestore(null)}
+              className="absolute top-4 right-4 p-2 text-white/40 hover:text-white rounded-full bg-white/5"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-600/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0">
+                <Database className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">Restaurar Copia de Seguridad</h3>
+                <p className="text-xs text-white/50">Fecha de creación: {new Date(pendingBackupToRestore.metadata.exportedAt).toLocaleString()}</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2 text-xs">
+              <p className="font-bold text-white uppercase tracking-wider text-[11px] text-cyan-300">
+                Contenido del Archivo de Respaldo:
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-white/80 pt-1">
+                <div className="bg-white/5 p-2 rounded-xl">🎮 Juegos: <strong className="text-white">{pendingBackupToRestore.metadata.stats.gamesCount}</strong></div>
+                <div className="bg-white/5 p-2 rounded-xl">📝 Tareas: <strong className="text-white">{pendingBackupToRestore.metadata.stats.homeworkCount}</strong></div>
+                <div className="bg-white/5 p-2 rounded-xl">📸 Fotos/Audios: <strong className="text-white">{pendingBackupToRestore.metadata.stats.mediaCount}</strong></div>
+                <div className="bg-white/5 p-2 rounded-xl">👥 Docentes: <strong className="text-white">{pendingBackupToRestore.metadata.stats.teachersCount}</strong></div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>Al restaurar, los datos actuales serán sustituidos por los contenidos en este respaldo y la aplicación se actualizará automáticamente.</span>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setPendingBackupToRestore(null)}
+                className="w-1/2 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRestore}
+                disabled={isRestoringBackup}
+                className="w-1/2 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs transition-colors shadow-lg shadow-cyan-700/30 flex items-center justify-center gap-1.5"
+              >
+                {isRestoringBackup ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Restaurando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Confirmar y Restaurar</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

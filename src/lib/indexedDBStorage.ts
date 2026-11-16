@@ -122,6 +122,41 @@ class IndexedDBManager {
       return false;
     }
   }
+
+  // ── Funciones para Copia de Seguridad y Restauración Completa ──
+  public async getAllMedia(): Promise<StoredMedia[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction('photos', 'readonly');
+        const store = tx.objectStore('photos');
+        const req = store.getAll();
+        req.onsuccess = () => resolve((req.result as StoredMedia[]) || []);
+        req.onerror = () => resolve([]);
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  public async restoreMediaList(items: StoredMedia[]): Promise<boolean> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction('photos', 'readwrite');
+        const store = tx.objectStore('photos');
+        for (const item of items) {
+          if (item && item.id && item.dataUrl) {
+            store.put(item);
+          }
+        }
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch {
+      return false;
+    }
+  }
 }
 
 export const idbManager = new IndexedDBManager();
