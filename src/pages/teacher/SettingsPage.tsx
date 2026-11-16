@@ -15,7 +15,7 @@ import {
   Sparkles, Play, Pause, Upload, ShieldCheck, Zap,
   UserPlus, Trash2, Shield, RotateCcw, AlertTriangle, X,
   Clock, Repeat, RefreshCw, AudioWaveform, Headphones, FileAudio, Check, Info,
-  Download, Database, Save, HardDrive, FileJson, AlertCircle
+  Download, Database, Save, HardDrive, FileJson, AlertCircle, FileDown
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -646,6 +646,16 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
+
+          <a
+            href="/manuales/MANUAL_MIGRACION_AXELS_PLAY.pdf"
+            download="MANUAL_MIGRACION_AXELS_PLAY.pdf"
+            className="px-4 py-2 rounded-xl text-xs font-bold text-cyan-200 bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-500/40 flex items-center gap-2 transition-all shadow-md self-start sm:self-auto"
+            title="Descargar el manual detallado de migración y copia en formato PDF"
+          >
+            <FileDown className="w-4 h-4 text-cyan-400" />
+            <span>Descargar Manual PDF</span>
+          </a>
         </div>
 
         {backupExportSuccess && (
