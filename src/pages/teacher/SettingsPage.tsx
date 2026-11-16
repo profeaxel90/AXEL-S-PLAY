@@ -27,9 +27,8 @@ export default function SettingsPage() {
   const [effectsVolume, setEffectsVolume] = useState(currentSettings.effectsVolume ?? 0.85);
   const [effectsEnabled, setEffectsEnabled] = useState(currentSettings.effectsEnabled ?? true);
 
-  // Estados del Gestor de Sonidos de Super Admin
+  // Estados del Gestor de Música de Super Admin
   const [customSounds, setCustomSounds] = useState<Record<string, CustomSoundItem>>({});
-  const [soundFilter, setSoundFilter] = useState<'all' | 'bgm' | 'sfx'>('all');
   const [previewingSlotId, setPreviewingSlotId] = useState<string | null>(null);
   const [soundSaveSuccess, setSoundSaveSuccess] = useState<string>('');
   const [showResetAllSoundsModal, setShowResetAllSoundsModal] = useState<boolean>(false);
@@ -201,13 +200,6 @@ export default function SettingsPage() {
     setTimeout(() => setSoundSaveSuccess(''), 4000);
   };
 
-  // Filtrado de Ranuras de Sonido
-  const filteredSlots = SOUND_SLOTS.filter((s) => {
-    if (soundFilter === 'bgm') return s.category === 'bgm';
-    if (soundFilter === 'sfx') return s.category === 'sfx';
-    return true;
-  });
-
   const customCount = Object.keys(customSounds).length;
 
   return (
@@ -231,11 +223,11 @@ export default function SettingsPage() {
       )}
 
       {/* ═════════════════════════════════════════════════════════════════════════ */}
-      {/* ── SECCIÓN SUPER ADMIN: CONFIGURACIÓN DE SONIDOS DE LOS JUEGOS ── */}
+      {/* ── SECCIÓN SUPER ADMIN: CONFIGURACIÓN DE MÚSICA DE LOS JUEGOS ── */}
       {/* ═════════════════════════════════════════════════════════════════════════ */}
       <div className="card p-6 sm:p-8 border-purple-500/40 bg-gradient-to-b from-slate-900 via-slate-900/95 to-indigo-950/40 shadow-2xl space-y-6 rounded-3xl">
         
-        {/* Cabecera del Módulo de Sonidos */}
+        {/* Cabecera del Módulo de Música */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-white/10">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600/40 to-indigo-600/30 border border-purple-500/50 flex items-center justify-center shadow-lg shadow-purple-900/30">
@@ -243,14 +235,14 @@ export default function SettingsPage() {
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-xl font-black text-white">Configuración de Sonidos</h2>
+                <h2 className="text-xl font-black text-white">Configuración de Música</h2>
                 <span className="text-[11px] font-bold text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
                   <Shield className="w-3 h-3" />
                   Super Admin
                 </span>
               </div>
               <p className="text-xs text-purple-200/80 font-medium mt-0.5">
-                Carga y personaliza todos los sonidos de los juegos. Si no cargas uno, se conserva el sonido por defecto sin alterar nada.
+                Carga y personaliza las secciones de música de las partidas: Sala de espera, preguntas estándar y largas, conteo 3-2-1 y podio final.
               </p>
             </div>
           </div>
@@ -261,10 +253,10 @@ export default function SettingsPage() {
               type="button"
               onClick={() => setShowResetAllSoundsModal(true)}
               className="px-3.5 py-2 rounded-xl text-xs font-bold text-red-300 bg-red-950/40 hover:bg-red-900/50 border border-red-500/40 flex items-center gap-1.5 transition-all shadow-md"
-              title="Restablece todos los sonidos al sintetizador u oficial por defecto"
+              title="Restablece todas las músicas a los valores predeterminados por defecto"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Resetear Todos</span>
+              <span>Resetear Todas</span>
             </button>
 
             <button
@@ -273,7 +265,7 @@ export default function SettingsPage() {
               className="px-5 py-2 rounded-xl text-xs font-black text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 flex items-center gap-2 transition-all shadow-lg shadow-emerald-700/30"
             >
               <Check className="w-4 h-4" />
-              <span>Guardar Sonidos</span>
+              <span>Guardar Música</span>
             </button>
           </div>
         </div>
@@ -282,7 +274,7 @@ export default function SettingsPage() {
         <div className="p-4 rounded-2xl bg-purple-950/40 border border-purple-500/30 space-y-2 text-xs">
           <div className="flex items-center gap-2 text-purple-300 font-black uppercase tracking-wider">
             <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>Reglas de Sonido en Todas las Partidas:</span>
+            <span>Reglas de Música en Todas las Partidas:</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-white/80">
             <div className="flex items-start gap-2 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
@@ -296,14 +288,14 @@ export default function SettingsPage() {
               <Repeat className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
               <div>
                 <strong className="text-white block">Repetición en Bucle de Audios Cortos:</strong>
-                Si el sonido cargado es más corto que el tiempo de la pregunta, se repetirá continuamente hasta terminar el tiempo o responder.
+                Si el audio cargado es más corto que el tiempo de la pregunta, se repetirá continuamente en bucle hasta que finalice el tiempo.
               </div>
             </div>
           </div>
           <div className="text-[11px] text-white/60 flex items-center gap-1.5 pt-1">
             <Info className="w-3.5 h-3.5 text-purple-400 shrink-0" />
             <span>
-              Estos sonidos se aplican a <strong>todos los juegos</strong>. Los sonidos por defecto permanecen activos siempre que no se haya subido un audio propio.
+              Estas pistas se aplican a <strong>todos los juegos</strong>. Si no has cargado un archivo propio, se conservan intactos los sonidos por defecto.
             </span>
           </div>
         </div>
@@ -395,54 +387,21 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Pestañas de Filtro y Contador */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.04] border border-white/10 w-fit">
-            <button
-              type="button"
-              onClick={() => setSoundFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                soundFilter === 'all'
-                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                  : 'text-white/60 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              Todos los Sonidos ({SOUND_SLOTS.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setSoundFilter('bgm')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                soundFilter === 'bgm'
-                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                  : 'text-white/60 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Music className="w-3.5 h-3.5" />
-              <span>Música de Fondo (4)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setSoundFilter('sfx')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                soundFilter === 'sfx'
-                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                  : 'text-white/60 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5" />
-              <span>Efectos SFX (17)</span>
-            </button>
+        {/* Encabezado de Lista de Ranuras */}
+        <div className="flex items-center justify-between pt-2">
+          <div className="text-xs font-bold text-white flex items-center gap-2">
+            <Music className="w-4 h-4 text-purple-400" />
+            <span>Secciones de Música ({SOUND_SLOTS.length})</span>
           </div>
 
           <div className="text-xs text-white/50 font-medium">
-            Personalizados: <span className="font-bold text-emerald-400">{customCount}</span> de {SOUND_SLOTS.length}
+            Personalizadas: <span className="font-bold text-emerald-400">{customCount}</span> de {SOUND_SLOTS.length}
           </div>
         </div>
 
-        {/* ── LISTA DE RANURAS DE SONIDO ── */}
+        {/* ── LISTA DE RANURAS DE MÚSICA ── */}
         <div className="space-y-3 pt-1">
-          {filteredSlots.map((slot) => {
+          {SOUND_SLOTS.map((slot) => {
             const custom = customSounds[slot.id];
             const isCustom = !!custom;
             const isPlayingThis = previewingSlotId === slot.id;
@@ -458,13 +417,11 @@ export default function SettingsPage() {
                 }`}
               >
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  {/* Información Principal del Sonido */}
+                  {/* Información Principal de la Música */}
                   <div className="space-y-1.5 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <div className={`p-1.5 rounded-lg ${
-                        slot.category === 'bgm' ? 'bg-purple-600/30 text-purple-300' : 'bg-amber-500/20 text-yellow-300'
-                      }`}>
-                        {slot.category === 'bgm' ? <Music className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+                      <div className="p-1.5 rounded-lg bg-purple-600/30 text-purple-300">
+                        <Music className="w-4 h-4" />
                       </div>
 
                       <h3 className="text-sm font-black text-white">{slot.name}</h3>
@@ -488,7 +445,7 @@ export default function SettingsPage() {
                       )}
                     </div>
 
-                    {/* DÓNDE SUENA EL SONIDO (Requisito Explícito del Usuario) */}
+                    {/* DÓNDE SUENA EL SONIDO */}
                     <div className="p-2.5 rounded-xl bg-purple-950/30 border border-purple-500/20 text-xs text-purple-200/90 flex items-start gap-2">
                       <span className="font-bold text-purple-300 shrink-0">📍 Dónde suena:</span>
                       <span>{slot.location}</span>
@@ -496,7 +453,7 @@ export default function SettingsPage() {
 
                     {!isCustom && (
                       <p className="text-[11px] text-white/40 pl-1">
-                        🔊 Sonido predeterminado: {slot.defaultDescription}
+                        🔊 Predeterminado: {slot.defaultDescription}
                       </p>
                     )}
                   </div>
@@ -512,7 +469,7 @@ export default function SettingsPage() {
                           ? 'bg-amber-600 text-white hover:bg-amber-500 animate-pulse'
                           : 'bg-white/10 hover:bg-white/20 text-white'
                       }`}
-                      title={isPlayingThis ? 'Detener preescucha' : 'Escuchar cómo suena este sonido'}
+                      title={isPlayingThis ? 'Detener preescucha' : 'Escuchar cómo suena'}
                     >
                       {isPlayingThis ? (
                         <>
@@ -555,7 +512,7 @@ export default function SettingsPage() {
                       />
                     </label>
 
-                    {/* Botón Restablecer Ranura (Solo si es personalizado) */}
+                    {/* Botón Restablecer Ranura (Solo si es personalizada) */}
                     {isCustom && (
                       <button
                         type="button"
