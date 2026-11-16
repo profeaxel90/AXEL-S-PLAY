@@ -13,12 +13,15 @@ import StorageUsageBar from '../../components/common/StorageUsageBar';
 import {
   Volume2, VolumeX, Music, Sliders, CheckCircle2,
   Sparkles, Play, Pause, Upload, ShieldCheck, Zap,
-  UserPlus, Trash2, Shield, RotateCcw, AlertTriangle, X,
+  UserPlus, Users, Layers, Trash2, Shield, RotateCcw, AlertTriangle, X,
   Clock, Repeat, RefreshCw, AudioWaveform, Headphones, FileAudio, Check, Info,
   Download, Database, Save, HardDrive, FileJson, AlertCircle, FileDown
 } from 'lucide-react';
 
+export type SettingsTab = 'sounds' | 'backup' | 'teachers' | 'storage' | 'rules' | 'all';
+
 export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<SettingsTab>('sounds');
   const currentSettings = audioEngine.getSettings();
   const { getAllTeachers, createTeacher, deleteTeacher } = useAuthStore();
   const { clearAllHomeworkData } = useHomeworkStore();
@@ -283,10 +286,52 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ── BARRA DE ITEMS / PESTAÑAS DE CONFIGURACIÓN ── */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-white/10">
+        {[
+          { id: 'sounds' as SettingsTab, label: 'Música y Sonidos', icon: Headphones, badge: '5 Pistas' },
+          { id: 'backup' as SettingsTab, label: 'Copia de Seguridad', icon: Database, badge: 'Anti-Fallo' },
+          { id: 'teachers' as SettingsTab, label: 'Gestión de Docentes', icon: Users, badge: `${teachersList.length}` },
+          { id: 'storage' as SettingsTab, label: 'Almacenamiento', icon: HardDrive },
+          { id: 'rules' as SettingsTab, label: 'Reglas y Reinicio', icon: ShieldCheck },
+          { id: 'all' as SettingsTab, label: 'Ver Todo', icon: Layers }
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 whitespace-nowrap transition-all border ${
+                isActive
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-purple-400/50 shadow-lg shadow-purple-900/40'
+                  : 'bg-white/5 text-white/70 hover:text-white hover:bg-white/10 border-white/10'
+              }`}
+            >
+              <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-purple-400'}`} />
+              <span>{tab.label}</span>
+              {tab.badge && (
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    isActive
+                      ? 'bg-white/20 text-white'
+                      : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                  }`}
+                >
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {/* ═════════════════════════════════════════════════════════════════════════ */}
-      {/* ── SECCIÓN SUPER ADMIN: CONFIGURACIÓN DE MÚSICA DE LOS JUEGOS ── */}
+      {/* ── ITEM 1: CONFIGURACIÓN DE MÚSICA DE LOS JUEGOS ── */}
       {/* ═════════════════════════════════════════════════════════════════════════ */}
-      <div className="card p-6 sm:p-8 border-purple-500/40 bg-gradient-to-b from-slate-900 via-slate-900/95 to-indigo-950/40 shadow-2xl space-y-6 rounded-3xl">
+      {(activeTab === 'sounds' || activeTab === 'all') && (
+      <div className="card p-6 sm:p-8 border-purple-500/40 bg-gradient-to-b from-slate-900 via-slate-900/95 to-indigo-950/40 shadow-2xl space-y-6 rounded-3xl animate-fade-in">
         
         {/* Cabecera del Módulo de Música */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-white/10">
@@ -607,28 +652,13 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+      )}
 
-      {/* REGLAS DEL JUEGO CONFIRMADAS */}
-      <div className="p-6 rounded-2xl bg-slate-900/50 border border-white/10 space-y-3">
-        <h3 className="font-bold text-sm text-white flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-green-400" />
-          <span>Reglas Activas en AXEL'S PLAY</span>
-        </h3>
-        <ul className="text-xs text-white/70 space-y-1.5 list-disc pl-5">
-          <li><strong>Música Exclusiva:</strong> Suena únicamente en el computador del docente; los celulares nunca reproducen música de fondo.</li>
-          <li><strong>Detención Automática:</strong> La música de fondo se apaga en cuanto termina la animación del podio final.</li>
-          <li><strong>Preguntas con Cuenta Regresiva:</strong> Si el audio es corto, se repite automáticamente hasta agotar el tiempo.</li>
-          <li><strong>Robo de Puntos:</strong> 50 puntos fijos por robo, máximo 2 robos por estudiante, solo a rivales con 50+ puntos.</li>
-          <li><strong>Clasificación Top 7:</strong> Se muestra en pantalla tras cada pregunta con puntuación por velocidad de respuesta.</li>
-          <li><strong>Podio de Ganadores:</strong> Animación sincronizada revelando el 3.er puesto, 2.º puesto y el 1.er puesto campeón con confeti.</li>
-        </ul>
-      </div>
-
-      {/* ── BARRA DE CAPACIDAD DE MEMORIA Y ALMACENAMIENTO ── */}
-      <StorageUsageBar />
-
-      {/* ── PANEL DE SUPER ADMIN: COPIA DE SEGURIDAD Y RESPALDO (BACKUP & RESTORE) ── */}
-      <div className="card p-6 sm:p-8 border-cyan-500/40 bg-gradient-to-r from-slate-900 via-cyan-950/20 to-slate-900 rounded-3xl space-y-5 shadow-2xl">
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* ── ITEM 2: COPIA DE SEGURIDAD Y RESPALDO (BACKUP & RESTORE) ── */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {(activeTab === 'backup' || activeTab === 'all') && (
+      <div className="card p-6 sm:p-8 border-cyan-500/40 bg-gradient-to-r from-slate-900 via-cyan-950/20 to-slate-900 rounded-3xl space-y-5 shadow-2xl animate-fade-in">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-cyan-600/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shadow-lg shadow-cyan-950/50">
@@ -739,9 +769,13 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* ── PANEL DE SUPER ADMIN: GESTIÓN DE DOCENTES ── */}
-      <div className="card p-6 border-purple-500/40 bg-gradient-to-r from-purple-950/40 via-slate-900 to-indigo-950/30 rounded-3xl space-y-4 shadow-xl">
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* ── ITEM 3: GESTIÓN DE DOCENTES (SUPER ADMIN) ── */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {(activeTab === 'teachers' || activeTab === 'all') && (
+      <div className="card p-6 border-purple-500/40 bg-gradient-to-r from-purple-950/40 via-slate-900 to-indigo-950/30 rounded-3xl space-y-4 shadow-xl animate-fade-in">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-300">
@@ -818,33 +852,66 @@ export default function SettingsPage() {
           })}
         </div>
       </div>
+      )}
 
-      {/* ── SECCIÓN DE RESETEO DE ESTADÍSTICAS ── */}
-      <div className="p-6 rounded-3xl bg-red-950/20 border border-red-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h3 className="text-sm font-black text-red-300 flex items-center gap-2">
-            <RotateCcw className="w-4 h-4" />
-            <span>Zona de Reinicio: Resetear Estadísticas</span>
-          </h3>
-          <p className="text-xs text-white/50 mt-1 max-w-xl">
-            Limpia el historial de partidas, puntuaciones acumuladas y estadísticas de prueba para comenzar un nuevo ciclo escolar desde cero.
-          </p>
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* ── ITEM 4: CAPACIDAD DE MEMORIA Y ALMACENAMIENTO ── */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {(activeTab === 'storage' || activeTab === 'all') && (
+        <div className="animate-fade-in space-y-4">
+          <StorageUsageBar />
         </div>
+      )}
 
-        <button
-          type="button"
-          onClick={() => setShowResetModal(true)}
-          className="px-4 py-2.5 rounded-xl bg-red-600/30 hover:bg-red-600/50 border border-red-500/50 text-red-200 font-bold text-xs flex items-center gap-1.5 transition-all self-start sm:self-auto shrink-0 shadow-lg shadow-red-900/30"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Resetear Estadísticas</span>
-        </button>
-      </div>
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* ── ITEM 5: REGLAS ACTIVAS Y ZONA DE REINICIO ── */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {(activeTab === 'rules' || activeTab === 'all') && (
+        <div className="space-y-6 animate-fade-in">
+          {/* REGLAS DEL JUEGO CONFIRMADAS */}
+          <div className="p-6 rounded-2xl bg-slate-900/50 border border-white/10 space-y-3">
+            <h3 className="font-bold text-sm text-white flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-green-400" />
+              <span>Reglas Activas en AXEL'S PLAY</span>
+            </h3>
+            <ul className="text-xs text-white/70 space-y-1.5 list-disc pl-5">
+              <li><strong>Música Exclusiva:</strong> Suena únicamente en el computador del docente; los celulares nunca reproducen música de fondo.</li>
+              <li><strong>Detención Automática:</strong> La música de fondo se apaga en cuanto termina la animación del podio final.</li>
+              <li><strong>Preguntas con Cuenta Regresiva:</strong> Si el audio es corto, se repite automáticamente hasta agotar el tiempo.</li>
+              <li><strong>Robo de Puntos:</strong> 50 puntos fijos por robo, máximo 2 robos por estudiante, solo a rivales con 50+ puntos.</li>
+              <li><strong>Clasificación Top 7:</strong> Se muestra en pantalla tras cada pregunta con puntuación por velocidad de respuesta.</li>
+              <li><strong>Podio de Ganadores:</strong> Animación sincronizada revelando el 3.er puesto, 2.º puesto y el 1.er puesto campeón con confeti.</li>
+            </ul>
+          </div>
 
-      {resetSuccess && (
-        <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>¡Estadísticas reiniciadas exitosamente! El sistema está completamente limpio para tus nuevas clases.</span>
+          {/* ── SECCIÓN DE RESETEO DE ESTADÍSTICAS ── */}
+          <div className="p-6 rounded-3xl bg-red-950/20 border border-red-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-black text-red-300 flex items-center gap-2">
+                <RotateCcw className="w-4 h-4" />
+                <span>Zona de Reinicio: Resetear Estadísticas</span>
+              </h3>
+              <p className="text-xs text-white/50 mt-1 max-w-xl">
+                Limpia el historial de partidas, puntuaciones acumuladas y estadísticas de prueba para comenzar un nuevo ciclo escolar desde cero.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowResetModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-red-600/30 hover:bg-red-600/50 border border-red-500/50 text-red-200 font-bold text-xs flex items-center gap-1.5 transition-all self-start sm:self-auto shrink-0 shadow-lg shadow-red-900/30"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Resetear Estadísticas</span>
+            </button>
+          </div>
+
+          {resetSuccess && (
+            <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>¡Estadísticas reiniciadas exitosamente! El sistema está completamente limpio para tus nuevas clases.</span>
+            </div>
+          )}
         </div>
       )}
 
