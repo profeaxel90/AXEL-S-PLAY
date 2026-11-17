@@ -66,29 +66,6 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Tarjeta de credenciales por defecto / recordatorio */}
-          <div className="mb-5 p-3.5 rounded-xl bg-purple-900/30 border border-purple-500/30 flex items-center justify-between text-xs text-purple-200">
-            <div className="space-y-0.5">
-              <p className="text-white font-semibold flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
-                <span>Credenciales de Administrador:</span>
-              </p>
-              <p className="text-[11px] text-white/70 font-mono">
-                profe@axelsplay.edu / admin123
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('profe@axelsplay.edu');
-                setPassword('admin123');
-              }}
-              className="px-2.5 py-1 rounded-lg bg-purple-600/40 hover:bg-purple-600/60 text-[11px] font-bold text-white transition-colors"
-            >
-              Autocompletar
-            </button>
-          </div>
-
           {(error || localError) && (
             <div className="mb-6 p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start gap-3 text-red-300 text-sm">
               <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-400 mt-0.5" />

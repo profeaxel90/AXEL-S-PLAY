@@ -728,14 +728,64 @@ function NewAssignmentModal({ defaultGameId, initialAssignment, onClose, onCreat
                     </button>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-bold text-white/60 mb-1">Enunciado o Pregunta *</label>
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label className="block text-[11px] font-bold text-white/60">Enunciado o Pregunta *</label>
+                      <div className="flex items-center gap-1 bg-slate-950/70 border border-white/10 rounded-xl p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => updateQuestion(qIdx, { bold: !q.bold })}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-black flex items-center gap-1 transition-all ${
+                            q.bold ? 'bg-purple-600 text-white shadow-sm' : 'text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                          title="Alternar Negrita"
+                        >
+                          <Bold className="w-3 h-3" />
+                          <span>Negrita</span>
+                        </button>
+                        <div className="w-px h-3 bg-white/10 mx-0.5" />
+                        <button
+                          type="button"
+                          onClick={() => updateQuestion(qIdx, { align: 'left' })}
+                          className={`p-1 rounded-md text-xs transition-all ${
+                            q.align === 'left' ? 'bg-purple-600 text-white' : 'text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                          title="Alinear a la izquierda"
+                        >
+                          <AlignLeft className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateQuestion(qIdx, { align: 'center' })}
+                          className={`p-1 rounded-md text-xs transition-all ${
+                            q.align === 'center' ? 'bg-purple-600 text-white' : 'text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                          title="Centrar texto"
+                        >
+                          <AlignCenter className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateQuestion(qIdx, { align: 'justify' })}
+                          className={`p-1 rounded-md text-xs transition-all ${
+                            !q.align || q.align === 'justify' ? 'bg-purple-600 text-white' : 'text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                          title="Justificar texto"
+                        >
+                          <AlignJustify className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
                     <textarea
-                      rows={2}
+                      rows={3}
                       value={q.content}
                       onChange={(e) => updateQuestion(qIdx, { content: e.target.value })}
-                      placeholder="Escribe la pregunta o problema a resolver..."
-                      className="input text-xs w-full py-2 bg-slate-950 border-white/10 resize-none font-medium"
+                      placeholder="Escribe la pregunta o problema a resolver (puedes usar saltos de línea)..."
+                      className={`input text-xs w-full py-2 bg-slate-950 border-white/10 resize-none whitespace-pre-wrap ${
+                        q.bold ? 'font-black text-white' : 'font-medium text-slate-200'
+                      } ${
+                        q.align === 'center' ? 'text-center' : q.align === 'left' ? 'text-left' : 'text-justify'
+                      }`}
                     />
                   </div>
 
@@ -1065,7 +1115,7 @@ function StudentDetail({
                 </span>
               )}
             </div>
-            <p className="text-sm font-semibold text-white mb-2">{ans.questionPrompt}</p>
+            <p className="text-sm font-semibold text-white mb-2 whitespace-pre-wrap">{ans.questionPrompt}</p>
             <div className="text-xs space-y-1">
               <p className="text-white/70">
                 Respuesta del alumno: <strong className="text-white">{ans.selectedOptionText}</strong>

@@ -33,6 +33,7 @@ export interface AxelsPlayBackup {
     customSoundsMeta: string | null;
     questionBank: string | null;
   };
+  allLocalStorage?: Record<string, string>;
   indexedDB: {
     media: StoredMedia[];
   };
@@ -56,6 +57,16 @@ class BackupManager {
     const audioSettingsRaw = localStorage.getItem('axelplay_audio');
     const customSoundsMetaRaw = localStorage.getItem('axels_play_custom_sounds_meta');
     const questionBankRaw = sessionStorage.getItem('question_bank');
+
+    // Captura total de todas las claves en localStorage (seguridad integral 100%)
+    const allLocalStorage: Record<string, string> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k) {
+        const v = localStorage.getItem(k);
+        if (v !== null) allLocalStorage[k] = v;
+      }
+    }
 
     // 2. Extraer todos los medios de IndexedDB (fotos de cuadernos y audios)
     const mediaList = await idbManager.getAllMedia();
@@ -99,6 +110,7 @@ class BackupManager {
         customSoundsMeta: customSoundsMetaRaw,
         questionBank: questionBankRaw,
       },
+      allLocalStorage,
       indexedDB: {
         media: mediaList,
       },
@@ -155,7 +167,20 @@ class BackupManager {
    */
   public async restoreBackup(backup: AxelsPlayBackup): Promise<boolean> {
     try {
-      // 1. Restaurar localStorage
+      // 1. Restaurar volcado total de localStorage si existe
+      if (backup.allLocalStorage && typeof backup.allLocalStorage === 'object') {
+        Object.entries(backup.allLocalStorage).forEach(([k, v]) => {
+          try {
+            if (typeof v === 'string') {
+              localStorage.setItem(k, v);
+            }
+          } catch (e) {
+            console.warn(`Error restaurando clave ${k}:`, e);
+          }
+        });
+      }
+
+      // 2. Restaurar claves primarias de localStorage (compatibilidad garantizada)
       if (backup.storage.games !== null && backup.storage.games !== undefined) {
         localStorage.setItem('axels_play_custom_games_v2', backup.storage.games);
       }

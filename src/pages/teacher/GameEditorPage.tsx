@@ -3,7 +3,8 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   Save, ArrowLeft, Plus, Trash2, Copy, Eye, Clock,
   Award, Sparkles, CheckCircle2, Image as ImageIcon,
-  HelpCircle, Settings, Layers, ListOrdered, Upload, Database, Video
+  HelpCircle, Settings, Layers, ListOrdered, Upload, Database, Video,
+  Bold, AlignLeft, AlignCenter, AlignJustify
 } from 'lucide-react';
 import { SUBJECTS } from '../../types';
 import type { QuestionType, Difficulty, GameMode, GradeLevel } from '../../types';
@@ -24,6 +25,8 @@ interface QuestionDraft {
   id: string;
   type: QuestionType;
   content: string;
+  align?: 'left' | 'center' | 'justify';
+  bold?: boolean;
   timeLimit: number;
   points: number;
   pointsMultiplier?: 1 | 2 | 3;
@@ -176,6 +179,8 @@ export default function GameEditorPage() {
               id: q.id || `q-${idx + 1}`,
               type: q.type || 'single_choice',
               content: q.content || '',
+              align: q.align || 'center',
+              bold: q.bold || false,
               timeLimit: q.timeLimit || 20,
               points: q.points || 1000,
               pointsMultiplier: q.pointsMultiplier || 1,
@@ -199,6 +204,8 @@ export default function GameEditorPage() {
       id: `q-${Date.now()}-${questions.length + 1}`,
       type: 'single_choice',
       content: `Nueva pregunta ${questions.length + 1}...`,
+      align: 'center',
+      bold: false,
       timeLimit: timePerQuestion || 20,
       points: 1000,
       pointsMultiplier: 1,
@@ -272,6 +279,8 @@ export default function GameEditorPage() {
         teacherId: 'teacher-1',
         type: q.type,
         content: q.content.trim() || `Pregunta ${idx + 1}`,
+        align: q.align || 'center',
+        bold: q.bold || false,
         timeLimit: q.timeLimit || timePerQuestion || 20,
         points: q.points || 1000,
         pointsMultiplier: q.pointsMultiplier || 1,
@@ -541,15 +550,39 @@ export default function GameEditorPage() {
                 </label>
                 <select
                   value={activeQuestion.type}
-                  onChange={(e) => updateActiveQuestion({ type: e.target.value as QuestionType })}
+                  onChange={(e) => {
+                    const newType = e.target.value as QuestionType;
+                    if (newType === 'true_false') {
+                      updateActiveQuestion({
+                        type: 'true_false',
+                        options: [
+                          { id: `opt-tf-1`, text: 'Verdadero', isCorrect: true },
+                          { id: `opt-tf-2`, text: 'Falso', isCorrect: false },
+                        ],
+                      });
+                    } else if ((newType === 'single_choice' || newType === 'multiple_choice') && activeQuestion.options.length < 4) {
+                      updateActiveQuestion({
+                        type: newType,
+                        options: [
+                          { id: `opt-1`, text: activeQuestion.options[0]?.text || '', isCorrect: true },
+                          { id: `opt-2`, text: activeQuestion.options[1]?.text || '', isCorrect: false },
+                          { id: `opt-3`, text: '', isCorrect: false },
+                          { id: `opt-4`, text: '', isCorrect: false },
+                        ],
+                      });
+                    } else {
+                      updateActiveQuestion({ type: newType });
+                    }
+                  }}
                   className="input text-xs bg-slate-900 border-white/10 py-2 font-semibold text-purple-300"
                 >
-                  <option value="single_choice">🔘 Selección Única (4 colores Kahoot)</option>
+                  <option value="single_choice">🔘 Selección Única (4 colores clásicos)</option>
+                  <option value="true_false">⚖️ Verdadero o Falso (2 opciones)</option>
                   <option value="multiple_choice">☑️ Selección Múltiple (varias correctas)</option>
                   <option value="short_answer">✍️ Escribir Texto / Respuesta Abierta</option>
                   <option value="photo_only">📸 Solo Foto / Evidencia del Trabajo</option>
                   <option value="image_based">🖼️ Pregunta con Imagen Destacada</option>
-                  <option value="situation">📖 Caso o Situación Pedagógica</option>
+                  <option value="situation">📖 Caso o Situación de Aprendizaje</option>
                   <option value="matching">🧩 Relacionar Columnas</option>
                 </select>
               </div>
@@ -703,17 +736,77 @@ export default function GameEditorPage() {
               </div>
             </div>
 
-            {/* Enunciado */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-white/70 mb-1.5">
-                Enunciado de la Pregunta {activeQuestionIndex + 1} *
-              </label>
+            {/* Enunciado con Controles de Formato */}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-white/70">
+                  Enunciado de la Pregunta {activeQuestionIndex + 1} *
+                </label>
+                {/* Barra de formato: Negrita, Izquierda, Centrado, Justificado */}
+                <div className="flex items-center gap-1 bg-slate-950/70 border border-white/10 rounded-xl p-1">
+                  <button
+                    type="button"
+                    onClick={() => updateActiveQuestion({ bold: !activeQuestion.bold })}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-black flex items-center gap-1 transition-all ${
+                      activeQuestion.bold ? 'bg-purple-600 text-white shadow-md' : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
+                    title="Alternar Negrita"
+                  >
+                    <Bold className="w-3.5 h-3.5" />
+                    <span>Negrita</span>
+                  </button>
+
+                  <div className="w-px h-4 bg-white/10 mx-0.5" />
+
+                  <button
+                    type="button"
+                    onClick={() => updateActiveQuestion({ align: 'left' })}
+                    className={`p-1.5 rounded-lg text-xs transition-all ${
+                      activeQuestion.align === 'left' ? 'bg-purple-600 text-white' : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
+                    title="Alinear a la izquierda"
+                  >
+                    <AlignLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => updateActiveQuestion({ align: 'center' })}
+                    className={`p-1.5 rounded-lg text-xs transition-all ${
+                      !activeQuestion.align || activeQuestion.align === 'center' ? 'bg-purple-600 text-white' : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
+                    title="Centrar texto"
+                  >
+                    <AlignCenter className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => updateActiveQuestion({ align: 'justify' })}
+                    className={`p-1.5 rounded-lg text-xs transition-all ${
+                      activeQuestion.align === 'justify' ? 'bg-purple-600 text-white' : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
+                    title="Justificar texto"
+                  >
+                    <AlignJustify className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
               <textarea
                 value={activeQuestion.content}
                 onChange={(e) => updateActiveQuestion({ content: e.target.value })}
                 rows={3}
                 placeholder="Escribe aquí la pregunta que verán los estudiantes..."
-                className="input text-base font-medium resize-none"
+                className={`input text-base resize-none whitespace-pre-wrap ${
+                  activeQuestion.bold ? 'font-black' : 'font-medium'
+                } ${
+                  activeQuestion.align === 'justify'
+                    ? 'text-justify'
+                    : activeQuestion.align === 'left'
+                    ? 'text-left'
+                    : 'text-center'
+                }`}
               />
             </div>
 
@@ -762,13 +855,18 @@ export default function GameEditorPage() {
 
                 <div className="space-y-3">
                   {activeQuestion.options.map((opt, optIdx) => {
+                    const isTF = activeQuestion.type === 'true_false';
+                    const TF_COLORS = [
+                      { border: 'border-blue-500/60 bg-blue-950/30', badge: 'bg-blue-600 text-white', symbol: '✔', name: 'Verdadero' },
+                      { border: 'border-red-500/60 bg-red-950/30', badge: 'bg-red-600 text-white', symbol: '✖', name: 'Falso' },
+                    ];
                     const CREATION_COLORS = [
                       { border: 'border-red-500/60 bg-red-950/25', badge: 'bg-red-600 text-white', symbol: '▲', name: 'Rojo' },
                       { border: 'border-blue-500/60 bg-blue-950/25', badge: 'bg-blue-600 text-white', symbol: '◆', name: 'Azul' },
                       { border: 'border-amber-500/60 bg-amber-950/25', badge: 'bg-amber-400 text-slate-950', symbol: '●', name: 'Amarillo' },
                       { border: 'border-emerald-500/60 bg-emerald-950/25', badge: 'bg-emerald-600 text-white', symbol: '■', name: 'Verde' },
                     ];
-                    const cStyle = CREATION_COLORS[optIdx % CREATION_COLORS.length];
+                    const cStyle = isTF ? TF_COLORS[optIdx % TF_COLORS.length] : CREATION_COLORS[optIdx % CREATION_COLORS.length];
 
                     return (
                       <div
@@ -838,21 +936,6 @@ export default function GameEditorPage() {
                 </div>
               </div>
             )}
-
-            {/* Explicación Pedagógica */}
-            <div>
-              <label className="block text-xs font-semibold text-white/60 mb-1 flex items-center gap-1">
-                <HelpCircle className="w-3.5 h-3.5 text-purple-400" />
-                <span>Explicación Pedagógica (Se muestra tras responder para reforzar el aprendizaje)</span>
-              </label>
-              <textarea
-                value={activeQuestion.explanation}
-                onChange={(e) => updateActiveQuestion({ explanation: e.target.value })}
-                rows={2}
-                placeholder="Explica por qué esta respuesta es la correcta..."
-                className="input text-xs resize-none"
-              />
-            </div>
           </div>
         </div>
       </div>

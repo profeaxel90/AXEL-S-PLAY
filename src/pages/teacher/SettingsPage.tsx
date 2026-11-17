@@ -7,7 +7,6 @@ import {
 } from '../../lib/audio';
 import { backupManager, type AxelsPlayBackup } from '../../lib/backupManager';
 import { useAuthStore, type StoredAccount } from '../../stores/authStore';
-import { useHomeworkStore } from '../../stores/homeworkStore';
 import { useSessionHistoryStore } from '../../stores/sessionHistoryStore';
 import StorageUsageBar from '../../components/common/StorageUsageBar';
 import {
@@ -24,7 +23,6 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('sounds');
   const currentSettings = audioEngine.getSettings();
   const { getAllTeachers, createTeacher, deleteTeacher } = useAuthStore();
-  const { clearAllHomeworkData } = useHomeworkStore();
 
   const [musicEnabled, setMusicEnabled] = useState(currentSettings.musicEnabled ?? true);
   const [applyToAllGames, setApplyToAllGames] = useState(currentSettings.applyToAllGames ?? true);
@@ -130,7 +128,6 @@ export default function SettingsPage() {
       localStorage.removeItem('axels_play_session_history');
       localStorage.removeItem('axelplay_session_history');
       localStorage.removeItem('axels_play_recent_sessions');
-      clearAllHomeworkData();
       setShowResetModal(false);
       setResetSuccess(true);
       setTimeout(() => setResetSuccess(false), 4000);

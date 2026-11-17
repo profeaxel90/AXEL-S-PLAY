@@ -6,7 +6,7 @@ interface MascotAvatarProps {
   avatar?: string;
   seed?: string;
   emotion?: MascotEmotion;
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
   className?: string;
   showBadge?: boolean;
 }
@@ -38,6 +38,8 @@ const SIZE_MAP = {
   lg: 'w-16 h-16',
   xl: 'w-24 h-24',
   '2xl': 'w-32 h-32',
+  '3xl': 'w-40 h-40 sm:w-48 sm:h-48',
+  '4xl': 'w-52 h-52 sm:w-64 sm:h-64',
 };
 
 // Paleta de colores e identidades de las 15 mascotas 3D Cartoon
@@ -402,6 +404,14 @@ export default function MascotAvatar({
             <circle cx="8" cy="4" r="2.5" fill="#ef4444" />
             <circle cx="20" cy="12" r="2.5" fill="#3b82f6" />
             <circle cx="32" cy="4" r="2.5" fill="#10b981" />
+          </g>
+        )}
+
+        {/* 7. Destellos de Gran Emoción y Victoria */}
+        {(emotion === 'victory' || emotion === 'celebrate') && (
+          <g className="animate-pulse">
+            <path d="M 16,24 L 18,19 L 20,24 L 25,26 L 20,28 L 18,33 L 16,28 L 11,26 Z" fill="#facc15" />
+            <path d="M 82,24 L 84,19 L 86,24 L 91,26 L 86,28 L 84,33 L 82,28 L 77,26 Z" fill="#facc15" />
           </g>
         )}
       </svg>

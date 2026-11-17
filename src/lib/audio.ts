@@ -81,7 +81,7 @@ class MusicSynthesizer {
     }
   }
 
-  // ── Primitivas Sonoras Estilo Kahoot (Sintetizadores FM, Funk Bass y Percusión Digital Suave) ──
+  // ── Primitivas Sonoras AXEL'S PLAY (Sintetizadores FM, Funk Bass y Percusión Digital Suave) ──
   // 1. Shaker / Hi-Hat Digital Suave (Marca el pulso sin cansar)
   private playHiHat(time: number, vol = 0.025) {
     if (!this.ctx || !this.masterMusicGain) return;
@@ -107,7 +107,7 @@ class MusicSynthesizer {
     osc.stop(time + 0.03);
   }
 
-  // 2. Synth Bass Funky & Saltarín (El alma rítmica del concurso, estilo Kahoot)
+  // 2. Synth Bass Funky & Saltarín (El alma rítmica del concurso)
   private playSynthBass(freq: number, time: number, duration = 0.16, vol = 0.14) {
     if (!this.ctx || !this.masterMusicGain) return;
     const osc1 = this.ctx.createOscillator();
@@ -142,7 +142,7 @@ class MusicSynthesizer {
     osc2.stop(time + duration + 0.02);
   }
 
-  // 3. Pluck Melódico y Alegre (Marimba / Teclado Digital Estilo Kahoot)
+  // 3. Pluck Melódico y Alegre (Marimba / Teclado Digital Electrónico)
   private playMarimba(freq: number, time: number, duration = 0.15, vol = 0.1) {
     if (!this.ctx || !this.masterMusicGain) return;
     const osc = this.ctx.createOscillator();
@@ -219,8 +219,8 @@ class MusicSynthesizer {
     osc.stop(time + duration + 0.02);
   }
 
-  // ── Secuenciadores Musicales Estilo Kahoot (Groove Bailable, Tensión de Concurso y Podio Olímpico) ──
-  // 1. Lobby Theme: 124 BPM, Funky, Bailable y Alegre (Inspirado en la Sala de Espera de Kahoot)
+  // ── Secuenciadores Musicales AXEL'S PLAY (Groove Bailable, Tensión de Concurso y Podio Olímpico) ──
+  // 1. Lobby Theme: 124 BPM, Funky, Bailable y Alegre (Inspirado en Concursos Educativos)
   private tickLobby(time: number, step: number) {
     const beat16 = step % 16;
     const bar64 = step % 64; // Ciclo de 4 compases
@@ -236,7 +236,7 @@ class MusicSynthesizer {
     }
 
     // Línea de bajo Funky Syncopado estilo disco/electro-pop (D2, D3, F2, G2, A2)
-    // El clásico bajo saltarín de Kahoot que invita a los alumnos a moverse
+    // El clásico bajo saltarín que invita a los alumnos a moverse
     const bassRhythm: Record<number, number> = {
       0: 146.83,  // D3
       3: 146.83,  // D3
@@ -253,7 +253,7 @@ class MusicSynthesizer {
       this.playSynthBass(freq * 0.5, time, 0.14, 0.13);
     }
 
-    // Melodía pegadiza en sintetizador pluck / marimba electrónica estilo Kahoot
+    // Melodía pegadiza en sintetizador pluck / marimba electrónica
     // Frase A (Compás 1), Reposo rítmico (Compás 2), Frase B (Compás 3), Cierre alegre (Compás 4)
     const lobbyMelody: Record<number, number> = {
       // Compás 1: Motivo principal bailable
@@ -284,7 +284,7 @@ class MusicSynthesizer {
     }
   }
 
-  // 2. Question Theme: 132 BPM, Tensión de Concurso Televisivo (Inspirado en el Countdown de Kahoot)
+  // 2. Question Theme: 132 BPM, Tensión de Concurso Televisivo (Inspirado en Concursos de Preguntas)
   // Bajo pulsante "bouncy", reloj electrónico nítido y arpegios de anticipación
   private tickQuestion(time: number, step: number) {
     const beat16 = step % 16;
@@ -342,7 +342,7 @@ class MusicSynthesizer {
     }
   }
 
-  // 3. Podium Theme: 136 BPM, Fanfarria Triunfal y Celebración Olímpica (Estilo Ceremonia Kahoot)
+  // 3. Podium Theme: 136 BPM, Fanfarria Triunfal y Celebración Olímpica (Ceremonia de Ganadores)
   // Acordes mayores brillantes, bajo bailable de fiesta y campanas de victoria
   private tickPodium(time: number, step: number) {
     const beat16 = step % 16;
@@ -539,7 +539,7 @@ class MusicSynthesizer {
     });
   }
 
-  // Sonido de finalización armónico estilo Kahoot ("¡Bing-Bong!") cuando termina el tiempo o todos responden
+  // Sonido de finalización armónico ("¡Bing-Bong!") cuando termina el tiempo o todos responden
   public playTimeUp() {
     // 1er tono de campana alta (G5 - 783.99 Hz)
     this.playEffectTone(783.99, 'sine', 0.22, 0.45);
@@ -559,7 +559,7 @@ class MusicSynthesizer {
 
   // ── Nuevos Efectos de Gamificación AXEL'S PLAY ──
   public playStreak() {
-    // Sonido ascendente de racha de fuego estilo Kahoot
+    // Sonido ascendente de racha de fuego AXEL'S PLAY
     const tones = [523.25, 659.25, 783.99, 1046.5, 1318.5];
     tones.forEach((freq, idx) => {
       setTimeout(() => this.playEffectTone(freq, 'triangle', 0.12, 0.32), idx * 45);
@@ -736,7 +736,7 @@ export const SOUND_SLOTS: SoundSlot[] = [
     category: 'bgm',
     name: 'Música de Espera en Preguntas Estándar (< 30s)',
     location: 'Pantalla del Docente — Suena durante las preguntas normales con tiempo menor a 30 segundos. Si el audio es corto, se repetirá continuamente en bucle hasta que termine el tiempo de la pregunta.',
-    defaultDescription: 'Sintetizador Procedural Web Audio API (Estilo Kahoot)',
+    defaultDescription: 'Sintetizador Procedural Web Audio API (AXEL\'S PLAY Original)',
     isSpecialRule: true,
   },
   {
@@ -1311,7 +1311,7 @@ class AudioEngine {
 
       this.currentQuestionAudio = audio;
     } else {
-      // Por defecto: Sintetizador Web Audio API estilo Kahoot intacto
+      // Por defecto: Sintetizador Web Audio API de AXEL'S PLAY intacto
       this.synth.startMusic('question');
     }
   }

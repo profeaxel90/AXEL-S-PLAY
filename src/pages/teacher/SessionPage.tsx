@@ -777,8 +777,8 @@ export default function SessionPage() {
 
       setLeaderboardData(top5);
       setIsLeaderboardAnimated(false);
-      setShowLeaderboard(true);
-      setTimeout(() => setIsLeaderboardAnimated(true), 350);
+      // El docente verá primero la respuesta correcta en la pantalla y decidirá cuándo avanzar a la clasificación o al podio
+      // setShowLeaderboard(true);
 
       // Sincronizar tabla de clasificación con todos los participantes
       hostSyncRef.current?.broadcast('LEADERBOARD', {
@@ -1789,9 +1789,9 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* ── FASE 2: PREGUNTA EN PANTALLA COMPLETA 100VH SIN SCROLL (ESTILO KAHOOT) ── */}
+      {/* ── FASE 2: PREGUNTA EN PANTALLA PRINCIPAL AXEL'S PLAY ── */}
       {gamePhase === 'question' && (
-        <div className="h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] flex flex-col justify-between overflow-hidden gap-2 sm:gap-3 select-none pr-12 sm:pr-14">
+        <div className="min-h-[75vh] flex flex-col justify-between gap-3 select-none">
           {/* Header Superior Compacto */}
           <div className="card p-2 sm:p-2.5 border-purple-500/30 bg-slate-900/90 backdrop-blur-md flex items-center justify-between gap-3 shrink-0 rounded-2xl shadow-xl">
             {/* Izquierda: Indicador de Pregunta, PIN y Botón Zoom QR */}
@@ -1878,15 +1878,27 @@ export default function SessionPage() {
                   className="py-2 px-4 rounded-xl text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-600/30 hover:scale-105 transition-all flex items-center gap-1.5"
                 >
                   <Eye className="w-4 h-4" />
-                  <span>Revelar</span>
+                  <span>Revelar Respuesta</span>
+                </button>
+              ) : currentQIndex >= questions.length - 1 ? (
+                <button
+                  onClick={handleEndGame}
+                  className="py-2.5 px-5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 via-yellow-400 to-yellow-300 hover:from-amber-300 hover:to-yellow-200 text-slate-950 shadow-xl shadow-yellow-500/50 hover:scale-105 transition-all flex items-center gap-2 animate-bounce"
+                >
+                  <Trophy className="w-4 h-4 text-slate-950 fill-current" />
+                  <span>🏆 Ver Podio Final</span>
                 </button>
               ) : (
                 <button
-                  onClick={handleNextQuestion}
+                  onClick={() => {
+                    setIsLeaderboardAnimated(false);
+                    setShowLeaderboard(true);
+                    setTimeout(() => setIsLeaderboardAnimated(true), 350);
+                  }}
                   className="py-2 px-4 rounded-xl text-xs font-black bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-green-500/40 hover:scale-105 transition-all flex items-center gap-1.5"
                 >
-                  <span>Siguiente</span>
-                  <SkipForward className="w-4 h-4 fill-slate-950" />
+                  <BarChart3 className="w-4 h-4" />
+                  <span>Ver Clasificación</span>
                 </button>
               )}
 
@@ -2313,8 +2325,8 @@ export default function SessionPage() {
                 }`}>
                   {secondPlace && (
                     <>
-                      <div className="w-20 h-20 rounded-3xl bg-cyan-500/30 p-1.5 border-3 border-cyan-300 mb-2 shadow-xl shadow-cyan-500/30 flex items-center justify-center">
-                        <MascotAvatar avatar={secondPlace.avatar} emotion="happy" size="lg" />
+                      <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-3xl bg-cyan-500/30 p-1.5 border-3 border-cyan-300 mb-2 shadow-xl shadow-cyan-500/30 flex items-center justify-center">
+                        <MascotAvatar avatar={secondPlace.avatar} emotion="happy" size="3xl" />
                       </div>
                       <span className="font-bold text-sm text-cyan-200 truncate max-w-full drop-shadow">{secondPlace.nickname}</span>
                       <span className="text-xs text-white font-extrabold mb-2">{secondPlace.score.toLocaleString()} pts</span>
@@ -2332,8 +2344,8 @@ export default function SessionPage() {
                 }`}>
                   {firstPlace && (
                     <>
-                      <div className="w-26 h-26 rounded-3xl bg-yellow-400/40 p-2 border-4 border-yellow-300 shadow-2xl shadow-yellow-400/80 mb-2 animate-bounce ring-4 ring-yellow-300/40 flex items-center justify-center">
-                        <MascotAvatar avatar={firstPlace.avatar} emotion="victory" size="xl" />
+                      <div className="w-40 h-40 sm:w-52 sm:h-52 rounded-3xl bg-yellow-400/40 p-2 border-4 border-yellow-300 shadow-2xl shadow-yellow-400/80 mb-2 animate-bounce ring-4 ring-yellow-300/40 flex items-center justify-center">
+                        <MascotAvatar avatar={firstPlace.avatar} emotion="victory" size="4xl" />
                       </div>
                       <span className="font-black text-base text-yellow-300 truncate max-w-full drop-shadow-[0_2px_10px_rgba(250,204,21,0.5)]">
                         {firstPlace.nickname}
@@ -2356,8 +2368,8 @@ export default function SessionPage() {
                 }`}>
                   {thirdPlace && (
                     <>
-                      <div className="w-20 h-20 rounded-3xl bg-orange-500/30 p-1.5 border-3 border-orange-300 mb-2 shadow-xl shadow-orange-500/30 flex items-center justify-center">
-                        <MascotAvatar avatar={thirdPlace.avatar} emotion="happy" size="lg" />
+                      <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-3xl bg-orange-500/30 p-1.5 border-3 border-orange-300 mb-2 shadow-xl shadow-orange-500/30 flex items-center justify-center">
+                        <MascotAvatar avatar={thirdPlace.avatar} emotion="happy" size="3xl" />
                       </div>
                       <span className="font-bold text-sm text-orange-200 truncate max-w-full drop-shadow">{thirdPlace.nickname}</span>
                       <span className="text-xs text-white font-extrabold mb-2">{thirdPlace.score.toLocaleString()} pts</span>

@@ -246,7 +246,7 @@ export default function StudentWorkspacePage() {
                   ans.isCorrect ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'
                 }`}
               >
-                <p className="font-semibold text-white/90 mb-1">{ans.questionPrompt}</p>
+                <p className="font-semibold text-white/90 mb-1 whitespace-pre-wrap">{ans.questionPrompt}</p>
                 <p className="text-[11px] text-white/60">
                   Tu respuesta: <strong className={ans.isCorrect ? 'text-emerald-300' : 'text-red-300'}>{ans.selectedOptionText}</strong>
                 </p>

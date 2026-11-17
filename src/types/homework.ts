@@ -23,6 +23,8 @@ export interface HomeworkQuestionOption {
 export interface HomeworkQuestion {
   id: string;
   content: string; // Enunciado
+  align?: 'left' | 'center' | 'justify'; // Alineación del enunciado
+  bold?: boolean;                       // Texto en negrita
   imageUrl?: string;
   videoUrl?: string;
   // Lo que habilita el docente para esta pregunta:

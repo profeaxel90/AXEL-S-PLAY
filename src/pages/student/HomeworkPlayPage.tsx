@@ -45,6 +45,8 @@ interface PlayedOption {
 interface PlayedQuestion {
   id: string;
   content: string;
+  align?: 'left' | 'center' | 'justify';
+  bold?: boolean;
   imageUrl?: string;
   videoUrl?: string;
   timeLimit?: number;
@@ -131,6 +133,8 @@ export default function HomeworkPlayPage() {
       return assignment.customQuestions.map((cq, idx) => ({
         id: cq.id || `cq-${idx}`,
         content: cq.content,
+        align: cq.align || 'left',
+        bold: cq.bold || false,
         imageUrl: cq.imageUrl,
         videoUrl: cq.videoUrl,
         timeLimit: 0,
@@ -146,6 +150,8 @@ export default function HomeworkPlayPage() {
     return (game?.questions ?? []).map((gq) => ({
       id: gq.id,
       content: gq.content,
+      align: gq.align || 'left',
+      bold: gq.bold || false,
       imageUrl: gq.imageUrl,
       videoUrl: gq.videoUrl,
       timeLimit: gq.timeLimit || 0,
@@ -1017,7 +1023,17 @@ export default function HomeworkPlayPage() {
               className="w-full max-h-48 object-contain rounded-xl mb-4 bg-black/40"
             />
           ) : null}
-          <p className="text-xl font-black text-white text-center leading-snug">{currentQ.content}</p>
+          <div className={`text-lg sm:text-xl text-white leading-relaxed whitespace-pre-wrap ${
+            currentQ.bold ? 'font-black' : 'font-bold'
+          } ${
+            currentQ.align === 'center'
+              ? 'text-center'
+              : currentQ.align === 'justify'
+              ? 'text-justify [text-align-last:left]'
+              : 'text-left'
+          }`}>
+            {currentQ.content}
+          </div>
           <p className="text-center text-xs text-white/30 mt-2">Sin límite de tiempo · Sin presión ⏸</p>
         </div>
 

@@ -115,6 +115,8 @@ export interface Question {
   teacherId: string;
   type: QuestionType;
   content: string;          // Enunciado
+  align?: 'left' | 'center' | 'justify'; // Alineación del enunciado
+  bold?: boolean;                       // Texto en negrita
   options?: QuestionOption[];
   correctAnswer: QuestionAnswer;
   explanation?: string;
