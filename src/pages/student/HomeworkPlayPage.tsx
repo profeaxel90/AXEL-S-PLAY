@@ -692,7 +692,7 @@ export default function HomeworkPlayPage() {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 text-white font-bold text-xs sm:text-sm">
                     <Camera className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <span>Fotos de tu cuaderno ({studentPhotos.length}/6)</span>
+                    <span>Fotos de tu cuaderno ({studentPhotos.length}/5)</span>
                   </div>
                   {isProcessingPhoto && (
                     <span className="flex items-center gap-1.5 text-xs text-amber-300 font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full animate-pulse">
@@ -704,20 +704,50 @@ export default function HomeworkPlayPage() {
                   Adjunta capturas claras de tus apuntes o procedimientos antes de enviar.
                 </p>
 
-                {/* Botón único de Cámara en Vivo */}
-                <div className="mb-3">
+                {/* Botón de Cámara en Vivo + Subir desde Galería */}
+                <div className="mb-3 flex gap-2">
                   <button
                     type="button"
-                    disabled={isProcessingPhoto || studentPhotos.length >= 6}
+                    disabled={isProcessingPhoto || studentPhotos.length >= 5}
                     onClick={() => {
                       setCameraTarget('summary');
                       setCameraModalOpen(true);
                     }}
-                    className="w-full flex items-center justify-center gap-2 p-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white text-xs font-black shadow-md cursor-pointer transition-all border border-purple-400/30 disabled:opacity-40"
+                    className="flex-1 flex items-center justify-center gap-2 p-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white text-xs font-black shadow-md cursor-pointer transition-all border border-purple-400/30 disabled:opacity-40"
                   >
                     <Camera className="w-4 h-4 flex-shrink-0" />
-                    <span>📸 Tomar Foto con Cámara</span>
+                    <span>📸 Cámara</span>
                   </button>
+                  <label
+                    className={`flex-1 flex items-center justify-center gap-2 p-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white text-xs font-black shadow-md cursor-pointer transition-all border border-emerald-400/30 ${isProcessingPhoto || studentPhotos.length >= 5 ? 'opacity-40 pointer-events-none' : ''}`}
+                  >
+                    <Plus className="w-4 h-4 flex-shrink-0" />
+                    <span>🖼️ Galería</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      disabled={isProcessingPhoto || studentPhotos.length >= 5}
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (!files) return;
+                        const remaining = 5 - studentPhotos.length;
+                        const toProcess = Array.from(files).slice(0, remaining);
+                        toProcess.forEach((file) => {
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            const result = ev.target?.result as string;
+                            if (result) {
+                              setStudentPhotos((prev) => (prev.length < 5 && !prev.includes(result) ? [...prev, result] : prev));
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        });
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
                 </div>
                 {studentPhotos.length > 0 ? (
                   <div className="grid grid-cols-4 gap-2">

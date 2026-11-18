@@ -100,10 +100,10 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
     if (!video || !video.videoWidth || !video.videoHeight) return;
 
     try {
-      // Redimensionar a resolución ultra-liviana y nítida para MQTT (máx 800px)
+      // Redimensionar a resolución alta para fotos de evidencia (máx 1600px)
       let width = video.videoWidth;
       let height = video.videoHeight;
-      const MAX_DIM = 800;
+      const MAX_DIM = 1600;
       if (width > MAX_DIM || height > MAX_DIM) {
         if (width > height) {
           height = Math.round((height * MAX_DIM) / width);
@@ -123,8 +123,8 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
       // Dibujar fotograma del video redimensionado
       ctx.drawImage(video, 0, 0, width, height);
 
-      // Convertir a JPEG optimizado ultra-liviano (30-40 KB)
-      const rawDataUrl = canvas.toDataURL('image/jpeg', 0.72);
+      // Convertir a JPEG con buena calidad para leer texto de cuadernos
+      const rawDataUrl = canvas.toDataURL('image/jpeg', 0.88);
       setCapturedPreview(rawDataUrl);
 
       // Detener video en vivo para congelar y ahorrar batería

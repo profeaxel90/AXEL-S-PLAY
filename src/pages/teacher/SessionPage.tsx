@@ -124,10 +124,11 @@ export default function SessionPage() {
       : SAMPLE_QUESTIONS_ROAD_SAFETY;
 
   // Estado del juego
-  const [gamePhase, setGamePhase] = useState<'waiting' | 'intro' | 'question' | 'finished'>('waiting');
+  const [gamePhase, setGamePhase] = useState<'waiting' | 'intro' | 'question' | 'reading' | 'finished'>('waiting');
   const [introCountdown, setIntroCountdown] = useState(6);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [timerLeft, setTimerLeft] = useState(20);
+  const [readingTimeLeft, setReadingTimeLeft] = useState(5);
   const [isPaused, setIsPaused] = useState(false);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
@@ -461,6 +462,32 @@ export default function SessionPage() {
     return () => clearInterval(introTimer);
   }, [gamePhase]);
 
+  // ── Temporizador de LECTURA (5 seg para leer la pregunta antes de responder) ──
+  useEffect(() => {
+    if (gamePhase !== 'reading') return;
+
+    setReadingTimeLeft(5);
+    const readTimer = setInterval(() => {
+      setReadingTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(readTimer);
+          setGamePhase('question');
+          // Iniciar la música DESPUÉS de la fase de lectura
+          const q = questions[currentQIndex];
+          if (q) {
+            audioEngine.playQuestionMusic(q.timeLimit || 20);
+          }
+          // Notificar a estudiantes que pueden responder
+          hostSyncRef.current?.broadcast('READING_END', {});
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(readTimer);
+  }, [gamePhase, currentQIndex]);
+
   // ── Temporizador de la pregunta ──
   useEffect(() => {
     if (gamePhase !== 'question' || isPaused || isAnswerRevealed) return;
@@ -617,7 +644,7 @@ export default function SessionPage() {
       setWheelSelectedStudent(wheelStudent);
     }
 
-    setGamePhase('question');
+    setGamePhase('reading');
     setCurrentQIndex(0);
     setIsAnswerRevealed(false);
     setAnsweredCount(0);
@@ -630,16 +657,17 @@ export default function SessionPage() {
     prevRanksRef.current = new Map(initialSorted.map((p, idx) => [p.id, idx + 1]));
     roundStartScoresRef.current = new Map(updatedParticipants.map((p) => [p.id, p.score]));
 
-    // Iniciar la música repetitiva de la pregunta (con regla de 30s y bucle continuo)
-    audioEngine.playQuestionMusic(firstQ.timeLimit || 20);
+    // La música se inicia DESPUÉS de la fase de lectura (en el useEffect reading→question)
 
-    // Transmitir primera pregunta a todos los celulares con datos de modalidad
+    // Transmitir primera pregunta a todos los celulares CON fase de lectura
     hostSyncRef.current?.broadcast('START_GAME');
     hostSyncRef.current?.broadcast('QUESTION', {
       question: firstQ,
       index: 0,
       total: questions.length,
       timeLimit: firstQ.timeLimit || 20,
+      readingPhase: true,
+      readingTime: 5,
       gameMode: mode,
       selectedStudentId: wheelStudent?.id,
       selectedStudentName: wheelStudent?.nickname,
@@ -670,6 +698,7 @@ export default function SessionPage() {
 
     const nextQ = questions[nextIdx];
     setCurrentQIndex(nextIdx);
+    setGamePhase('reading');
     setIsAnswerRevealed(false);
     setAnsweredCount(0);
     setTimerLeft(nextQ.timeLimit || 20);
@@ -679,15 +708,16 @@ export default function SessionPage() {
     prevRanksRef.current = new Map(prevSorted.map((p, idx) => [p.id, idx + 1]));
     roundStartScoresRef.current = new Map(liveParticipants.map((p) => [p.id, p.score]));
 
-    // Iniciar la música de la siguiente pregunta (con regla de 30s y bucle continuo)
-    audioEngine.playQuestionMusic(nextQ.timeLimit || 20);
+    // La música se inicia DESPUÉS de la fase de lectura (en el useEffect reading→question)
 
-    // Transmitir nueva pregunta a los celulares
+    // Transmitir nueva pregunta a los celulares CON fase de lectura
     hostSyncRef.current?.broadcast('QUESTION', {
       question: nextQ,
       index: nextIdx,
       total: questions.length,
       timeLimit: nextQ.timeLimit || 20,
+      readingPhase: true,
+      readingTime: 5,
       isGoldenRound,
       gameMode: mode,
       selectedStudentId: wheelStudent?.id,
@@ -1135,7 +1165,7 @@ export default function SessionPage() {
   return (
     <div className="space-y-4 select-none">
       {/* ── Top Bar de Control Docente (Oculto en pregunta activa para maximizar espacio 100vh) ── */}
-      {gamePhase !== 'question' && (
+      {gamePhase !== 'question' && gamePhase !== 'reading' && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
@@ -1789,6 +1819,73 @@ export default function SessionPage() {
         </div>
       )}
 
+      {/* ── FASE 1.5: LECTURA DE PREGUNTA (5 seg para leer antes de responder) ── */}
+      {gamePhase === 'reading' && (
+        <div className="min-h-[75vh] flex flex-col items-center justify-center gap-6 select-none animate-fade-in">
+          {/* Badge de lectura */}
+          <div className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-600/30 to-purple-600/30 border border-blue-400/40 shadow-xl">
+            <span className="text-3xl animate-pulse">📖</span>
+            <div>
+              <span className="text-blue-200 font-black text-lg uppercase tracking-wider">Leyendo Pregunta</span>
+              <span className="text-white/60 text-sm ml-3">Pregunta {currentQIndex + 1} / {questions.length}</span>
+            </div>
+          </div>
+
+          {/* Countdown circular de lectura */}
+          <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-900/80 to-purple-900/80 border-4 border-blue-400/50 shadow-2xl shadow-blue-900/60">
+            <svg className="absolute inset-0 w-full h-full -rotate-90 p-1" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255, 255, 255, 0.1)" strokeWidth="8" />
+              <circle
+                cx="50" cy="50" r="44" fill="none"
+                stroke="#60a5fa"
+                strokeWidth="8"
+                strokeDasharray="276"
+                strokeDashoffset={`${(5 - readingTimeLeft) / 5 * 276}`}
+                strokeLinecap="round"
+                className="transition-all duration-1000 ease-linear"
+              />
+            </svg>
+            <div className="relative z-10 flex flex-col items-center">
+              <span className="text-5xl sm:text-6xl font-black text-blue-300 drop-shadow-[0_2px_10px_rgba(96,165,250,0.5)]">{readingTimeLeft}</span>
+              <span className="text-[10px] font-black uppercase tracking-wider text-white/70">LECTURA</span>
+            </div>
+          </div>
+
+          {/* Pregunta visible (sin opciones) */}
+          <div className="card p-6 sm:p-8 border-blue-500/30 bg-gradient-to-b from-blue-950/40 to-slate-900 max-w-3xl w-full text-center shadow-xl rounded-2xl">
+            {currentQ.videoUrl ? (
+              <div className="mb-3 w-full max-w-md mx-auto rounded-2xl overflow-hidden border border-white/20 bg-black shadow-lg aspect-video max-h-[26vh]">
+                <iframe
+                  src={getEmbedVideoUrl(currentQ.videoUrl)}
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  title="Video de la pregunta"
+                />
+              </div>
+            ) : currentQ.imageUrl ? (
+              <div className="mb-3 flex items-center justify-center rounded-2xl overflow-hidden border border-white/20 bg-black/40 p-1 shadow-lg max-h-[26vh] w-auto mx-auto">
+                <img
+                  src={currentQ.imageUrl}
+                  alt="Imagen de apoyo"
+                  className="max-h-[24vh] max-w-full w-auto h-auto object-contain rounded-xl"
+                />
+              </div>
+            ) : null}
+
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white leading-snug px-2">
+              {currentQ.content}
+            </h2>
+
+            {/* Indicador de que las opciones aparecerán pronto */}
+            <div className="mt-4 flex items-center justify-center gap-2 text-blue-300/70 text-sm font-semibold">
+              <span className="animate-pulse">⏳</span>
+              <span>Las opciones de respuesta aparecerán en {readingTimeLeft} segundo{readingTimeLeft !== 1 ? 's' : ''}...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── FASE 2: PREGUNTA EN PANTALLA PRINCIPAL AXEL'S PLAY ── */}
       {gamePhase === 'question' && (
         <div className="min-h-[75vh] flex flex-col justify-between gap-3 select-none">
@@ -1957,10 +2054,10 @@ export default function SessionPage() {
             {/* RELOJ CIRCULAR GIGANTE DE ALTO IMPACTO (Estilo Kahoot) */}
             <div className="shrink-0 flex items-center justify-center">
               <div
-                className={`relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 rounded-full flex items-center justify-center transition-all duration-300 select-none ${
+                className={`relative w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full flex items-center justify-center transition-all duration-300 select-none ${
                   timerLeft <= 5
-                    ? 'bg-red-600 shadow-[0_0_50px_rgba(239,68,68,0.9)] animate-pulse scale-105 ring-4 ring-yellow-400'
-                    : 'bg-slate-900/95 border-4 border-purple-500/50 shadow-2xl shadow-purple-900/50'
+                    ? 'bg-red-600 shadow-[0_0_40px_rgba(239,68,68,0.9)] animate-pulse scale-105 ring-3 ring-yellow-400'
+                    : 'bg-slate-900/95 border-3 border-purple-500/50 shadow-xl shadow-purple-900/50'
                 }`}
               >
                 {/* SVG Radial Progress Ring */}
@@ -1990,7 +2087,7 @@ export default function SessionPage() {
                 {/* Número Gigante de Tiempo */}
                 <div className="relative z-10 flex flex-col items-center justify-center">
                   <span
-                    className={`text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tighter leading-none ${
+                    className={`text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter leading-none ${
                       timerLeft <= 5 ? 'text-white' : 'text-yellow-300 drop-shadow-[0_2px_10px_rgba(250,204,21,0.5)]'
                     }`}
                   >
@@ -2025,7 +2122,7 @@ export default function SessionPage() {
                 </div>
               ) : null}
 
-              <h2 className="text-sm sm:text-base md:text-lg font-bold text-white leading-snug max-w-3xl px-2">
+              <h2 className="text-base sm:text-lg md:text-xl lg:text-2xl font-black text-white leading-snug max-w-4xl px-2">
                 {currentQ.content}
               </h2>
 
@@ -2042,8 +2139,8 @@ export default function SessionPage() {
 
             {/* TARJETA GIGANTE DE RESPUESTAS (Estilo Kahoot) */}
             <div className="shrink-0 flex items-center justify-center">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 lg:w-32 lg:h-32 rounded-3xl bg-slate-900/95 border-4 border-indigo-500/50 shadow-2xl shadow-indigo-900/50 flex flex-col items-center justify-center select-none text-center p-2">
-                <span className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-indigo-300 tracking-tight leading-none">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-2xl bg-slate-900/95 border-2 border-indigo-500/50 shadow-xl shadow-indigo-900/50 flex flex-col items-center justify-center select-none text-center p-2">
+                <span className="text-xl sm:text-2xl md:text-3xl font-black text-indigo-300 tracking-tight leading-none">
                   {answeredCount}
                 </span>
                 <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-white/80 mt-1">
@@ -2090,19 +2187,19 @@ export default function SessionPage() {
                 return (
                   <div
                     key={option.id}
-                    className={`py-2 sm:py-2.5 px-3 sm:px-4 rounded-xl border-2 transition-all flex items-center gap-2.5 relative shadow-md select-none ${
+                    className={`py-1.5 sm:py-2 px-3 sm:px-4 rounded-lg border transition-all flex items-center gap-2.5 relative shadow-sm select-none ${
                       isAnswerRevealed
                         ? isCorrect
-                          ? 'bg-emerald-600 border-yellow-400 text-white scale-[1.01] shadow-emerald-500/40 ring-4 ring-yellow-400'
+                          ? 'bg-emerald-600 border-yellow-400 text-white scale-[1.01] shadow-emerald-500/40 ring-2 ring-yellow-400'
                           : 'opacity-25 bg-slate-900 border-white/10'
                         : `${style.bg} ${style.border}`
                     }`}
                   >
-                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-black text-sm sm:text-base shrink-0 ${style.symbolBg}`}>
+                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-md flex items-center justify-center font-black text-sm sm:text-base shrink-0 ${style.symbolBg}`}>
                       {style.icon}
                     </div>
 
-                    <span className="text-xs sm:text-sm md:text-base font-bold leading-snug flex-1 truncate-none">
+                    <span className="text-sm sm:text-base md:text-lg lg:text-xl font-bold leading-snug flex-1">
                       {option.text}
                     </span>
 
@@ -2115,8 +2212,8 @@ export default function SessionPage() {
             </div>
           )}
 
-          {/* ── BARRA LATERAL EN EL COSTADO: TODOS LOS PODERES (SOLO ICONOS COMPACTOS) ── */}
-          <div className="fixed right-2 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1.5 p-1.5 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-purple-500/40 shadow-2xl">
+          {/* ── BARRA DE PODERES HORIZONTAL ABAJO (no tapa el marcador de respuestas) ── */}
+          <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 flex flex-row gap-1 p-1.5 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-purple-500/40 shadow-2xl">
             {/* 1. Doble Puntos (2X) a Todos */}
             <button
               type="button"
@@ -2328,8 +2425,8 @@ export default function SessionPage() {
                       <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-3xl bg-cyan-500/30 p-1.5 border-3 border-cyan-300 mb-2 shadow-xl shadow-cyan-500/30 flex items-center justify-center">
                         <MascotAvatar avatar={secondPlace.avatar} emotion="happy" size="3xl" />
                       </div>
-                      <span className="font-bold text-sm text-cyan-200 truncate max-w-full drop-shadow">{secondPlace.nickname}</span>
-                      <span className="text-xs text-white font-extrabold mb-2">{secondPlace.score.toLocaleString()} pts</span>
+                      <span className="font-black text-lg sm:text-xl text-cyan-200 truncate max-w-full drop-shadow-lg">{secondPlace.nickname}</span>
+                      <span className="text-sm sm:text-base text-white font-extrabold mb-2">{secondPlace.score.toLocaleString()} pts</span>
                       <div className="w-full h-36 rounded-t-3xl bg-gradient-to-t from-sky-600 via-cyan-400 to-indigo-200 border-t-4 border-cyan-200 flex flex-col items-center justify-center shadow-2xl shadow-cyan-500/40">
                         <Medal className="w-9 h-9 text-slate-950 mb-1" />
                         <span className="font-black text-4xl text-slate-950">2°</span>
@@ -2347,10 +2444,10 @@ export default function SessionPage() {
                       <div className="w-40 h-40 sm:w-52 sm:h-52 rounded-3xl bg-yellow-400/40 p-2 border-4 border-yellow-300 shadow-2xl shadow-yellow-400/80 mb-2 animate-bounce ring-4 ring-yellow-300/40 flex items-center justify-center">
                         <MascotAvatar avatar={firstPlace.avatar} emotion="victory" size="4xl" />
                       </div>
-                      <span className="font-black text-base text-yellow-300 truncate max-w-full drop-shadow-[0_2px_10px_rgba(250,204,21,0.5)]">
+                      <span className="font-black text-xl sm:text-2xl md:text-3xl text-yellow-300 truncate max-w-full drop-shadow-[0_2px_10px_rgba(250,204,21,0.5)]">
                         {firstPlace.nickname}
                       </span>
-                      <span className="text-sm text-white font-black mb-2">{firstPlace.score.toLocaleString()} pts</span>
+                      <span className="text-base sm:text-lg text-white font-black mb-2">{firstPlace.score.toLocaleString()} pts</span>
                       <div className="w-full h-48 rounded-t-3xl bg-gradient-to-t from-amber-500 via-yellow-400 to-yellow-200 border-t-4 border-yellow-200 flex flex-col items-center justify-center shadow-2xl shadow-yellow-400/70">
                         <Trophy className="w-14 h-14 text-slate-950 mb-1 animate-pulse" />
                         <span className="font-black text-5xl text-slate-950">1°</span>
@@ -2371,8 +2468,8 @@ export default function SessionPage() {
                       <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-3xl bg-orange-500/30 p-1.5 border-3 border-orange-300 mb-2 shadow-xl shadow-orange-500/30 flex items-center justify-center">
                         <MascotAvatar avatar={thirdPlace.avatar} emotion="happy" size="3xl" />
                       </div>
-                      <span className="font-bold text-sm text-orange-200 truncate max-w-full drop-shadow">{thirdPlace.nickname}</span>
-                      <span className="text-xs text-white font-extrabold mb-2">{thirdPlace.score.toLocaleString()} pts</span>
+                      <span className="font-black text-lg sm:text-xl text-orange-200 truncate max-w-full drop-shadow-lg">{thirdPlace.nickname}</span>
+                      <span className="text-sm sm:text-base text-white font-extrabold mb-2">{thirdPlace.score.toLocaleString()} pts</span>
                       <div className="w-full h-28 rounded-t-3xl bg-gradient-to-t from-orange-600 via-amber-500 to-rose-400 border-t-4 border-orange-300 flex flex-col items-center justify-center shadow-2xl shadow-orange-500/40">
                         <Medal className="w-8 h-8 text-slate-950 mb-1" />
                         <span className="font-black text-3xl text-slate-950">3°</span>

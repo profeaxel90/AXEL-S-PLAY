@@ -100,6 +100,10 @@ export default function GameStudentPage() {
   const [typedStudentAnswer, setTypedStudentAnswer] = useState<string>('');
   const [photoStudentAnswer, setPhotoStudentAnswer] = useState<string | null>(null);
 
+  // Fase de lectura — el estudiante ve la pregunta pero no puede responder aún
+  const [isReadingPhase, setIsReadingPhase] = useState(false);
+  const [studentReadingTimeLeft, setStudentReadingTimeLeft] = useState(0);
+
   // Escuchar mensajes en tiempo real vía GameClientSync (SSE + P2P)
   useEffect(() => {
     if (!sessionId) return;
@@ -128,6 +132,15 @@ export default function GameStudentPage() {
         setTimeLeft(msg.timeLimit || 20);
         setQuestionNum((msg.index || 0) + 1);
         setTotalQuestions(msg.total || 5);
+
+        // Fase de lectura: si viene readingPhase, bloquear respuestas por readingTime segundos
+        if (msg.readingPhase) {
+          setIsReadingPhase(true);
+          setStudentReadingTimeLeft(msg.readingTime || 5);
+        } else {
+          setIsReadingPhase(false);
+          setStudentReadingTimeLeft(0);
+        }
         if (msg.isGoldenRound !== undefined) {
           setIsGoldenRound(msg.isGoldenRound);
         }
@@ -173,6 +186,10 @@ export default function GameStudentPage() {
             .map((p: any) => ({ id: p.id, nickname: p.nickname, score: p.score }));
           setAvailablePlayers(others);
         }
+      } else if (msg.type === 'READING_END') {
+        // El profe terminó la fase de lectura, ahora se puede responder
+        setIsReadingPhase(false);
+        setStudentReadingTimeLeft(0);
       } else if (msg.type === 'GOLDEN_ROUND') {
         const active = msg.isGoldenRound || false;
         setIsGoldenRound(active);
@@ -295,9 +312,27 @@ export default function GameStudentPage() {
     sync.connectSSE();
   }, [sessionId, currentParticipant, activeQuestion, navigate]);
 
-  // Temporizador regresivo local por pregunta
+  // Temporizador de lectura local del estudiante (countdown visual)
   useEffect(() => {
-    if (!activeQuestion) return;
+    if (!isReadingPhase || studentReadingTimeLeft <= 0) return;
+
+    const readTimer = setInterval(() => {
+      setStudentReadingTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(readTimer);
+          setIsReadingPhase(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(readTimer);
+  }, [isReadingPhase, studentReadingTimeLeft > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Temporizador regresivo local por pregunta (solo arranca después de lectura)
+  useEffect(() => {
+    if (!activeQuestion || isReadingPhase) return;
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
@@ -313,7 +348,7 @@ export default function GameStudentPage() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [activeQuestion]);
+  }, [activeQuestion, isReadingPhase]);
 
   // Si la fase pasa a finalizado por el store
   useEffect(() => {
@@ -324,7 +359,7 @@ export default function GameStudentPage() {
 
   // Manejo de envío de respuesta
   const handleSelectAnswer = async (optionId: string) => {
-    if (isAnswerSubmitted || timeLeft <= 0 || !activeQuestion) return;
+    if (isAnswerSubmitted || timeLeft <= 0 || !activeQuestion || isReadingPhase) return;
     if (currentGameMode === 'survival' && studentHearts <= 0) return;
 
     setSelectedOption(optionId);
@@ -659,6 +694,19 @@ export default function GameStudentPage() {
             {displayQuestion.content}
           </h2>
         </div>
+
+        {/* ── Banner de Fase de Lectura ── */}
+        {isReadingPhase && (
+          <div className="flex items-center justify-center gap-3 mb-3 px-4 py-3 rounded-2xl bg-gradient-to-r from-blue-600/30 to-purple-600/30 border-2 border-blue-400/50 shadow-lg animate-pulse">
+            <span className="text-2xl">📖</span>
+            <div className="text-center">
+              <p className="text-blue-200 font-black text-sm uppercase tracking-wider">¡Lee la pregunta!</p>
+              <p className="text-white/70 text-xs">
+                Podrás responder en <span className="text-yellow-300 font-black text-base">{studentReadingTimeLeft}</span> segundo{studentReadingTimeLeft !== 1 ? 's' : ''}...
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ── Banners de Modalidades Especiales ── */}
         {currentGameMode === 'survival' && (

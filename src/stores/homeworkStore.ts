@@ -205,6 +205,7 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
   };
 
   // ── SINCRONIZACIÓN CON FIREBASE (background) ──
+  // La nube es la FUENTE DE VERDAD: si algo se eliminó en la nube, NO se re-sube desde local.
   if (typeof window !== 'undefined' && isFirebaseConfigured()) {
     setTimeout(async () => {
       try {
@@ -212,46 +213,46 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
         const cloudGroups = await cloudSync.loadAll<CourseGroup>('groups');
         const localGroups = get().groups;
         if (!cloudGroups || Object.keys(cloudGroups).length === 0) {
+          // Primera vez: subir todo a la nube
           const map: Record<string, CourseGroup> = {};
           localGroups.forEach((g) => { map[g.id] = g; });
           await cloudSync.saveAll('groups', map);
         } else {
+          // La nube tiene datos → usarla como fuente de verdad
           const cloudArr = Object.values(cloudGroups);
-          const merged = [...cloudArr];
+          const defaultGroupIds = ['grp-demo-1'];
+          const finalGroups = [...cloudArr];
           localGroups.forEach((lg) => {
-            if (!cloudGroups[lg.id]) merged.push(lg);
+            if (!cloudGroups[lg.id] && defaultGroupIds.includes(lg.id)) {
+              finalGroups.push(lg);
+            }
           });
-          if (merged.length !== localGroups.length) {
-            persistGroups(merged);
-            set({ groups: merged });
-          }
-          const toUpload: Record<string, CourseGroup> = {};
-          localGroups.forEach((g) => { if (!cloudGroups[g.id]) toUpload[g.id] = g; });
-          if (Object.keys(toUpload).length > 0) await cloudSync.saveAll('groups', toUpload);
+          persistGroups(finalGroups);
+          set({ groups: finalGroups });
         }
 
         // --- Tareas (Assignments) ---
         const cloudAssign = await cloudSync.loadAll<HomeworkAssignment>('assignments');
         const localAssign = get().assignments;
         if (!cloudAssign || Object.keys(cloudAssign).length === 0) {
+          // Primera vez: subir todo a la nube
           const map: Record<string, HomeworkAssignment> = {};
           localAssign.forEach((a) => { map[a.id] = a; });
           await cloudSync.saveAll('assignments', map);
         } else {
+          // La nube tiene datos → usarla como fuente de verdad
           const cloudArr = Object.values(cloudAssign);
-          const merged = [...cloudArr];
+          const defaultAssignIds = ['hw-demo-1'];
+          const finalAssign = [...cloudArr];
           localAssign.forEach((la) => {
-            if (!cloudAssign[la.id]) merged.push(la);
+            if (!cloudAssign[la.id] && defaultAssignIds.includes(la.id)) {
+              finalAssign.push(la);
+            }
           });
-          if (merged.length !== localAssign.length) {
-            persistAssignments(merged);
-            set({ assignments: merged });
-          }
-          const toUpload: Record<string, HomeworkAssignment> = {};
-          localAssign.forEach((a) => { if (!cloudAssign[a.id]) toUpload[a.id] = a; });
-          if (Object.keys(toUpload).length > 0) await cloudSync.saveAll('assignments', toUpload);
+          persistAssignments(finalAssign);
+          set({ assignments: finalAssign });
         }
-        console.log('[CloudSync] ✅ Tareas y grupos sincronizados desde Firebase');
+        console.log('[CloudSync] ✅ Tareas y grupos sincronizados (nube = fuente de verdad)');
       } catch (e) {
         console.warn('[CloudSync] ⚠️ Error sincronizando homework:', e);
       }

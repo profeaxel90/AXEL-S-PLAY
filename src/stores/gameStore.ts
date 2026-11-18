@@ -200,28 +200,40 @@ export const useGameStore = create<GameStoreState>((set, get) => {
         }
 
         // Mezclar: el más reciente (updatedAt) gana por cada ID
-        const merged: Record<string, Game> = { ...localGames };
+        // La nube es la fuente de verdad — si un juego NO está en la nube, fue eliminado en otro dispositivo
+        const merged: Record<string, Game> = {};
         let changed = false;
+
+        // 1. Agregar todos los juegos de la nube
         for (const [id, cg] of Object.entries(cloudGames)) {
-          const lg = merged[id];
-          if (!lg || new Date(cg.updatedAt || '0').getTime() > new Date(lg.updatedAt || '0').getTime()) {
-            merged[id] = cg;
-            changed = true;
+          merged[id] = cg;
+        }
+
+        // 2. Agregar juegos locales que son DEFAULT (g-1 a g-4) si no están en nube
+        for (const [id, lg] of Object.entries(localGames)) {
+          if (/^g-[1-4]$/.test(id) && !merged[id]) {
+            merged[id] = lg;
           }
         }
+
+        // 3. Verificar si hubo cambios respecto a lo local
+        const localKeys = Object.keys(localGames).sort().join(',');
+        const mergedKeys = Object.keys(merged).sort().join(',');
+        if (localKeys !== mergedKeys) changed = true;
+        if (!changed) {
+          for (const [id, cg] of Object.entries(cloudGames)) {
+            const lg = localGames[id];
+            if (!lg || new Date(cg.updatedAt || '0').getTime() > new Date(lg.updatedAt || '0').getTime()) {
+              changed = true;
+              break;
+            }
+          }
+        }
+
         if (changed) {
           set({ games: merged });
           persist(merged);
           console.log('[CloudSync] ✅ Juegos sincronizados desde Firebase');
-        }
-
-        // Subir juegos que solo existen localmente
-        const localOnlyEntries: Record<string, Game> = {};
-        for (const [id, game] of Object.entries(merged)) {
-          if (!cloudGames[id]) localOnlyEntries[id] = game;
-        }
-        if (Object.keys(localOnlyEntries).length > 0) {
-          await cloudSync.saveAll('games', localOnlyEntries);
         }
       } catch (e) {
         console.warn('[CloudSync] ⚠️ Error sincronizando juegos:', e);

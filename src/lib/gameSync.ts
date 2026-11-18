@@ -34,6 +34,7 @@ export interface GameEventMessage {
     | 'ACTIVATE_SHIELD'
     | 'GOLDEN_ROUND'
     | 'GAME_OVER'
+    | 'READING_END'
     | 'RESET';
   participant?: Participant;
   participants?: Participant[];
@@ -80,6 +81,8 @@ export interface GameEventMessage {
   hearts?: number;
   selectedStudentId?: string;
   selectedStudentName?: string;
+  readingPhase?: boolean;
+  readingTime?: number;
   _msgId?: string;
 }
 
