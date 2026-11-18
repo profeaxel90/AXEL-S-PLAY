@@ -128,7 +128,7 @@ export default function SessionPage() {
   const [introCountdown, setIntroCountdown] = useState(6);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [timerLeft, setTimerLeft] = useState(20);
-  const [readingTimeLeft, setReadingTimeLeft] = useState(5);
+  const [readingTimeLeft, setReadingTimeLeft] = useState(10);
   const [isPaused, setIsPaused] = useState(false);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
@@ -466,7 +466,7 @@ export default function SessionPage() {
   useEffect(() => {
     if (gamePhase !== 'reading') return;
 
-    setReadingTimeLeft(5);
+    setReadingTimeLeft(10);
     const readTimer = setInterval(() => {
       setReadingTimeLeft((prev) => {
         if (prev <= 1) {
@@ -667,7 +667,7 @@ export default function SessionPage() {
       total: questions.length,
       timeLimit: firstQ.timeLimit || 20,
       readingPhase: true,
-      readingTime: 5,
+      readingTime: 10,
       gameMode: mode,
       selectedStudentId: wheelStudent?.id,
       selectedStudentName: wheelStudent?.nickname,
@@ -717,7 +717,7 @@ export default function SessionPage() {
       total: questions.length,
       timeLimit: nextQ.timeLimit || 20,
       readingPhase: true,
-      readingTime: 5,
+      readingTime: 10,
       isGoldenRound,
       gameMode: mode,
       selectedStudentId: wheelStudent?.id,
@@ -1840,7 +1840,7 @@ export default function SessionPage() {
                 stroke="#60a5fa"
                 strokeWidth="8"
                 strokeDasharray="276"
-                strokeDashoffset={`${(5 - readingTimeLeft) / 5 * 276}`}
+                strokeDashoffset={`${(10 - readingTimeLeft) / 10 * 276}`}
                 strokeLinecap="round"
                 className="transition-all duration-1000 ease-linear"
               />
@@ -2415,43 +2415,43 @@ export default function SessionPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-end justify-center gap-4 sm:gap-6 max-w-3xl mx-auto my-8 pt-8 min-h-64 relative">
+              <div className="flex items-end justify-center gap-3 sm:gap-5 max-w-3xl mx-auto my-4 pt-4 min-h-48 relative">
                 {/* 🥈 2do Lugar (Aparece en paso 2 - Plata Luminosa y Alegre) */}
                 <div className={`flex-1 flex flex-col items-center transition-all duration-700 ${
                   podiumStep >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
                 }`}>
                   {secondPlace && (
                     <>
-                      <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-3xl bg-cyan-500/30 p-1.5 border-3 border-cyan-300 mb-2 shadow-xl shadow-cyan-500/30 flex items-center justify-center">
+                      <div className="w-28 h-28 sm:w-40 sm:h-40 rounded-3xl bg-cyan-500/30 p-1.5 border-3 border-cyan-300 mb-1.5 shadow-xl shadow-cyan-500/30 flex items-center justify-center">
                         <MascotAvatar avatar={secondPlace.avatar} emotion="happy" size="3xl" />
                       </div>
                       <span className="font-black text-lg sm:text-xl text-cyan-200 truncate max-w-full drop-shadow-lg">{secondPlace.nickname}</span>
-                      <span className="text-sm sm:text-base text-white font-extrabold mb-2">{secondPlace.score.toLocaleString()} pts</span>
-                      <div className="w-full h-36 rounded-t-3xl bg-gradient-to-t from-sky-600 via-cyan-400 to-indigo-200 border-t-4 border-cyan-200 flex flex-col items-center justify-center shadow-2xl shadow-cyan-500/40">
-                        <Medal className="w-9 h-9 text-slate-950 mb-1" />
-                        <span className="font-black text-4xl text-slate-950">2°</span>
+                      <span className="text-sm sm:text-base text-white font-extrabold mb-1">{secondPlace.score.toLocaleString()} pts</span>
+                      <div className="w-full h-28 rounded-t-2xl bg-gradient-to-t from-sky-600 via-cyan-400 to-indigo-200 border-t-3 border-cyan-200 flex flex-col items-center justify-center shadow-xl shadow-cyan-500/40">
+                        <Medal className="w-7 h-7 text-slate-950 mb-0.5" />
+                        <span className="font-black text-3xl text-slate-950">2°</span>
                       </div>
                     </>
                   )}
                 </div>
 
                 {/* 🥇 1er Lugar (Aparece en paso 3 - Oro Brillante y Bomba de Confeti) */}
-                <div className={`flex-1 flex flex-col items-center -mt-10 transition-all duration-700 ${
+                <div className={`flex-1 flex flex-col items-center -mt-6 transition-all duration-700 ${
                   podiumStep >= 3 ? 'opacity-100 translate-y-0 scale-105' : 'opacity-0 translate-y-12 scale-90'
                 }`}>
                   {firstPlace && (
                     <>
-                      <div className="w-40 h-40 sm:w-52 sm:h-52 rounded-3xl bg-yellow-400/40 p-2 border-4 border-yellow-300 shadow-2xl shadow-yellow-400/80 mb-2 animate-bounce ring-4 ring-yellow-300/40 flex items-center justify-center">
+                      <div className="w-36 h-36 sm:w-48 sm:h-48 rounded-3xl bg-yellow-400/40 p-2 border-4 border-yellow-300 shadow-2xl shadow-yellow-400/80 mb-1.5 animate-bounce ring-4 ring-yellow-300/40 flex items-center justify-center">
                         <MascotAvatar avatar={firstPlace.avatar} emotion="victory" size="4xl" />
                       </div>
                       <span className="font-black text-xl sm:text-2xl md:text-3xl text-yellow-300 truncate max-w-full drop-shadow-[0_2px_10px_rgba(250,204,21,0.5)]">
                         {firstPlace.nickname}
                       </span>
-                      <span className="text-base sm:text-lg text-white font-black mb-2">{firstPlace.score.toLocaleString()} pts</span>
-                      <div className="w-full h-48 rounded-t-3xl bg-gradient-to-t from-amber-500 via-yellow-400 to-yellow-200 border-t-4 border-yellow-200 flex flex-col items-center justify-center shadow-2xl shadow-yellow-400/70">
-                        <Trophy className="w-14 h-14 text-slate-950 mb-1 animate-pulse" />
-                        <span className="font-black text-5xl text-slate-950">1°</span>
-                        <span className="text-[11px] font-black text-slate-950 uppercase tracking-widest bg-yellow-300/80 px-2 py-0.5 rounded-full mt-0.5">
+                      <span className="text-base sm:text-lg text-white font-black mb-1">{firstPlace.score.toLocaleString()} pts</span>
+                      <div className="w-full h-36 rounded-t-2xl bg-gradient-to-t from-amber-500 via-yellow-400 to-yellow-200 border-t-3 border-yellow-200 flex flex-col items-center justify-center shadow-xl shadow-yellow-400/70">
+                        <Trophy className="w-10 h-10 text-slate-950 mb-0.5 animate-pulse" />
+                        <span className="font-black text-4xl text-slate-950">1°</span>
+                        <span className="text-[10px] font-black text-slate-950 uppercase tracking-widest bg-yellow-300/80 px-2 py-0.5 rounded-full mt-0.5">
                           ¡GRAN CAMPEÓN!
                         </span>
                       </div>
@@ -2465,14 +2465,14 @@ export default function SessionPage() {
                 }`}>
                   {thirdPlace && (
                     <>
-                      <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-3xl bg-orange-500/30 p-1.5 border-3 border-orange-300 mb-2 shadow-xl shadow-orange-500/30 flex items-center justify-center">
+                      <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-3xl bg-orange-500/30 p-1.5 border-3 border-orange-300 mb-1.5 shadow-xl shadow-orange-500/30 flex items-center justify-center">
                         <MascotAvatar avatar={thirdPlace.avatar} emotion="happy" size="3xl" />
                       </div>
                       <span className="font-black text-lg sm:text-xl text-orange-200 truncate max-w-full drop-shadow-lg">{thirdPlace.nickname}</span>
-                      <span className="text-sm sm:text-base text-white font-extrabold mb-2">{thirdPlace.score.toLocaleString()} pts</span>
-                      <div className="w-full h-28 rounded-t-3xl bg-gradient-to-t from-orange-600 via-amber-500 to-rose-400 border-t-4 border-orange-300 flex flex-col items-center justify-center shadow-2xl shadow-orange-500/40">
-                        <Medal className="w-8 h-8 text-slate-950 mb-1" />
-                        <span className="font-black text-3xl text-slate-950">3°</span>
+                      <span className="text-sm sm:text-base text-white font-extrabold mb-1">{thirdPlace.score.toLocaleString()} pts</span>
+                      <div className="w-full h-20 rounded-t-2xl bg-gradient-to-t from-orange-600 via-amber-500 to-rose-400 border-t-3 border-orange-300 flex flex-col items-center justify-center shadow-xl shadow-orange-500/40">
+                        <Medal className="w-6 h-6 text-slate-950 mb-0.5" />
+                        <span className="font-black text-2xl text-slate-950">3°</span>
                       </div>
                     </>
                   )}

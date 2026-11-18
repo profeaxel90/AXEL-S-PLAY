@@ -38,8 +38,8 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
         newStream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: mode },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+            width: { ideal: 2560 },
+            height: { ideal: 1920 },
           },
           audio: false,
         });
@@ -100,10 +100,10 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
     if (!video || !video.videoWidth || !video.videoHeight) return;
 
     try {
-      // Redimensionar a resolución alta para fotos de evidencia (máx 1600px)
+      // Redimensionar a resolución alta para fotos de evidencia (máx 2000px)
       let width = video.videoWidth;
       let height = video.videoHeight;
-      const MAX_DIM = 1600;
+      const MAX_DIM = 2000;
       if (width > MAX_DIM || height > MAX_DIM) {
         if (width > height) {
           height = Math.round((height * MAX_DIM) / width);
@@ -123,8 +123,8 @@ export default function LiveCameraModal({ isOpen, onClose, onCapture }: LiveCame
       // Dibujar fotograma del video redimensionado
       ctx.drawImage(video, 0, 0, width, height);
 
-      // Convertir a JPEG con buena calidad para leer texto de cuadernos
-      const rawDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+      // Convertir a JPEG con alta calidad para leer texto de cuadernos
+      const rawDataUrl = canvas.toDataURL('image/jpeg', 0.92);
       setCapturedPreview(rawDataUrl);
 
       // Detener video en vivo para congelar y ahorrar batería

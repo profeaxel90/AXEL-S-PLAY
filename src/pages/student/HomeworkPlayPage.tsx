@@ -199,6 +199,32 @@ export default function HomeworkPlayPage() {
   const [dismissBrowserBanner, setDismissBrowserBanner] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Función para redimensionar y comprimir fotos (galería o cámara) para buena calidad legible
+  const compressPhoto = (dataUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width;
+        let h = img.height;
+        const MAX = 2000; // Resolución alta para leer texto de cuadernos
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round((h * MAX) / w); w = MAX; }
+          else { w = Math.round((w * MAX) / h); h = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(dataUrl); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL('image/jpeg', 0.85);
+        resolve(compressed);
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  };
+
   const isEmbeddedBrowser = useMemo(() => {
     if (typeof navigator === 'undefined') return false;
     const ua = navigator.userAgent || '';
@@ -734,13 +760,22 @@ export default function HomeworkPlayPage() {
                         if (!files) return;
                         const remaining = 5 - studentPhotos.length;
                         const toProcess = Array.from(files).slice(0, remaining);
+                        setIsProcessingPhoto(true);
+                        let processed = 0;
                         toProcess.forEach((file) => {
                           const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            const result = ev.target?.result as string;
-                            if (result) {
-                              setStudentPhotos((prev) => (prev.length < 5 && !prev.includes(result) ? [...prev, result] : prev));
+                          reader.onload = async (ev) => {
+                            const raw = ev.target?.result as string;
+                            if (raw) {
+                              const compressed = await compressPhoto(raw);
+                              setStudentPhotos((prev) => (prev.length < 5 && !prev.includes(compressed) ? [...prev, compressed] : prev));
                             }
+                            processed++;
+                            if (processed >= toProcess.length) setIsProcessingPhoto(false);
+                          };
+                          reader.onerror = () => {
+                            processed++;
+                            if (processed >= toProcess.length) setIsProcessingPhoto(false);
                           };
                           reader.readAsDataURL(file);
                         });
