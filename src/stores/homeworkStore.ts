@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { HomeworkAssignment, HomeworkSubmission, CourseGroup } from '../types/homework';
 import { SAMPLE_GAMES } from '../data/mockGames';
+import { cloudSync, isFirebaseConfigured } from '../lib/firestoreSync';
 
 const STORAGE_KEY = 'axels_play_homework_assignments';
 const GROUPS_STORAGE_KEY = 'axels_play_course_groups';
@@ -203,6 +204,60 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
     }
   };
 
+  // ── SINCRONIZACIÓN CON FIREBASE (background) ──
+  if (typeof window !== 'undefined' && isFirebaseConfigured()) {
+    setTimeout(async () => {
+      try {
+        // --- Grupos ---
+        const cloudGroups = await cloudSync.loadAll<CourseGroup>('groups');
+        const localGroups = get().groups;
+        if (!cloudGroups || Object.keys(cloudGroups).length === 0) {
+          const map: Record<string, CourseGroup> = {};
+          localGroups.forEach((g) => { map[g.id] = g; });
+          await cloudSync.saveAll('groups', map);
+        } else {
+          const cloudArr = Object.values(cloudGroups);
+          const merged = [...cloudArr];
+          localGroups.forEach((lg) => {
+            if (!cloudGroups[lg.id]) merged.push(lg);
+          });
+          if (merged.length !== localGroups.length) {
+            persistGroups(merged);
+            set({ groups: merged });
+          }
+          const toUpload: Record<string, CourseGroup> = {};
+          localGroups.forEach((g) => { if (!cloudGroups[g.id]) toUpload[g.id] = g; });
+          if (Object.keys(toUpload).length > 0) await cloudSync.saveAll('groups', toUpload);
+        }
+
+        // --- Tareas (Assignments) ---
+        const cloudAssign = await cloudSync.loadAll<HomeworkAssignment>('assignments');
+        const localAssign = get().assignments;
+        if (!cloudAssign || Object.keys(cloudAssign).length === 0) {
+          const map: Record<string, HomeworkAssignment> = {};
+          localAssign.forEach((a) => { map[a.id] = a; });
+          await cloudSync.saveAll('assignments', map);
+        } else {
+          const cloudArr = Object.values(cloudAssign);
+          const merged = [...cloudArr];
+          localAssign.forEach((la) => {
+            if (!cloudAssign[la.id]) merged.push(la);
+          });
+          if (merged.length !== localAssign.length) {
+            persistAssignments(merged);
+            set({ assignments: merged });
+          }
+          const toUpload: Record<string, HomeworkAssignment> = {};
+          localAssign.forEach((a) => { if (!cloudAssign[a.id]) toUpload[a.id] = a; });
+          if (Object.keys(toUpload).length > 0) await cloudSync.saveAll('assignments', toUpload);
+        }
+        console.log('[CloudSync] ✅ Tareas y grupos sincronizados desde Firebase');
+      } catch (e) {
+        console.warn('[CloudSync] ⚠️ Error sincronizando homework:', e);
+      }
+    }, 1200);
+  }
+
   // Auto-reparar asignaciones existentes en background (si tienen pdfUrl pero no documentText)
   if (typeof window !== 'undefined') {
     setTimeout(async () => {
@@ -256,6 +311,7 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
       const updated = [newGroup, ...get().groups];
       set({ groups: updated });
       persistGroups(updated);
+      cloudSync.saveItem('groups', newGroup.id, newGroup).catch(() => {});
       return newGroup;
     },
 
@@ -263,18 +319,23 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
       const updated = get().groups.map((g) => (g.id === id ? { ...g, ...data } : g));
       set({ groups: updated });
       persistGroups(updated);
+      const updatedGroup = updated.find((g) => g.id === id);
+      if (updatedGroup) cloudSync.saveItem('groups', id, updatedGroup).catch(() => {});
     },
 
     deleteGroup: (id, deleteAssociatedActivities = true) => {
       const updatedGroups = get().groups.filter((g) => g.id !== id);
       set({ groups: updatedGroups });
       persistGroups(updatedGroups);
+      cloudSync.deleteItem('groups', id).catch(() => {});
 
       if (deleteAssociatedActivities) {
         // Eliminar todas las actividades vinculadas a este grupo
+        const toDelete = get().assignments.filter((a) => a.groupId === id);
         const updatedAssignments = get().assignments.filter((a) => a.groupId !== id);
         set({ assignments: updatedAssignments });
         persistAssignments(updatedAssignments);
+        toDelete.forEach((a) => cloudSync.deleteItem('assignments', a.id).catch(() => {}));
       }
     },
 
@@ -315,6 +376,7 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
       const updated = [newAssignment, ...get().assignments];
       set({ assignments: updated });
       persistAssignments(updated);
+      cloudSync.saveItem('assignments', newAssignment.id, newAssignment).catch(() => {});
       return newAssignment;
     },
 
@@ -324,14 +386,16 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
     },
 
     updateAssignment: (id, data) => {
-      const updated = get().assignments.map((a) => {
+      const updatedA = get().assignments.map((a) => {
         if (a.id === id) {
           return { ...a, ...data };
         }
         return a;
       });
-      set({ assignments: updated });
-      persistAssignments(updated);
+      set({ assignments: updatedA });
+      persistAssignments(updatedA);
+      const saved = updatedA.find((a) => a.id === id);
+      if (saved) cloudSync.saveItem('assignments', id, saved).catch(() => {});
     },
 
     submitHomework: (assignmentId, subData) => {
@@ -361,6 +425,8 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
 
       set({ assignments: updated });
       persistAssignments(updated);
+      const saved = updated.find((a) => a.id === (targetAssignment?.id || assignmentId));
+      if (saved) cloudSync.saveItem('assignments', saved.id, saved).catch(() => {});
       return submission;
     },
 
@@ -373,12 +439,15 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
       });
       set({ assignments: updated });
       persistAssignments(updated);
+      const saved = updated.find((a) => a.id === id);
+      if (saved) cloudSync.saveItem('assignments', id, saved).catch(() => {});
     },
 
     deleteAssignment: (id) => {
       const updated = get().assignments.filter((a) => a.id !== id);
       set({ assignments: updated });
       persistAssignments(updated);
+      cloudSync.deleteItem('assignments', id).catch(() => {});
     },
 
     importAssignment: (assignment) => {
@@ -393,6 +462,7 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
       }
       set({ assignments: updated });
       persistAssignments(updated);
+      cloudSync.saveItem('assignments', assignment.id, assignment).catch(() => {});
     },
 
     addTeacherFeedback: (assignmentId, submissionId, feedback) => {
@@ -414,6 +484,8 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
       });
       set({ assignments: updated });
       persistAssignments(updated);
+      const saved = updated.find((a) => a.id === assignmentId || a.pin === assignmentId);
+      if (saved) cloudSync.saveItem('assignments', saved.id, saved).catch(() => {});
     },
 
     deleteSubmission: (assignmentId, submissionId) => {
@@ -428,20 +500,21 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
       });
       set({ assignments: updated });
       persistAssignments(updated);
+      const saved = updated.find((a) => a.id === assignmentId || a.pin === assignmentId);
+      if (saved) cloudSync.saveItem('assignments', saved.id, saved).catch(() => {});
     },
 
     clearAllSubmissions: (assignmentId) => {
       const updated = get().assignments.map((a) => {
         if (a.id === assignmentId || a.pin === assignmentId) {
-          return {
-            ...a,
-            submissions: [],
-          };
+          return { ...a, submissions: [] };
         }
         return a;
       });
       set({ assignments: updated });
       persistAssignments(updated);
+      const saved = updated.find((a) => a.id === assignmentId || a.pin === assignmentId);
+      if (saved) cloudSync.saveItem('assignments', saved.id, saved).catch(() => {});
     },
 
     // ── MANTENIMIENTO Y LIBERACIÓN DE MEMORIA ──
@@ -480,6 +553,8 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(GROUPS_STORAGE_KEY);
       }
+      cloudSync.clearCollection('assignments').catch(() => {});
+      cloudSync.clearCollection('groups').catch(() => {});
     },
   };
 });

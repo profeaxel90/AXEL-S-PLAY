@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Game, Question, GameSettings } from '../types';
 import { SAMPLE_GAMES, SAMPLE_QUESTIONS_ROAD_SAFETY } from '../data/mockGames';
+import { cloudSync, isFirebaseConfigured } from '../lib/firestoreSync';
 
 const STORAGE_KEY = 'axels_play_custom_games_v2';
 
@@ -184,6 +185,50 @@ export const useGameStore = create<GameStoreState>((set, get) => {
     }
   };
 
+  // ── SINCRONIZACIÓN AUTOMÁTICA CON FIREBASE (background) ──
+  if (typeof window !== 'undefined' && isFirebaseConfigured()) {
+    setTimeout(async () => {
+      try {
+        const cloudGames = await cloudSync.loadAll<Game>('games');
+        const localGames = get().games;
+
+        if (!cloudGames || Object.keys(cloudGames).length === 0) {
+          // Nube vacía → subir todos los juegos locales (primera migración)
+          console.log('[CloudSync] ☁️ Primera sincronización: subiendo juegos a Firebase...');
+          await cloudSync.saveAll('games', localGames);
+          return;
+        }
+
+        // Mezclar: el más reciente (updatedAt) gana por cada ID
+        const merged: Record<string, Game> = { ...localGames };
+        let changed = false;
+        for (const [id, cg] of Object.entries(cloudGames)) {
+          const lg = merged[id];
+          if (!lg || new Date(cg.updatedAt || '0').getTime() > new Date(lg.updatedAt || '0').getTime()) {
+            merged[id] = cg;
+            changed = true;
+          }
+        }
+        if (changed) {
+          set({ games: merged });
+          persist(merged);
+          console.log('[CloudSync] ✅ Juegos sincronizados desde Firebase');
+        }
+
+        // Subir juegos que solo existen localmente
+        const localOnlyEntries: Record<string, Game> = {};
+        for (const [id, game] of Object.entries(merged)) {
+          if (!cloudGames[id]) localOnlyEntries[id] = game;
+        }
+        if (Object.keys(localOnlyEntries).length > 0) {
+          await cloudSync.saveAll('games', localOnlyEntries);
+        }
+      } catch (e) {
+        console.warn('[CloudSync] ⚠️ Error sincronizando juegos:', e);
+      }
+    }, 800);
+  }
+
   return {
     games: loadInitial(),
 
@@ -237,6 +282,7 @@ export const useGameStore = create<GameStoreState>((set, get) => {
 
       set({ games: updatedMap });
       persist(updatedMap);
+      cloudSync.saveItem('games', gameId, updatedGame).catch(() => {});
       return updatedGame;
     },
 
@@ -245,6 +291,7 @@ export const useGameStore = create<GameStoreState>((set, get) => {
       delete current[id];
       set({ games: current });
       persist(current);
+      cloudSync.deleteItem('games', id).catch(() => {});
     },
 
     duplicateGame: (id: string) => {
@@ -276,6 +323,7 @@ export const useGameStore = create<GameStoreState>((set, get) => {
 
       set({ games: updatedMap });
       persist(updatedMap);
+      cloudSync.saveItem('games', newId, duplicated).catch(() => {});
       return duplicated;
     },
   };

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { cloudSync, isFirebaseConfigured } from '../lib/firestoreSync';
 
 export interface QuestionStat {
   name: string;
@@ -54,7 +55,41 @@ const loadStoredSessions = (): GameSessionReport[] => {
   return [];
 };
 
-export const useSessionHistoryStore = create<SessionHistoryState>((set, get) => ({
+export const useSessionHistoryStore = create<SessionHistoryState>((set, get) => {
+  // ── Sincronización inicial desde Firebase ──
+  if (typeof window !== 'undefined' && isFirebaseConfigured()) {
+    setTimeout(async () => {
+      try {
+        const cloud = await cloudSync.loadAll<GameSessionReport>('session_history');
+        if (cloud && Object.keys(cloud).length > 0) {
+          const cloudArr = Object.values(cloud).sort((a, b) => b.timestamp - a.timestamp);
+          const local = get().sessions;
+          const merged = [...cloudArr];
+          local.forEach((s) => { if (!cloud[s.id]) merged.push(s); });
+          merged.sort((a, b) => b.timestamp - a.timestamp);
+          if (merged.length !== local.length) {
+            set({ sessions: merged });
+            if (typeof window !== 'undefined') {
+              try { localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)); } catch {}
+            }
+          }
+          console.log('[CloudSync] ✅ Historial de sesiones sincronizado');
+        } else {
+          // Primera vez: subir historial local
+          const local = get().sessions;
+          if (local.length > 0) {
+            const map: Record<string, GameSessionReport> = {};
+            local.forEach((s) => { map[s.id] = s; });
+            await cloudSync.saveAll('session_history', map);
+          }
+        }
+      } catch (e) {
+        console.warn('[CloudSync] ⚠️ Error sync session_history:', e);
+      }
+    }, 1500);
+  }
+
+  return {
   sessions: loadStoredSessions(),
 
   addSession: (report) => {
@@ -67,6 +102,7 @@ export const useSessionHistoryStore = create<SessionHistoryState>((set, get) => 
         console.warn('Error saving session history:', e);
       }
     }
+    cloudSync.saveItem('session_history', report.id, report).catch(() => {});
   },
 
   removeSession: (id) => {
@@ -79,6 +115,7 @@ export const useSessionHistoryStore = create<SessionHistoryState>((set, get) => 
         console.warn('Error saving session history:', e);
       }
     }
+    cloudSync.deleteItem('session_history', id).catch(() => {});
   },
 
   clearHistory: () => {
@@ -90,9 +127,11 @@ export const useSessionHistoryStore = create<SessionHistoryState>((set, get) => 
         console.warn('Error clearing session history:', e);
       }
     }
+    cloudSync.clearCollection('session_history').catch(() => {});
   },
 
   getSessionById: (id) => {
     return get().sessions.find((s) => s.id === id);
   },
-}));
+  };
+});
