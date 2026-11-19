@@ -1065,6 +1065,8 @@ class AudioEngine {
   public stopMusic() {
     this.synth.stopMusic();
     this.stopCustomAudio();
+    this.stopQuestionMusic();
+    this.stopLobbyMusic();
   }
 
   // ── Reproducción de Pista Oficial o Personalizada ──
@@ -1363,9 +1365,9 @@ class AudioEngine {
 
   // ── Música de Podio Final (Ganadores) ──
   public playPodiumMusic() {
+    // Detener cualquier música previa que esté sonando (preguntas, lobby o pistas personalizadas)
+    this.stopMusic();
     if (!this.settings.musicEnabled) return;
-    this.synth.stopMusic();
-    this.stopCustomAudio();
     this.unlock();
 
     const custom = this.customSounds.get('bgm_podium');
@@ -1382,6 +1384,17 @@ class AudioEngine {
       this.currentPodiumAudio = audio;
     } else {
       this.synth.startMusic('podium');
+    }
+  }
+
+  public stopPodiumMusic() {
+    if (this.currentPodiumAudio) {
+      this.currentPodiumAudio.pause();
+      this.currentPodiumAudio.src = '';
+      this.currentPodiumAudio = null;
+    }
+    if (this.synth.getTrack() === 'podium') {
+      this.synth.stopMusic();
     }
   }
 

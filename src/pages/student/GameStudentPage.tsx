@@ -708,20 +708,19 @@ export default function GameStudentPage() {
             </div>
           ) : null}
 
-          <h2 className="text-sm md:text-base font-black text-white leading-snug">
+          <h2 className="text-base sm:text-lg md:text-xl font-black text-white leading-snug px-1">
             {displayQuestion.content}
           </h2>
         </div>
 
         {/* ── Banner de Fase de Lectura ── */}
         {isReadingPhase && (
-          <div className="flex items-center justify-center gap-3 mb-3 px-4 py-3 rounded-2xl bg-gradient-to-r from-blue-600/30 to-purple-600/30 border-2 border-blue-400/50 shadow-lg animate-pulse">
-            <div className="text-center">
-              <p className="text-yellow-300 font-black text-sm uppercase tracking-wider">{questionNum} de {totalQuestions}</p>
-              <p className="text-white/80 text-xs mt-0.5">
-                Podrás responder en <span className="text-yellow-300 font-black text-base">{studentReadingTimeLeft}</span> segundo{studentReadingTimeLeft !== 1 ? 's' : ''}...
-              </p>
-            </div>
+          <div className="flex items-center justify-center gap-3 mb-3 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-blue-600/30 to-purple-600/30 border-2 border-blue-400/50 shadow-lg animate-pulse">
+            <span className="text-yellow-300 font-black text-base uppercase tracking-wider">{questionNum} de {totalQuestions}</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-300" />
+            <span className="text-white font-black text-lg bg-blue-900/60 border border-blue-400/40 px-2.5 py-0.5 rounded-xl text-yellow-300">
+              {studentReadingTimeLeft}s
+            </span>
           </div>
         )}
 
@@ -886,11 +885,11 @@ export default function GameStudentPage() {
                   }`}
                 >
                   {/* Símbolo geométrico */}
-                  <span className="w-9 h-9 rounded-xl bg-black/25 flex items-center justify-center font-black text-lg shrink-0">
+                  <span className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-black/25 flex items-center justify-center font-black text-xl sm:text-2xl shrink-0">
                     {style.icon}
                   </span>
 
-                  <span className="text-xs sm:text-sm leading-tight flex-1">
+                  <span className="text-sm sm:text-base md:text-lg font-black leading-snug flex-1">
                     {option.text}
                   </span>
 

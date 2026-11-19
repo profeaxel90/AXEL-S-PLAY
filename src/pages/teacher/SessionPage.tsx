@@ -128,7 +128,7 @@ export default function SessionPage() {
   const [introCountdown, setIntroCountdown] = useState(6);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [timerLeft, setTimerLeft] = useState(20);
-  const [readingTimeLeft, setReadingTimeLeft] = useState(10);
+  const [readingTimeLeft, setReadingTimeLeft] = useState(5);
   const [isPaused, setIsPaused] = useState(false);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
@@ -466,7 +466,7 @@ export default function SessionPage() {
   useEffect(() => {
     if (gamePhase !== 'reading') return;
 
-    setReadingTimeLeft(10);
+    setReadingTimeLeft(5);
     const readTimer = setInterval(() => {
       setReadingTimeLeft((prev) => {
         if (prev <= 1) {
@@ -539,9 +539,10 @@ export default function SessionPage() {
       audioEngine.playEffect('sfx_victory');
     }, 6000);
 
-    // 4. Detener automáticamente la música al finalizar la animación
+    // 4. Detener automáticamente la música de podio al finalizar la animación
     const t4 = setTimeout(() => {
       setPodiumStep(4);
+      audioEngine.stopPodiumMusic();
       audioEngine.stopMusic();
       audioEngine.stopCustomAudio();
       setCustomIsPlaying(false);
@@ -667,7 +668,7 @@ export default function SessionPage() {
       total: questions.length,
       timeLimit: firstQ.timeLimit || 20,
       readingPhase: true,
-      readingTime: 10,
+      readingTime: 5,
       gameMode: mode,
       selectedStudentId: wheelStudent?.id,
       selectedStudentName: wheelStudent?.nickname,
@@ -717,7 +718,7 @@ export default function SessionPage() {
       total: questions.length,
       timeLimit: nextQ.timeLimit || 20,
       readingPhase: true,
-      readingTime: 10,
+      readingTime: 5,
       isGoldenRound,
       gameMode: mode,
       selectedStudentId: wheelStudent?.id,
@@ -884,6 +885,11 @@ export default function SessionPage() {
   };
 
   const handleEndGame = () => {
+    // Detener de inmediato cualquier música de pregunta o lobby antes del podio
+    audioEngine.stopQuestionMusic();
+    audioEngine.stopLobbyMusic();
+    audioEngine.stopMusic();
+
     setGamePhase('finished');
     audioEngine.setContext('podium');
 
@@ -1838,7 +1844,7 @@ export default function SessionPage() {
                 stroke="#60a5fa"
                 strokeWidth="8"
                 strokeDasharray="276"
-                strokeDashoffset={`${(10 - readingTimeLeft) / 10 * 276}`}
+                strokeDashoffset={`${(5 - readingTimeLeft) / 5 * 276}`}
                 strokeLinecap="round"
                 className="transition-all duration-1000 ease-linear"
               />
@@ -1850,7 +1856,7 @@ export default function SessionPage() {
           </div>
 
           {/* Pregunta visible (sin opciones) */}
-          <div className="card p-6 sm:p-8 border-blue-500/30 bg-gradient-to-b from-blue-950/40 to-slate-900 max-w-3xl w-full text-center shadow-xl rounded-2xl">
+          <div className="card p-6 sm:p-8 border-blue-500/30 bg-gradient-to-b from-blue-950/40 to-slate-900 max-w-4xl w-full text-center shadow-xl rounded-2xl">
             {currentQ.videoUrl ? (
               <div className="mb-3 w-full max-w-md mx-auto rounded-2xl overflow-hidden border border-white/20 bg-black shadow-lg aspect-video max-h-[26vh]">
                 <iframe
@@ -1871,15 +1877,9 @@ export default function SessionPage() {
               </div>
             ) : null}
 
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white leading-snug px-2">
+            <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white leading-snug px-3 py-2">
               {currentQ.content}
             </h2>
-
-            {/* Indicador de que las opciones aparecerán pronto */}
-            <div className="mt-4 flex items-center justify-center gap-2 text-blue-300/70 text-sm font-semibold">
-              <span className="animate-pulse">⏳</span>
-              <span>Las opciones de respuesta aparecerán en {readingTimeLeft} segundo{readingTimeLeft !== 1 ? 's' : ''}...</span>
-            </div>
           </div>
         </div>
       )}
@@ -2120,7 +2120,7 @@ export default function SessionPage() {
                 </div>
               ) : null}
 
-              <h2 className="text-base sm:text-lg md:text-xl lg:text-2xl font-black text-white leading-snug max-w-4xl px-2">
+              <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white leading-snug max-w-5xl px-3 py-1">
                 {currentQ.content}
               </h2>
 
@@ -2177,7 +2177,7 @@ export default function SessionPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 flex-1 max-h-[34vh] max-w-4xl mx-auto w-full">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 flex-1 max-h-[38vh] max-w-5xl mx-auto w-full">
               {(currentQ.options || []).map((option, idx) => {
                 const style = OPTION_STYLES[idx % OPTION_STYLES.length];
                 const isCorrect = currentQ.correctAnswer === option.id;
@@ -2185,24 +2185,24 @@ export default function SessionPage() {
                 return (
                   <div
                     key={option.id}
-                    className={`py-1.5 sm:py-2 px-3 sm:px-4 rounded-lg border transition-all flex items-center gap-2.5 relative shadow-sm select-none ${
+                    className={`py-3 sm:py-4 px-4 sm:px-6 rounded-2xl border-2 transition-all flex items-center gap-3.5 relative shadow-md select-none ${
                       isAnswerRevealed
                         ? isCorrect
-                          ? 'bg-emerald-600 border-yellow-400 text-white scale-[1.01] shadow-emerald-500/40 ring-2 ring-yellow-400'
+                          ? 'bg-emerald-600 border-yellow-400 text-white scale-[1.01] shadow-emerald-500/40 ring-4 ring-yellow-400'
                           : 'opacity-25 bg-slate-900 border-white/10'
                         : `${style.bg} ${style.border}`
                     }`}
                   >
-                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-md flex items-center justify-center font-black text-sm sm:text-base shrink-0 ${style.symbolBg}`}>
+                    <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center font-black text-lg sm:text-2xl shrink-0 shadow-inner ${style.symbolBg}`}>
                       {style.icon}
                     </div>
 
-                    <span className="text-sm sm:text-base md:text-lg lg:text-xl font-bold leading-snug flex-1">
+                    <span className="text-base sm:text-xl md:text-2xl lg:text-3xl font-black leading-snug flex-1 drop-shadow-sm">
                       {option.text}
                     </span>
 
                     {isAnswerRevealed && isCorrect && (
-                      <CheckCircle2 className="w-5 h-5 text-yellow-300 shrink-0 animate-bounce" />
+                      <CheckCircle2 className="w-7 h-7 text-yellow-300 shrink-0 animate-bounce" />
                     )}
                   </div>
                 );
