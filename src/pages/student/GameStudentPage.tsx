@@ -195,24 +195,15 @@ export default function GameStudentPage() {
         }
       } else if (msg.type === 'ANSWER_ACK') {
         if (!currentParticipant || msg.participantId === currentParticipant.id) {
-          setFeedback(msg.isCorrect ? 'correct' : 'incorrect');
+          // El resultado y puntaje ganado se guardan pero se revelan solo al acabarse el tiempo
           setPointsGained(msg.pointsEarned || 0);
           if (msg.newScore !== undefined) {
             setCurrentScore(msg.newScore);
           }
           if (msg.isCorrect) {
-            setStreakCount((prev) => {
-              const next = prev + 1;
-              if (next >= 2) {
-                audioEngine.playEffect('sfx_streak');
-              } else {
-                audioEngine.playEffect('sfx_correct');
-              }
-              return next;
-            });
+            setStreakCount((prev) => prev + 1);
           } else {
             setStreakCount(0);
-            audioEngine.playEffect('sfx_wrong');
             if (currentGameMode === 'survival') {
               setStudentHearts((h) => Math.max(0, h - 1));
             }
@@ -235,6 +226,24 @@ export default function GameStudentPage() {
           setRevealedCorrectId(msg.correctOptionId);
         }
         if (msg.explanation) setExplanationText(msg.explanation);
+
+        // Al revelarse la respuesta (fin del tiempo o docente revela), activar feedback de sonido y animación
+        if (selectedOption) {
+          const isCorrect = Array.isArray(activeQuestion?.correctAnswer)
+            ? (activeQuestion?.correctAnswer as unknown[])?.includes(selectedOption)
+            : activeQuestion?.correctAnswer === selectedOption;
+
+          setFeedback(isCorrect ? 'correct' : 'incorrect');
+          if (isCorrect) {
+            audioEngine.playEffect('sfx_correct');
+            if (streakCount >= 2) {
+              setTimeout(() => audioEngine.playEffect('sfx_streak'), 350);
+            }
+          } else {
+            audioEngine.playEffect('sfx_wrong');
+          }
+        }
+
         if (msg.rankings) {
           setLeaderboardData(msg.rankings);
           setShowLeaderboard(true);
@@ -334,6 +343,21 @@ export default function GameStudentPage() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
+
+          // Si el tiempo llega a 0 y el estudiante respondió, mostrar si fue correcta o no
+          if (selectedOption && !revealedCorrectId) {
+            const isCorrect = Array.isArray(activeQuestion?.correctAnswer)
+              ? (activeQuestion?.correctAnswer as unknown[])?.includes(selectedOption)
+              : activeQuestion?.correctAnswer === selectedOption;
+
+            setFeedback(isCorrect ? 'correct' : 'incorrect');
+            if (isCorrect) {
+              audioEngine.playEffect('sfx_correct');
+            } else {
+              audioEngine.playEffect('sfx_wrong');
+            }
+          }
+
           return 0;
         }
         if (prev <= 5) {
@@ -417,25 +441,17 @@ export default function GameStudentPage() {
       });
     }
 
-    setFeedback(isCorrect ? 'correct' : 'incorrect');
-
-    // Vibración háptica según resultado
+    // Vibración háptica suave al enviar respuesta
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(isCorrect ? [100] : [200, 100, 200]);
+      navigator.vibrate(50);
     }
 
     setPointsGained(earned);
     if (isCorrect) {
       setCurrentScore((prev) => prev + earned);
       setStreakCount(nextStreak);
-      if (nextStreak >= 2) {
-        audioEngine.playEffect('sfx_streak');
-      } else {
-        audioEngine.playEffect('sfx_correct');
-      }
     } else {
       setStreakCount(0);
-      audioEngine.playEffect('sfx_wrong');
     }
   };
 
