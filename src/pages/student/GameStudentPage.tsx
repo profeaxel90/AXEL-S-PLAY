@@ -73,8 +73,6 @@ export default function GameStudentPage() {
   // Nuevo sistema de Robo de Puntos
   const [stealCount, setStealCount] = useState(0); // robos usados (máx 2)
   const [showStealModal, setShowStealModal] = useState(false);
-  const [showStealConfirm, setShowStealConfirm] = useState(false);
-  const [stealTarget, setStealTarget] = useState<{id: string, nickname: string, score: number} | null>(null);
   const [stealResult, setStealResult] = useState<{success: boolean, fromNickname?: string, toNickname?: string, amount?: number, error?: string} | null>(null);
   const [isDoingSteal, setIsDoingSteal] = useState(false);
   const [availablePlayers, setAvailablePlayers] = useState<{id: string, nickname: string, score: number}[]>([]);
@@ -124,7 +122,6 @@ export default function GameStudentPage() {
         setRevealedCorrectId(null);
         setExplanationText(null);
         setShowStealModal(false);
-        setShowStealConfirm(false);
         setStealResult(null);
         setShowLeaderboard(false);
         setIsStealAuthorized(false);
@@ -254,7 +251,6 @@ export default function GameStudentPage() {
           }
           setStealResult({ success: msg.success || false, fromNickname: msg.fromNickname, toNickname: msg.toNickname, amount: msg.amount, error: msg.error });
           setIsDoingSteal(false);
-          setShowStealConfirm(false);
           setShowStealModal(false);
           setTimeout(() => setStealResult(null), 4000);
         } else if (msg.toId === currentParticipant?.id) {
@@ -478,23 +474,20 @@ export default function GameStudentPage() {
   };
 
   // Manejo del nuevo sistema de Robo de Puntos (máx 2 robos, 50 pts por robo)
+  // Al acabarse el tiempo o revelarse la respuesta, NO se puede robar puntos
+  const isStealBlocked = timeLeft <= 0 || Boolean(revealedCorrectId) || isReadingPhase;
+
   const handleOpenStealModal = () => {
-    if (stealCount >= 2) return;
+    if (stealCount >= 2 || isStealBlocked) return;
     audioEngine.playEffect('sfx_tick');
     setShowStealModal(true);
   };
 
-  const handleSelectVictim = (player: { id: string; nickname: string; score: number }) => {
-    audioEngine.playEffect('sfx_tick');
-    setStealTarget(player);
+  const handleExecuteDirectSteal = async (player: { id: string; nickname: string; score: number }) => {
+    if (!player || isDoingSteal || !sessionId || !currentParticipant) return;
+    if (stealCount >= 2 || isStealBlocked) return;
+
     setShowStealModal(false);
-    setShowStealConfirm(true);
-  };
-
-  const handleExecuteSteal = async () => {
-    if (!stealTarget || isDoingSteal || !sessionId || !currentParticipant) return;
-    if (stealCount >= 2) return;
-
     setIsDoingSteal(true);
     audioEngine.playEffect('sfx_tick');
 
@@ -505,11 +498,10 @@ export default function GameStudentPage() {
     const sync = getOrCreateGameClientSync(sessionId);
     const result = await sync.requestSteal({
       fromId: currentParticipant.id,
-      toId: stealTarget.id,
+      toId: player.id,
     });
 
     setIsDoingSteal(false);
-    setShowStealConfirm(false);
 
     if (!result.success) {
       audioEngine.playEffect('sfx_wrong');
@@ -961,6 +953,16 @@ export default function GameStudentPage() {
             <div className="w-full py-2.5 px-4 rounded-2xl bg-white/5 border border-white/10 text-white/40 text-xs font-bold text-center flex items-center justify-center gap-2">
               <span>🗡️ Robos de puntos agotados (2/2 usados)</span>
             </div>
+          ) : isStealBlocked ? (
+            <div className="w-full py-2.5 px-4 rounded-2xl bg-white/5 border border-white/10 text-white/40 text-xs font-bold flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span>⏰</span>
+                <span>Robo no disponible</span>
+              </div>
+              <span className="text-[10px] text-red-300/80 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                Tiempo finalizado
+              </span>
+            </div>
           ) : !isStealAuthorized ? (
             <div className="w-full py-2.5 px-4 rounded-2xl bg-white/5 border border-white/10 text-white/50 text-xs font-bold flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -974,6 +976,7 @@ export default function GameStudentPage() {
           ) : (
             <button
               type="button"
+              disabled={isDoingSteal}
               onClick={handleOpenStealModal}
               className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-600/40 border-2 border-yellow-300 flex items-center justify-between transition-transform active:scale-95 animate-pulse"
             >
@@ -1060,12 +1063,16 @@ export default function GameStudentPage() {
                 availablePlayers.map((player) => (
                   <button
                     key={player.id}
-                    onClick={() => handleSelectVictim(player)}
-                    className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-400 text-left transition-all group"
+                    disabled={isDoingSteal}
+                    onClick={() => handleExecuteDirectSteal(player)}
+                    className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-red-500/20 active:scale-98 border border-white/10 hover:border-red-400 text-left transition-all group disabled:opacity-50"
                   >
-                    <span className="font-bold text-sm text-white group-hover:text-yellow-300">
-                      {player.nickname}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🗡️</span>
+                      <span className="font-bold text-sm text-white group-hover:text-yellow-300">
+                        {player.nickname}
+                      </span>
+                    </div>
                     <span className="text-yellow-400 font-extrabold text-sm">
                       {player.score.toLocaleString()} pts
                     </span>
@@ -1080,45 +1087,6 @@ export default function GameStudentPage() {
             >
               Cerrar
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL 2: CONFIRMACIÓN DEL ROBO DE 50 PUNTOS ── */}
-      {showStealConfirm && stealTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-bounce-in">
-          <div className="card max-w-sm w-full p-6 border-2 border-red-500 bg-gradient-to-b from-red-950/80 via-slate-900 to-slate-950 shadow-2xl text-center space-y-4">
-            <div className="text-4xl animate-bounce">🗡️</div>
-            <h3 className="font-black text-xl text-white">¿Confirmar Robo?</h3>
-            <p className="text-sm text-white/80 leading-relaxed">
-              Vas a robar <span className="text-yellow-400 font-black">50 puntos</span> a{' '}
-              <span className="text-red-300 font-black">{stealTarget.nickname}</span>.
-            </p>
-            <p className="text-[10px] text-white/40">
-              Esta operación es definitiva y descontará 1 oportunidad de tus 2 robos permitidos.
-            </p>
-
-            <div className="flex gap-2.5 pt-2">
-              <button
-                type="button"
-                disabled={isDoingSteal}
-                onClick={() => {
-                  setShowStealConfirm(false);
-                  setStealTarget(null);
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={isDoingSteal}
-                onClick={handleExecuteSteal}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs shadow-lg shadow-red-600/40 border border-yellow-300 flex items-center justify-center gap-1.5"
-              >
-                {isDoingSteal ? 'Robando...' : '¡Confirmar Robo!'}
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -1145,22 +1113,33 @@ export default function GameStudentPage() {
       )}
 
       {/* ── TABLA DE CLASIFICACIÓN TOP 7 POST-PREGUNTA EN MÓVIL ── */}
-      {showLeaderboard && leaderboardData.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-bounce-in">
-          <div className="w-full max-w-lg p-5 rounded-3xl bg-slate-900/98 border-2 border-purple-500/60 shadow-2xl space-y-3.5 max-h-[85vh] flex flex-col justify-between">
-            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-              <span className="font-black text-sm sm:text-base text-yellow-400 flex items-center gap-2">
-                🏆 TABLA DE CLASIFICACIÓN
-              </span>
-              <button
-                onClick={() => setShowLeaderboard(false)}
-                className="text-xs text-white/70 hover:text-white px-2.5 py-1 rounded-lg bg-white/10 font-bold"
-              >
-                Cerrar ✕
-              </button>
-            </div>
+      {showLeaderboard && leaderboardData.length > 0 && (() => {
+        const myRankIndex = leaderboardData.findIndex((p: any) => p.id === currentParticipant?.id);
+        const myRank = myRankIndex !== -1 ? myRankIndex + 1 : null;
 
-            <div className="space-y-2 overflow-y-auto max-h-[65vh] pr-1">
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-bounce-in">
+            <div className="w-full max-w-lg p-5 rounded-3xl bg-slate-900/98 border-2 border-purple-500/60 shadow-2xl space-y-3.5 max-h-[85vh] flex flex-col justify-between">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                <span className="font-black text-sm sm:text-base text-yellow-400 flex items-center gap-2">
+                  🏆 TABLA DE CLASIFICACIÓN
+                </span>
+                <button
+                  onClick={() => setShowLeaderboard(false)}
+                  className="text-xs text-white/70 hover:text-white px-2.5 py-1 rounded-lg bg-white/10 font-bold"
+                >
+                  Cerrar ✕
+                </button>
+              </div>
+
+              {/* Indicador destacado de Posición del Estudiante */}
+              {myRank !== null && (
+                <div className="py-2.5 px-4 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-300 text-slate-950 font-black text-xl sm:text-2xl tracking-wider uppercase text-center shadow-lg shadow-yellow-400/30 border-2 border-yellow-200 animate-pulse">
+                  POSICIÓN {myRank}
+                </div>
+              )}
+
+              <div className="space-y-2 overflow-y-auto max-h-[60vh] pr-1">
               {leaderboardData.slice(0, 7).map((p, idx) => {
                 const isMe = currentParticipant && p.id === currentParticipant.id;
                 return (
@@ -1189,7 +1168,8 @@ export default function GameStudentPage() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Footer ── */}
       <footer className="max-w-lg mx-auto w-full text-center text-[10px] text-white/40 pb-1">

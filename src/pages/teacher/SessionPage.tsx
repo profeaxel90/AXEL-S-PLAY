@@ -740,6 +740,8 @@ export default function SessionPage() {
 
   const handleRevealAnswer = () => {
     setIsAnswerRevealed(true);
+    // Al acabarse el tiempo o revelarse la respuesta, se inhabilita el robo de puntos
+    setIsStealAuthorized(false);
     // Detener la música de la pregunta y sonar campanas de fin de tiempo
     audioEngine.stopQuestionMusic();
     audioEngine.playEffect('sfx_time_up');
@@ -1913,9 +1915,10 @@ export default function SessionPage() {
               </button>
             </div>
 
-            {/* Centro: Título sutil de la partida */}
-            <div className="hidden md:flex items-center gap-2 text-white/60 text-xs font-bold truncate max-w-xs">
-              <span className="truncate">{gameData?.title || "Partida en Vivo"}</span>
+            {/* Centro: Título destacado de la partida */}
+            <div className="hidden md:flex items-center gap-2 text-white font-black text-sm sm:text-base lg:text-lg truncate max-w-md px-3 py-1 bg-white/5 rounded-xl border border-white/10 shadow-inner">
+              <span className="text-yellow-400">🎮</span>
+              <span className="truncate text-yellow-300 drop-shadow">{gameData?.title || "AXEL'S PLAY"}</span>
             </div>
 
             {/* Derecha: Botones de Acción (Modo Proyector, Ronda Dorada, Robo y Revelar/Siguiente) */}
@@ -2341,13 +2344,14 @@ export default function SessionPage() {
             </div>
           )}
 
-          <div className="card border-purple-500/30 p-8 text-center relative overflow-hidden bg-gradient-to-b from-purple-950/40 via-slate-900 to-slate-950 shadow-2xl">
-            <div className="mb-4">
-              <Crown className="w-16 h-16 text-yellow-300 mx-auto mb-2 animate-bounce drop-shadow-[0_0_20px_rgba(250,204,21,0.8)]" />
-              <h2 className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-200 to-yellow-400">
+          <div className="card border-purple-500/30 p-6 sm:p-10 text-center relative overflow-hidden bg-gradient-to-b from-purple-950/40 via-slate-900 to-slate-950 shadow-2xl">
+            {/* Encabezado superior del Podio con amplio margen para evitar colisión con los avatares */}
+            <div className="mb-8 pt-2 pb-4 border-b border-white/10 relative z-20">
+              <Crown className="w-14 h-14 sm:w-16 sm:h-16 text-yellow-300 mx-auto mb-2 animate-bounce drop-shadow-[0_0_20px_rgba(250,204,21,0.8)]" />
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-200 to-yellow-400 tracking-tight">
                 ¡Gran Podio de Campeones!
               </h2>
-              <p className="text-yellow-300/80 font-bold text-sm mt-1">
+              <p className="text-yellow-300/80 font-bold text-xs sm:text-sm mt-1.5">
                 Resultados finales y celebración de la partida
               </p>
             </div>
@@ -2413,7 +2417,7 @@ export default function SessionPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-end justify-center gap-3 sm:gap-5 max-w-3xl mx-auto my-4 pt-4 min-h-48 relative">
+              <div className="flex items-end justify-center gap-3 sm:gap-6 max-w-3xl mx-auto mt-6 mb-4 pt-10 min-h-56 relative z-10">
                 {/* 🥈 2do Lugar (Aparece en paso 2 - Plata Luminosa y Alegre) */}
                 <div className={`flex-1 flex flex-col items-center transition-all duration-700 ${
                   podiumStep >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
