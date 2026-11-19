@@ -87,6 +87,18 @@ export default function HomeworkPlayPage() {
     }
   }, [searchParams]);
 
+  // Pantalla completa automática al entrar al juego (mejora UX móvil)
+  useEffect(() => {
+    const enterFullscreen = async () => {
+      try {
+        if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch {}
+    };
+    enterFullscreen();
+  }, []);
+
   // Recuperar datos del estudiante desde sessionStorage
   const [studentData] = useState<StudentData | null>(() => {
     try {
@@ -198,6 +210,7 @@ export default function HomeworkPlayPage() {
   const [cameraTarget, setCameraTarget] = useState<'question' | 'summary'>('question');
   const [dismissBrowserBanner, setDismissBrowserBanner] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSubmitSuccess, setShowSubmitSuccess] = useState(false);
 
   // Función para redimensionar y comprimir fotos (galería o cámara) para buena calidad legible
   const compressPhoto = (dataUrl: string): Promise<string> => {
@@ -433,6 +446,11 @@ export default function HomeworkPlayPage() {
 
       sessionStorage.setItem(`hw_submitted_${assignment.pin}`, 'true');
       setSubmitted(true);
+      setShowSubmitSuccess(true);
+      // Vibración de éxito al entregar
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
+      // Auto-ocultar toast después de 5 segundos
+      setTimeout(() => setShowSubmitSuccess(false), 5000);
     } catch (err) {
       console.error('[Submit] Error al enviar tarea:', err);
       setIsSubmitting(false);
@@ -520,6 +538,21 @@ export default function HomeworkPlayPage() {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-teal-950 to-slate-950 flex items-center justify-center p-4">
+        {/* Toast de confirmación de entrega exitosa */}
+        {showSubmitSuccess && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-bounce">
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-2xl shadow-2xl shadow-emerald-500/40 flex items-center gap-3 border border-emerald-400/50">
+              <span className="text-2xl">🎉</span>
+              <div>
+                <p className="font-black text-sm">¡Actividad enviada exitosamente!</p>
+                <p className="text-xs text-emerald-100/80">Tu profesor ya puede ver tu entrega</p>
+              </div>
+              <button onClick={() => setShowSubmitSuccess(false)} className="ml-2 p-1 hover:bg-white/20 rounded-full">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
         <div className="text-center max-w-sm w-full">
           <div className="mb-6">
             <MascotAvatar seed={studentData.avatar} emotion="victory" size="2xl" />

@@ -75,7 +75,7 @@ const INITIAL_BANK: BankItem[] = [
 export default function QuestionBankPage() {
   const [questions, setQuestions] = useState<BankItem[]>(() => {
     try {
-      const stored = sessionStorage.getItem('question_bank');
+      const stored = localStorage.getItem('question_bank');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -86,7 +86,7 @@ export default function QuestionBankPage() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem('question_bank', JSON.stringify(questions));
+      localStorage.setItem('question_bank', JSON.stringify(questions));
     } catch {}
   }, [questions]);
 

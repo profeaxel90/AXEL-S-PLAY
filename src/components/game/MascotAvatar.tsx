@@ -263,9 +263,9 @@ export default function MascotAvatar({
             <stop offset="100%" stopColor="#ffffff" stopOpacity="0.1" />
           </linearGradient>
 
-          {/* Sombra suave de base */}
+          {/* Sombra suave de base mejorada 3D */}
           <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
-            <feDropShadow dx="0" dy="4" stdDeviation="3" floodOpacity="0.3" floodColor="#000000" />
+            <feDropShadow dx="0" dy="4" stdDeviation="4" floodOpacity="0.4" floodColor="#000000" />
           </filter>
         </defs>
 
@@ -329,8 +329,17 @@ export default function MascotAvatar({
         {/* 3. Cabeza Principal Esférica 3D Cartoon */}
         <circle cx="50" cy="52" r="34" fill={`url(#${gradientId})`} />
 
-        {/* Brillo volumétrico 3D superior en la frente */}
-        <ellipse cx="44" cy="32" rx="18" ry="9" fill="#ffffff" opacity="0.25" />
+        {/* Contorno oscuro sutil para profundidad 3D */}
+        <circle cx="50" cy="52" r="34" fill="none" stroke={profile.secondary} strokeWidth="2" opacity="0.5" />
+
+        {/* Brillo volumétrico 3D superior en la frente (más intenso) */}
+        <ellipse cx="44" cy="32" rx="18" ry="9" fill="#ffffff" opacity="0.40" />
+
+        {/* Sombra lateral izquierda para volumen 3D */}
+        <ellipse cx="38" cy="60" rx="15" ry="20" fill="black" opacity="0.08" />
+
+        {/* Reflejo inferior sutil */}
+        <ellipse cx="56" cy="72" rx="12" ry="6" fill="white" opacity="0.08" />
 
         {/* Mejillas sonrosadas cute */}
         <circle cx="28" cy="62" r="5" fill="#f43f5e" opacity="0.3" />
@@ -363,19 +372,21 @@ export default function MascotAvatar({
             <circle cx="67" cy="46" r="1.5" fill="#ffffff" />
           </g>
         ) : (
-          // Ojos normales 3D brillantes con reflejo
+          // Ojos normales 3D brillantes con reflejo mejorado
           <g>
             {/* Ojo izquierdo */}
             <circle cx="38" cy="50" r="7.5" fill="#0f172a" />
             <circle cx="38" cy="50" r="6" fill="#1e293b" />
             <circle cx="36" cy="48" r="2.8" fill="#ffffff" />
             <circle cx="40" cy="52" r="1.2" fill="#ffffff" />
+            <circle cx="38" cy="53" r="1" fill="white" opacity="0.6" />
 
             {/* Ojo derecho */}
             <circle cx="62" cy="50" r="7.5" fill="#0f172a" />
             <circle cx="62" cy="50" r="6" fill="#1e293b" />
             <circle cx="60" cy="48" r="2.8" fill="#ffffff" />
             <circle cx="64" cy="52" r="1.2" fill="#ffffff" />
+            <circle cx="62" cy="53" r="1" fill="white" opacity="0.6" />
           </g>
         )}
 

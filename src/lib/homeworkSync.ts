@@ -19,6 +19,9 @@ class HomeworkSyncManager {
   private brokerIndex = 0;
   private activeSubscriptions = new Set<string>();
 
+  // Callback para notificar al profesor cuando un estudiante envía su actividad
+  public onSubmissionReceived: ((sub: HomeworkSubmission) => void) | null = null;
+
   constructor() {
     this.connect();
   }
@@ -140,6 +143,10 @@ class HomeworkSyncManager {
         if (sub && sub.studentFullName) {
           console.log(`[HomeworkSync] 📥 Nueva entrega recibida de ${sub.studentFullName}`);
           useHomeworkStore.getState().submitHomework(assignment.id, sub);
+          // Notificar al profesor si hay callback registrado
+          if (this.onSubmissionReceived) {
+            this.onSubmissionReceived(sub);
+          }
         }
       } catch (err) {
         console.warn('[HomeworkSync] Error procesando entrega:', err);

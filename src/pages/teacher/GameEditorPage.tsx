@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import {
   Save, ArrowLeft, Plus, Trash2, Copy, Eye, Clock,
   Award, Sparkles, CheckCircle2, Image as ImageIcon,
   HelpCircle, Settings, Layers, ListOrdered, Upload, Database, Video,
-  Bold, AlignLeft, AlignCenter, AlignJustify
+  Bold, AlignLeft, AlignCenter, AlignJustify, Download, FileSpreadsheet
 } from 'lucide-react';
 import { SUBJECTS } from '../../types';
 import type { QuestionType, Difficulty, GameMode, GradeLevel } from '../../types';
@@ -320,6 +321,82 @@ export default function GameEditorPage() {
     }, 1000);
   };
 
+  // ── Importar preguntas desde Excel ──
+  const handleImportFromExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws);
+
+        const imported: QuestionDraft[] = rows
+          .filter((r) => r['Pregunta']?.trim())
+          .map((row, idx) => {
+            const opts = [
+              { id: `ex-${Date.now()}-${idx}-A`, text: row['OpcionA'] || 'Opción A', isCorrect: false },
+              { id: `ex-${Date.now()}-${idx}-B`, text: row['OpcionB'] || 'Opción B', isCorrect: false },
+              { id: `ex-${Date.now()}-${idx}-C`, text: row['OpcionC'] || 'Opción C', isCorrect: false },
+              { id: `ex-${Date.now()}-${idx}-D`, text: row['OpcionD'] || 'Opción D', isCorrect: false },
+            ];
+            const correctLetter = (row['RespuestaCorrecta'] || 'A').trim().toUpperCase();
+            const correctIdx = correctLetter.charCodeAt(0) - 65;
+            if (correctIdx >= 0 && correctIdx < opts.length) opts[correctIdx].isCorrect = true;
+            else opts[0].isCorrect = true;
+
+            const diff = (row['Dificultad'] || 'medium').toLowerCase();
+
+            return {
+              id: `excel-${Date.now()}-${idx}`,
+              type: 'single_choice' as QuestionType,
+              content: row['Pregunta'].trim(),
+              timeLimit: parseInt(row['Tiempo'] || '20') || 20,
+              points: 1000,
+              pointsMultiplier: 1 as 1,
+              difficulty: (['easy', 'medium', 'hard'].includes(diff) ? diff : 'medium') as Difficulty,
+              explanation: row['Explicacion'] || '',
+              options: opts,
+            };
+          });
+
+        if (imported.length > 0) {
+          setQuestions((prev) => [...prev, ...imported]);
+          setActiveQuestionIndex(questions.length);
+          alert(`✅ Se importaron ${imported.length} preguntas desde Excel`);
+        } else {
+          alert('⚠️ No se encontraron preguntas válidas en el archivo. Verifica que la columna "Pregunta" tenga datos.');
+        }
+      } catch (err) {
+        console.error('[Excel Import] Error:', err);
+        alert('❌ Error al leer el archivo Excel. Verifica el formato.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+  };
+
+  // ── Descargar plantilla Excel ──
+  const handleDownloadExcelTemplate = () => {
+    const templateData = [
+      { Pregunta: '¿Cuál es la capital de Colombia?', OpcionA: 'Bogotá', OpcionB: 'Medellín', OpcionC: 'Cali', OpcionD: 'Cartagena', RespuestaCorrecta: 'A', Dificultad: 'easy', Explicacion: 'Bogotá es la capital de Colombia', Tiempo: '20' },
+      { Pregunta: '¿Cuántos departamentos tiene Colombia?', OpcionA: '28', OpcionB: '30', OpcionC: '32', OpcionD: '36', RespuestaCorrecta: 'C', Dificultad: 'medium', Explicacion: 'Colombia tiene 32 departamentos y un distrito capital', Tiempo: '25' },
+    ];
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Preguntas');
+
+    // Ajustar anchos de columna
+    ws['!cols'] = [
+      { wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 },
+      { wch: 18 }, { wch: 12 }, { wch: 40 }, { wch: 8 },
+    ];
+
+    XLSX.writeFile(wb, 'Plantilla_Preguntas_AxelsPlay.xlsx');
+  };
+
   return (
     <div className="space-y-6">
       {/* ── Top Bar ── */}
@@ -340,6 +417,25 @@ export default function GameEditorPage() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={handleDownloadExcelTemplate}
+            className="py-2.5 px-4 rounded-xl text-xs font-black flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white shadow-lg shadow-green-600/30 border border-green-400/40 hover:scale-105 transition-all"
+            title="Descargar plantilla Excel con columnas predefinidas"
+          >
+            <Download className="w-4 h-4 text-green-200" />
+            <span>📥 Plantilla Excel</span>
+          </button>
+
+          <label
+            className="py-2.5 px-4 rounded-xl text-xs font-black flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-600/30 border border-blue-400/40 hover:scale-105 transition-all cursor-pointer"
+            title="Importar preguntas desde un archivo Excel (.xlsx)"
+          >
+            <Upload className="w-4 h-4 text-blue-200" />
+            <span>📤 Importar Excel</span>
+            <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportFromExcel} />
+          </label>
+
           <button
             type="button"
             onClick={() => setIsBankModalOpen(true)}

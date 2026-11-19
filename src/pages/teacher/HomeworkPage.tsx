@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
+import JSZip from 'jszip';
 import {
   BookOpen, Plus, Clipboard, CheckCircle2, XCircle,
   Trash2, Users, ChevronRight, Download, ArrowLeft,
   Calendar, Hash, ToggleLeft, ToggleRight, Eye, Award, FileText, Camera, Image as ImageIcon,
   QrCode, X, Clock, ExternalLink, Pencil, FolderPlus, Layers, Shield, Sparkles, Send, Video,
-  MessageSquare, Check, Bold, AlignLeft, AlignCenter, AlignJustify
+  MessageSquare, Check, Bold, AlignLeft, AlignCenter, AlignJustify, Bell
 } from 'lucide-react';
 import FormattedTextViewer from '../../components/common/FormattedTextViewer';
 import { useHomeworkStore } from '../../stores/homeworkStore';
@@ -915,6 +916,34 @@ function StudentDetail({
   const [feedbackText, setFeedbackText] = useState(submission.teacherFeedback || '');
   const [savedAlert, setSavedAlert] = useState(false);
   const [selectedZoomPhoto, setSelectedZoomPhoto] = useState<string | null>(null);
+  const [downloadingZip, setDownloadingZip] = useState(false);
+
+  // Descargar todas las fotos del estudiante como ZIP
+  const handleDownloadZip = async () => {
+    if (!submission.studentPhotos || submission.studentPhotos.length === 0) return;
+    setDownloadingZip(true);
+    try {
+      const zip = new JSZip();
+      for (let i = 0; i < submission.studentPhotos.length; i++) {
+        const photo = submission.studentPhotos[i];
+        const base64Data = photo.split(',')[1];
+        if (base64Data) {
+          const ext = photo.includes('image/png') ? 'png' : 'jpg';
+          zip.file(`evidencia_${i + 1}.${ext}`, base64Data, { base64: true });
+        }
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fotos_${submission.studentFullName.replace(/\s+/g, '_')}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[ZIP] Error generando ZIP:', err);
+    }
+    setDownloadingZip(false);
+  };
 
   const PRESET_FEEDBACKS = [
     '🌟 ¡Excelente trabajo! Muy bien argumentado.',
@@ -1059,13 +1088,25 @@ function StudentDetail({
       {/* Evidencias fotográficas del estudiante si subió fotos de su cuaderno o procedimientos */}
       {submission.studentPhotos && submission.studentPhotos.length > 0 && (
         <div className="p-5 rounded-2xl bg-purple-950/20 border border-purple-500/30 mb-6 shadow-xl">
-          <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-            <Camera className="w-4 h-4 text-emerald-400" />
-            <span>Evidencias Fotográficas del Alumno ({submission.studentPhotos.length})</span>
-            <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-mono">
-              Cuaderno / Procedimiento
-            </span>
-          </h4>
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+              <Camera className="w-4 h-4 text-emerald-400" />
+              <span>Evidencias Fotográficas del Alumno ({submission.studentPhotos.length})</span>
+              <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-mono">
+                Cuaderno / Procedimiento
+              </span>
+            </h4>
+            <button
+              type="button"
+              onClick={handleDownloadZip}
+              disabled={downloadingZip}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 active:scale-95 text-white text-xs font-bold shadow-md cursor-pointer transition-all disabled:opacity-50"
+              title="Descargar todas las fotos en un archivo ZIP"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>{downloadingZip ? 'Generando ZIP...' : '📦 Descargar ZIP'}</span>
+            </button>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {submission.studentPhotos.map((photo, pIdx) => (
               <div
@@ -1584,6 +1625,27 @@ export default function HomeworkPage() {
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  // Solicitar permiso de notificaciones del navegador al profesor
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Notificar al profesor en tiempo real cuando un estudiante envía actividad
+  useEffect(() => {
+    homeworkSync.onSubmissionReceived = (sub) => {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('📚 Nueva entrega recibida', {
+          body: `${sub.studentFullName} envió su actividad (${sub.accuracy}% aciertos)`,
+          icon: '/favicon.ico',
+          tag: `submission-${sub.id}`,
+        });
+      }
+    };
+    return () => { homeworkSync.onSubmissionReceived = null; };
   }, []);
 
   const handleCreate = (data: Parameters<typeof createAssignment>[0]) => {

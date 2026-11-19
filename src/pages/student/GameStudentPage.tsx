@@ -357,6 +357,18 @@ export default function GameStudentPage() {
     }
   }, [phase, sessionId, navigate]);
 
+  // Pantalla completa automática al entrar al juego (mejora UX móvil)
+  useEffect(() => {
+    const enterFullscreen = async () => {
+      try {
+        if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch {}
+    };
+    enterFullscreen();
+  }, []);
+
   // Manejo de envío de respuesta
   const handleSelectAnswer = async (optionId: string) => {
     if (isAnswerSubmitted || timeLeft <= 0 || !activeQuestion || isReadingPhase) return;
@@ -410,6 +422,12 @@ export default function GameStudentPage() {
     }
 
     setFeedback(isCorrect ? 'correct' : 'incorrect');
+
+    // Vibración háptica según resultado
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(isCorrect ? [100] : [200, 100, 200]);
+    }
+
     setPointsGained(earned);
     if (isCorrect) {
       setCurrentScore((prev) => prev + earned);
