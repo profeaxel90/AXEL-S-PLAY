@@ -1819,16 +1819,14 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* ── FASE 1.5: LECTURA DE PREGUNTA (5 seg para leer antes de responder) ── */}
+      {/* ── FASE 1.5: LECTURA DE PREGUNTA (5-10 seg para leer antes de responder) ── */}
       {gamePhase === 'reading' && (
         <div className="min-h-[75vh] flex flex-col items-center justify-center gap-6 select-none animate-fade-in">
-          {/* Badge de lectura */}
-          <div className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-600/30 to-purple-600/30 border border-blue-400/40 shadow-xl">
-            <span className="text-3xl animate-pulse">📖</span>
-            <div>
-              <span className="text-blue-200 font-black text-lg uppercase tracking-wider">Leyendo Pregunta</span>
-              <span className="text-white/60 text-sm ml-3">Pregunta {currentQIndex + 1} / {questions.length}</span>
-            </div>
+          {/* Badge indicador: solo número de pregunta */}
+          <div className="flex items-center gap-3 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600/40 to-purple-600/40 border border-blue-400/50 shadow-2xl">
+            <span className="text-3xl font-black text-yellow-300 drop-shadow">
+              {currentQIndex + 1} de {questions.length}
+            </span>
           </div>
 
           {/* Countdown circular de lectura */}
@@ -1847,7 +1845,7 @@ export default function SessionPage() {
             </svg>
             <div className="relative z-10 flex flex-col items-center">
               <span className="text-5xl sm:text-6xl font-black text-blue-300 drop-shadow-[0_2px_10px_rgba(96,165,250,0.5)]">{readingTimeLeft}</span>
-              <span className="text-[10px] font-black uppercase tracking-wider text-white/70">LECTURA</span>
+              <span className="text-xs font-black uppercase tracking-widest text-white/80">{currentQIndex + 1} de {questions.length}</span>
             </div>
           </div>
 
@@ -1893,8 +1891,8 @@ export default function SessionPage() {
           <div className="card p-2 sm:p-2.5 border-purple-500/30 bg-slate-900/90 backdrop-blur-md flex items-center justify-between gap-3 shrink-0 rounded-2xl shadow-xl">
             {/* Izquierda: Indicador de Pregunta, PIN y Botón Zoom QR */}
             <div className="flex items-center gap-2 sm:gap-3">
-              <span className="px-3 py-1.5 rounded-xl bg-purple-600/30 border border-purple-400 text-purple-200 font-black text-xs uppercase tracking-wider">
-                Pregunta {currentQIndex + 1} / {questions.length}
+              <span className="px-3.5 py-1.5 rounded-xl bg-purple-600/30 border border-purple-400 text-yellow-300 font-black text-sm uppercase tracking-wider">
+                {currentQIndex + 1} de {questions.length}
               </span>
               <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-white/70 text-xs font-mono font-bold">
                 <span>PIN:</span>
@@ -2743,35 +2741,35 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* ── TABLA DE CLASIFICACIÓN TOP 5 ULTRA COMPACTA Y ANIMADA FÍSICAMENTE (CERO SCROLL) ── */}
+      {/* ── TABLA DE CLASIFICACIÓN TOP 5/10 EN PANTALLA GIGANTE Y ANIMADA FÍSICAMENTE ── */}
       {showLeaderboard && leaderboardData.length > 0 && gamePhase === 'question' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
-          <div className="card max-w-sm sm:max-w-md w-full p-3 sm:p-3.5 border-purple-500/40 bg-slate-900/95 shadow-2xl text-center space-y-2 rounded-2xl max-h-[75vh] overflow-hidden flex flex-col justify-between">
-            <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
-              <div className="flex items-center gap-1.5">
-                <BarChart3 className="w-4 h-4 text-yellow-400" />
-                <h3 className="text-sm sm:text-base font-black text-white">
-                  Clasificación · TOP 5 🏆
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/90 backdrop-blur-md animate-fade-in">
+          <div className="card max-w-2xl sm:max-w-3xl w-full p-5 sm:p-7 border-purple-500/50 bg-slate-900/98 shadow-2xl text-center space-y-4 rounded-3xl max-h-[90vh] overflow-hidden flex flex-col justify-between">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <BarChart3 className="w-6 h-6 text-yellow-400" />
+                <h3 className="text-xl sm:text-2xl font-black text-white tracking-wide">
+                  Tabla de Clasificación 🏆
                 </h3>
               </div>
               <button
                 onClick={() => setShowLeaderboard(false)}
-                className="text-[11px] px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70"
+                className="text-xs sm:text-sm font-bold px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
               >
                 Cerrar ✕
               </button>
             </div>
 
-            {/* Notificación compacta de Robo de Puntos si ocurrió */}
+            {/* Notificación de Robo de Puntos si ocurrió */}
             {latestStealEvent && (
-              <div className="py-0.5 px-2.5 rounded-xl bg-gradient-to-r from-red-600/30 via-amber-600/30 to-yellow-600/30 border border-yellow-400/40 text-yellow-200 text-[10px] font-black flex items-center justify-center gap-1 animate-bounce-in shadow-sm">
-                <span>🗡️</span>
+              <div className="py-1.5 px-4 rounded-xl bg-gradient-to-r from-red-600/30 via-amber-600/30 to-yellow-600/30 border border-yellow-400/40 text-yellow-200 text-xs sm:text-sm font-black flex items-center justify-center gap-2 animate-bounce-in shadow-sm">
+                <span className="text-base">🗡️</span>
                 <span>¡{latestStealEvent.from} robó {latestStealEvent.amount} pts a {latestStealEvent.to}!</span>
               </div>
             )}
 
-            {/* Lista de Filas Compactas con Desplazamiento Físico Animado (Sin badges de texto) */}
-            <div className="space-y-1 relative overflow-hidden py-0.5">
+            {/* Lista de Filas Grandes y Legibles con Desplazamiento Físico Animado */}
+            <div className="space-y-2.5 relative overflow-y-auto max-h-[60vh] py-1 pr-1">
               {leaderboardData.slice(0, 5).map((p, idx) => {
                 const isTop1 = idx === 0;
                 const isTop2 = idx === 1;
@@ -2781,8 +2779,8 @@ export default function SessionPage() {
                 const gained = p.score - prev;
                 const rankDelta = p.rankDelta !== undefined ? p.rankDelta : 0;
 
-                // Desplazamiento físico: si subió puestos parte de abajo; si bajó parte de arriba
-                const rowHeight = 44;
+                // Desplazamiento físico: fila más alta para que se lea claro
+                const rowHeight = 72;
                 const initialOffsetY = !isLeaderboardAnimated ? rankDelta * rowHeight : 0;
 
                 return (
@@ -2794,81 +2792,77 @@ export default function SessionPage() {
                         ? 'transform 850ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 400ms ease, border-color 400ms ease'
                         : 'none',
                     }}
-                    className={`flex items-center justify-between p-2 rounded-xl border ${
+                    className={`flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border-2 transition-all ${
                       rankDelta > 0 && isLeaderboardAnimated
-                        ? 'ring-2 ring-emerald-400/60 shadow-lg shadow-emerald-500/25 border-emerald-400/50'
+                        ? 'ring-2 ring-emerald-400/60 shadow-xl shadow-emerald-500/25 border-emerald-400/50'
                         : rankDelta < 0 && isLeaderboardAnimated
                         ? 'border-white/10 opacity-95'
                         : ''
                     } ${
                       isTop1
-                        ? 'bg-yellow-400/20 border-yellow-400/50 shadow-md shadow-yellow-500/10'
+                        ? 'bg-yellow-400/20 border-yellow-400/60 shadow-lg shadow-yellow-500/15'
                         : isTop2
-                        ? 'bg-slate-400/15 border-slate-300/30'
+                        ? 'bg-slate-400/20 border-slate-300/40'
                         : isTop3
-                        ? 'bg-amber-600/15 border-amber-500/30'
+                        ? 'bg-amber-600/20 border-amber-500/40'
                         : 'bg-white/5 border-white/10'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                       <span
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0 ${
+                        className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center font-black text-sm sm:text-lg shrink-0 ${
                           isTop1
-                            ? 'bg-yellow-400 text-slate-950 shadow-md shadow-yellow-400/50'
+                            ? 'bg-yellow-400 text-slate-950 shadow-md shadow-yellow-400/50 text-xl'
                             : isTop2
-                            ? 'bg-slate-300 text-slate-950'
+                            ? 'bg-slate-300 text-slate-950 text-xl'
                             : isTop3
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-white/10 text-white/80'
+                            ? 'bg-amber-600 text-white text-xl'
+                            : 'bg-white/10 text-white/90 text-sm font-mono'
                         }`}
                       >
                         {medal}
                       </span>
-                      <div className="w-8 h-8 shrink-0 flex items-center justify-center">
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 flex items-center justify-center">
                         <MascotAvatar
                           avatar={p.avatar}
                           emotion={isTop1 ? 'victory' : isLeaderboardAnimated && rankDelta > 0 ? 'happy' : rankDelta < 0 ? 'sad' : 'idle'}
-                          size="sm"
+                          size="md"
                         />
                       </div>
                       <div className="text-left truncate">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-extrabold text-xs sm:text-sm text-white truncate max-w-[110px] sm:max-w-[150px]">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-black text-base sm:text-xl text-white truncate max-w-[160px] sm:max-w-[280px]">
                             {p.nickname}
                           </span>
                           {p.streak && p.streak >= 2 ? (
-                            <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 border border-amber-400/40 px-1.5 py-0.2 rounded-md flex items-center gap-0.5 animate-pulse shadow-sm">
+                            <span className="text-xs font-black text-amber-300 bg-amber-500/20 border border-amber-400/40 px-2 py-0.5 rounded-lg flex items-center gap-1 animate-pulse shadow-sm">
                               🔥 {p.streak}
                             </span>
                           ) : null}
                           {p.hasShield && (
-                            <span className="text-[10px] font-black text-cyan-300 bg-cyan-500/20 border border-cyan-400/40 px-1 py-0.2 rounded-md flex items-center">
+                            <span className="text-xs font-black text-cyan-300 bg-cyan-500/20 border border-cyan-400/40 px-1.5 py-0.5 rounded-lg flex items-center">
                               🛡️
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-white/50 flex items-center gap-1">
+                        <div className="text-xs sm:text-sm text-white/60 flex items-center gap-1.5 mt-0.5">
                           <span>{p.correctAnswers !== undefined ? `${p.correctAnswers} aciertos` : 'Participante'}</span>
-                          {p.stealCount ? <span className="text-amber-300">· ⚡{p.stealCount}</span> : null}
+                          {p.stealCount ? <span className="text-amber-300 font-bold">· ⚡ {p.stealCount} robos</span> : null}
                         </div>
                       </div>
                     </div>
 
-                    <div className="text-right flex items-center gap-2 shrink-0">
+                    <div className="text-right flex items-center gap-3 shrink-0">
                       {gained > 0 ? (
-                        <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 rounded-md animate-pulse">
+                        <span className="text-xs sm:text-sm font-black text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-1 rounded-xl animate-pulse">
                           +{gained}
                         </span>
                       ) : gained < 0 ? (
-                        <span className="text-[10px] font-black text-rose-400 bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.5 rounded-md">
+                        <span className="text-xs sm:text-sm font-black text-rose-400 bg-rose-500/20 border border-rose-500/40 px-2.5 py-1 rounded-xl">
                           {gained}
                         </span>
-                      ) : (
-                        <span className="text-[10px] font-bold text-amber-300/70 bg-amber-500/10 border border-amber-500/20 px-1 py-0.5 rounded-md">
-                          +0
-                        </span>
-                      )}
-                      <div className="text-sm sm:text-base font-black text-yellow-400 min-w-16">
+                      ) : null}
+                      <div className="text-lg sm:text-2xl font-black text-yellow-400 min-w-20">
                         <AnimatedScoreValue target={p.score} start={prev} duration={1200} />
                       </div>
                     </div>
@@ -2877,16 +2871,16 @@ export default function SessionPage() {
               })}
             </div>
 
-            <div className="pt-2 flex justify-end gap-2 border-t border-white/5">
+            <div className="pt-3 flex justify-end gap-3 border-t border-white/10">
               <button
                 onClick={() => {
                   setShowLeaderboard(false);
                   handleNextQuestion();
                 }}
-                className="btn-primary py-2 px-5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg shadow-purple-600/30 ml-auto"
+                className="btn-primary py-3 px-7 rounded-2xl text-sm sm:text-base font-black flex items-center gap-2 shadow-xl shadow-purple-600/40 ml-auto cursor-pointer hover:scale-105 transition-all"
               >
                 <span>Siguiente Pregunta</span>
-                <SkipForward className="w-4 h-4" />
+                <SkipForward className="w-5 h-5" />
               </button>
             </div>
           </div>
@@ -2895,58 +2889,103 @@ export default function SessionPage() {
       {/* ── MODAL QR GIGANTE EXPANDIDO PARA PROYECTAR A TODA LA CLASE ── */}
       {qrExpanded && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/95 backdrop-blur-xl animate-fade-in"
           onClick={() => setQrExpanded(false)}
         >
           <div
-            className="card max-w-lg w-full p-8 border-purple-500/60 bg-slate-900 shadow-2xl text-center space-y-6 relative"
+            className="card max-w-5xl w-full p-6 sm:p-8 border-2 border-purple-500/70 bg-slate-900/98 shadow-2xl relative max-h-[95vh] overflow-hidden flex flex-col justify-between"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => setQrExpanded(false)}
-              className="absolute top-4 right-4 p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors"
+              className="absolute top-4 right-4 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors cursor-pointer z-10"
               title="Cerrar"
             >
               <X className="w-6 h-6" />
             </button>
 
-            <div>
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-black uppercase tracking-widest mb-2">
-                <Sparkles className="w-4 h-4 text-yellow-400" />
-                <span>CÓDIGO QR GIGANTE • AXEL'S PLAY</span>
+            {/* Header con contador en vivo */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4 pr-12">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-black uppercase tracking-widest mb-1">
+                  <Sparkles className="w-4 h-4 text-yellow-400" />
+                  <span>CÓDIGO QR GIGANTE • AXEL'S PLAY</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-white">Escanea para Entrar a la Partida</h2>
               </div>
-              <h2 className="text-2xl font-black text-white">Escanea para Entrar a la Partida</h2>
-              <p className="text-white/60 text-xs mt-1">
-                Apunta la cámara de tu celular a este código para unirte inmediatamente
-              </p>
+              <div className="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-emerald-500/20 border-2 border-emerald-400/50 text-emerald-300 font-black text-sm sm:text-base shadow-lg animate-pulse">
+                <Users className="w-5 h-5 text-emerald-400" />
+                <span>{liveParticipants.length} Estudiante{liveParticipants.length !== 1 ? 's' : ''} Unido{liveParticipants.length !== 1 ? 's' : ''}</span>
+              </div>
             </div>
 
-            {/* Código QR Gigante */}
-            <div className="p-6 bg-white rounded-3xl shadow-2xl border-4 border-purple-500 inline-block mx-auto">
-              <QRCodeSVG
-                value={qrUrl}
-                size={320}
-                level="H"
-                includeMargin={false}
-                fgColor="#1e1b4b"
-              />
-            </div>
+            {/* Layout principal: QR al centro/lado y panel lateral con alumnos que se unen */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 my-4 items-center overflow-hidden">
+              {/* Columna QR + PIN (7 columnas) */}
+              <div className="lg:col-span-7 flex flex-col items-center justify-center text-center space-y-4">
+                <div className="p-4 sm:p-5 bg-white rounded-3xl shadow-2xl border-4 border-purple-500 inline-block">
+                  <QRCodeSVG
+                    value={qrUrl}
+                    size={280}
+                    level="H"
+                    includeMargin={false}
+                    fgColor="#1e1b4b"
+                  />
+                </div>
 
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1.5 text-center">
-              <span className="text-xs text-white/60 font-semibold block uppercase tracking-wider">
-                Código PIN de la Partida:
-              </span>
-              <div className="text-4xl font-black tracking-widest text-yellow-400 font-mono">
-                {token}
+                <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 w-full max-w-sm space-y-1">
+                  <span className="text-[11px] text-white/60 font-bold block uppercase tracking-wider">
+                    Código PIN de la Partida:
+                  </span>
+                  <div className="text-4xl sm:text-5xl font-black tracking-widest text-yellow-400 font-mono drop-shadow">
+                    {token}
+                  </div>
+                  <p className="text-[11px] text-white/50 truncate font-mono">{qrUrl}</p>
+                </div>
               </div>
-              <p className="text-[11px] text-white/40 truncate">{qrUrl}</p>
+
+              {/* Columna Lateral: Estudiantes conectados en tiempo real (5 columnas) */}
+              <div className="lg:col-span-5 flex flex-col h-full max-h-[55vh] rounded-2xl bg-white/[0.03] border border-white/10 p-4">
+                <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-3">
+                  <span className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-purple-400" />
+                    <span>Unidos en vivo ({liveParticipants.length})</span>
+                  </span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                </div>
+
+                {liveParticipants.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-white/40">
+                    <Users className="w-10 h-10 mb-2 opacity-30 animate-pulse" />
+                    <p className="text-xs">Esperando que escaneen el código...</p>
+                    <p className="text-[10px] text-white/30 mt-1">Aparecerán aquí al instante con su avatar</p>
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                    {liveParticipants.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center gap-3 p-2.5 rounded-xl bg-purple-600/15 border border-purple-400/30 text-white animate-bounce-in"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-purple-900/60 p-0.5 shrink-0 flex items-center justify-center">
+                          <MascotAvatar avatar={p.avatar} size="sm" emotion="happy" />
+                        </div>
+                        <div className="min-w-0 flex-1 text-left">
+                          <p className="text-sm font-extrabold text-white truncate">{p.nickname}</p>
+                          <p className="text-[10px] text-emerald-300 font-bold">✓ Conectado</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <button
               onClick={() => setQrExpanded(false)}
-              className="w-full btn-primary py-3 rounded-xl text-sm font-bold shadow-lg shadow-purple-600/30"
+              className="w-full btn-primary py-3 rounded-2xl text-sm font-bold shadow-lg shadow-purple-600/30 cursor-pointer"
             >
-              Cerrar Vista Ampliada
+              Cerrar Vista de Proyección
             </button>
           </div>
         </div>
@@ -3069,39 +3108,98 @@ export default function SessionPage() {
 
       {/* ── MODAL FULLSCREEN ZOOM QR PARA UNIRSE EN VIVO DURANTE LA PARTIDA ── */}
       {showLiveQrZoom && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-slate-900 border-2 border-purple-500/50 rounded-3xl p-6 sm:p-10 max-w-md w-full text-center shadow-2xl relative">
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fade-in" onClick={() => setShowLiveQrZoom(false)}>
+          <div className="bg-slate-900 border-2 border-purple-500/60 rounded-3xl p-6 sm:p-8 max-w-4xl w-full text-center shadow-2xl relative max-h-[95vh] overflow-hidden flex flex-col justify-between" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={() => setShowLiveQrZoom(false)}
-              className="absolute top-4 right-4 p-2 text-white/50 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+              className="absolute top-4 right-4 p-2 text-white/50 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors cursor-pointer z-10"
               title="Cerrar QR"
             >
               <X className="w-6 h-6" />
             </button>
 
-            <div className="w-14 h-14 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 mx-auto mb-3">
-              <QrCode className="w-8 h-8" />
-            </div>
-
-            <h3 className="text-2xl font-black text-white">¡Únete a la Partida en Vivo!</h3>
-            <p className="text-sm text-purple-200 mt-1 mb-6">Escanea con tu cámara o celular para ingresar de inmediato</p>
-
-            <div className="bg-white p-5 rounded-3xl shadow-2xl inline-block mx-auto mb-6">
-              <QRCodeSVG value={qrUrl} size={260} level="M" />
-            </div>
-
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-around">
-              <div>
-                <span className="text-[10px] text-white/40 uppercase tracking-widest block font-bold">CÓDIGO PIN</span>
-                <span className="text-3xl font-black text-yellow-400 tracking-widest">{token}</span>
+            {/* Header con contador */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 pr-10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300">
+                  <QrCode className="w-6 h-6" />
+                </div>
+                <div className="text-left">
+                  <h3 className="text-xl sm:text-2xl font-black text-white">¡Únete a la Partida en Vivo!</h3>
+                  <p className="text-xs text-purple-200">Escanea con tu cámara o celular para ingresar de inmediato</p>
+                </div>
               </div>
-              <div className="h-8 w-px bg-white/10" />
-              <div>
-                <span className="text-[10px] text-white/40 uppercase tracking-widest block font-bold">ENLACE DIRECTO</span>
-                <span className="text-xs text-white/70 font-mono">{qrUrl}</span>
+
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-black text-xs sm:text-sm animate-pulse">
+                <Users className="w-4 h-4 text-emerald-400" />
+                <span>{liveParticipants.length} Conectados</span>
               </div>
             </div>
+
+            {/* Layout dos columnas: QR a la izquierda y lista de alumnos a la derecha */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 my-4 items-center overflow-hidden">
+              <div className="md:col-span-7 flex flex-col items-center justify-center space-y-3">
+                <div className="bg-white p-4 rounded-3xl shadow-2xl inline-block border-4 border-purple-500">
+                  <QRCodeSVG value={qrUrl} size={240} level="M" />
+                </div>
+
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-3 flex items-center justify-around w-full max-w-sm">
+                  <div>
+                    <span className="text-[10px] text-white/40 uppercase tracking-widest block font-bold">CÓDIGO PIN</span>
+                    <span className="text-3xl font-black text-yellow-400 tracking-widest">{token}</span>
+                  </div>
+                  <div className="h-8 w-px bg-white/10" />
+                  <div className="min-w-0 max-w-[160px]">
+                    <span className="text-[10px] text-white/40 uppercase tracking-widest block font-bold">ENLACE DIRECTO</span>
+                    <span className="text-xs text-white/70 font-mono truncate block">{qrUrl}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Panel lateral con alumnos en vivo */}
+              <div className="md:col-span-5 flex flex-col h-full max-h-[50vh] rounded-2xl bg-white/[0.03] border border-white/10 p-3.5">
+                <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-purple-400" />
+                    <span>Estudiantes Unidos ({liveParticipants.length})</span>
+                  </span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
+                </div>
+
+                {liveParticipants.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-4 text-white/40">
+                    <Users className="w-8 h-8 mb-2 opacity-30 animate-pulse" />
+                    <p className="text-xs">Esperando estudiantes...</p>
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                    {liveParticipants.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center gap-2.5 p-2 rounded-xl bg-purple-600/15 border border-purple-400/30 text-white animate-bounce-in"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-purple-900/60 p-0.5 shrink-0 flex items-center justify-center">
+                          <MascotAvatar avatar={p.avatar} size="xs" emotion="happy" />
+                        </div>
+                        <div className="min-w-0 flex-1 text-left">
+                          <p className="text-xs font-extrabold text-white truncate">{p.nickname}</p>
+                          <p className="text-[10px] text-emerald-300 font-bold">✓ {p.score} pts</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowLiveQrZoom(false)}
+              className="w-full btn-primary py-2.5 rounded-2xl text-xs sm:text-sm font-bold shadow-lg shadow-purple-600/30 cursor-pointer"
+            >
+              Volver a la Partida
+            </button>
           </div>
         </div>
       )}

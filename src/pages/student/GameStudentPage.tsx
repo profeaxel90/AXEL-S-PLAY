@@ -674,8 +674,8 @@ export default function GameStudentPage() {
       <main className="max-w-lg mx-auto w-full my-auto py-2">
         <div className="card p-3.5 md:p-4 border-purple-500/30 bg-purple-950/20 backdrop-blur-xl mb-3 text-center">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider block">
-              Pregunta #{questionNum}
+            <span className="text-xs font-black text-yellow-300 uppercase tracking-wider block">
+              {questionNum} de {totalQuestions}
             </span>
 
             {/* Badge de Multiplicador si es x2 o x3 */}
@@ -716,10 +716,9 @@ export default function GameStudentPage() {
         {/* ── Banner de Fase de Lectura ── */}
         {isReadingPhase && (
           <div className="flex items-center justify-center gap-3 mb-3 px-4 py-3 rounded-2xl bg-gradient-to-r from-blue-600/30 to-purple-600/30 border-2 border-blue-400/50 shadow-lg animate-pulse">
-            <span className="text-2xl">📖</span>
             <div className="text-center">
-              <p className="text-blue-200 font-black text-sm uppercase tracking-wider">¡Lee la pregunta!</p>
-              <p className="text-white/70 text-xs">
+              <p className="text-yellow-300 font-black text-sm uppercase tracking-wider">{questionNum} de {totalQuestions}</p>
+              <p className="text-white/80 text-xs mt-0.5">
                 Podrás responder en <span className="text-yellow-300 font-black text-base">{studentReadingTimeLeft}</span> segundo{studentReadingTimeLeft !== 1 ? 's' : ''}...
               </p>
             </div>
@@ -1148,39 +1147,41 @@ export default function GameStudentPage() {
 
       {/* ── TABLA DE CLASIFICACIÓN TOP 7 POST-PREGUNTA EN MÓVIL ── */}
       {showLeaderboard && leaderboardData.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-3 bg-slate-950/70 backdrop-blur-sm animate-bounce-in">
-          <div className="w-full max-w-md p-4 rounded-3xl bg-slate-900/95 border border-purple-500/50 shadow-2xl space-y-3">
-            <div className="flex items-center justify-between border-b border-white/10 pb-2">
-              <span className="font-black text-xs text-yellow-400 flex items-center gap-1.5">
-                🏆 CLASIFICACIÓN · TOP 7
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-bounce-in">
+          <div className="w-full max-w-lg p-5 rounded-3xl bg-slate-900/98 border-2 border-purple-500/60 shadow-2xl space-y-3.5 max-h-[85vh] flex flex-col justify-between">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+              <span className="font-black text-sm sm:text-base text-yellow-400 flex items-center gap-2">
+                🏆 TABLA DE CLASIFICACIÓN
               </span>
               <button
                 onClick={() => setShowLeaderboard(false)}
-                className="text-[11px] text-white/50 hover:text-white px-2 py-0.5 rounded bg-white/5"
+                className="text-xs text-white/70 hover:text-white px-2.5 py-1 rounded-lg bg-white/10 font-bold"
               >
                 Cerrar ✕
               </button>
             </div>
 
-            <div className="space-y-1.5 max-h-60 overflow-y-auto">
+            <div className="space-y-2 overflow-y-auto max-h-[65vh] pr-1">
               {leaderboardData.slice(0, 7).map((p, idx) => {
                 const isMe = currentParticipant && p.id === currentParticipant.id;
                 return (
                   <div
                     key={p.id || idx}
-                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold ${
+                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-bold ${
                       isMe
-                        ? 'bg-purple-600/40 border border-purple-400 text-yellow-300 shadow-md'
-                        : 'bg-white/5 border border-white/5 text-white'
+                        ? 'bg-purple-600/40 border-2 border-purple-400 text-yellow-300 shadow-md'
+                        : 'bg-white/5 border border-white/10 text-white'
                     }`}
                   >
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] shrink-0 font-black">
-                        #{idx + 1}
+                    <div className="flex items-center gap-2.5 truncate">
+                      <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs shrink-0 font-black ${
+                        idx === 0 ? 'bg-yellow-400 text-slate-950' : idx === 1 ? 'bg-slate-300 text-slate-950' : idx === 2 ? 'bg-amber-600 text-white' : 'bg-white/10 text-white/80'
+                      }`}>
+                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
                       </span>
-                      <span className="truncate">{p.nickname} {isMe ? '(Tú)' : ''}</span>
+                      <span className="truncate font-extrabold text-sm sm:text-base">{p.nickname} {isMe ? '(Tú)' : ''}</span>
                     </div>
-                    <span className="text-yellow-400 font-extrabold shrink-0">
+                    <span className="text-yellow-400 font-black text-sm sm:text-base shrink-0">
                       {p.score.toLocaleString()} pts
                     </span>
                   </div>
