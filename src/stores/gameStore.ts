@@ -18,119 +18,9 @@ const DEFAULT_GAME_SETTINGS: GameSettings = {
   enableTeacherPowers: true,
 };
 
-// Generar juegos predeterminados completos y estructurados
+// AXEL'S PLAY: No mostrar juegos predeterminados si el usuario desea únicamente sus propios juegos
 function getInitialDefaultGames(): Record<string, Game> {
-  const defaults: Record<string, Game> = {};
-
-  const entries: Array<{
-    id: string;
-    title: string;
-    description: string;
-    subject: string;
-    topic: string;
-    gameMode: Game['gameMode'];
-    difficulty: Game['difficulty'];
-    questions: Question[];
-  }> = [
-    {
-      id: 'g-1',
-      title: 'Seguridad Vial y Señales de Tránsito',
-      description: 'Aprende a identificar señales reglamentarias, preventivas e informativas con retos en tiempo real.',
-      subject: 'Educación Vial',
-      topic: 'Señales de Tránsito',
-      gameMode: 'battle_live',
-      difficulty: 'medium',
-      questions: SAMPLE_QUESTIONS_ROAD_SAFETY,
-    },
-    {
-      id: 'g-2',
-      title: 'Ecosistemas y Conservación Ambiental',
-      description: 'Cadena trófica, ciclos biogeoquímicos y preservación de especies.',
-      subject: 'Ciencias Naturales',
-      topic: 'Ecología',
-      gameMode: 'survival',
-      difficulty: 'easy',
-      questions: SAMPLE_QUESTIONS_ROAD_SAFETY.map((q, idx) => ({
-        ...q,
-        id: `q-g2-${idx + 1}`,
-      })),
-    },
-    {
-      id: 'g-3',
-      title: 'Desafío de Lógica y Fracciones',
-      description: 'Resolución de problemas con números racionales y operaciones combinadas.',
-      subject: 'Matemáticas',
-      topic: 'Fracciones',
-      gameMode: 'team_battle',
-      difficulty: 'hard',
-      questions: SAMPLE_QUESTIONS_ROAD_SAFETY.map((q, idx) => ({
-        ...q,
-        id: `q-g3-${idx + 1}`,
-      })),
-    },
-    {
-      id: 'g-4',
-      title: 'Comprensión Lectora e Inferencia',
-      description: 'Textos cortos, análisis de falacias y figuras literarias.',
-      subject: 'Lenguaje y Literatura',
-      topic: 'Comprensión',
-      gameMode: 'wheel',
-      difficulty: 'medium',
-      questions: SAMPLE_QUESTIONS_ROAD_SAFETY.map((q, idx) => ({
-        ...q,
-        id: `q-g4-${idx + 1}`,
-      })),
-    },
-  ];
-
-  for (const item of entries) {
-    defaults[item.id] = {
-      id: item.id,
-      teacherId: 'teacher-1',
-      title: item.title,
-      description: item.description,
-      subject: item.subject,
-      topic: item.topic,
-      gradeLevel: 'secondary',
-      difficulty: item.difficulty,
-      gameMode: item.gameMode,
-      scoringMode: 'time_based',
-      isPublic: true,
-      status: 'published',
-      questionsCount: item.questions.length,
-      createdAt: '2026-10-25T00:00:00.000Z',
-      updatedAt: '2026-11-01T00:00:00.000Z',
-      settings: DEFAULT_GAME_SETTINGS,
-      questions: item.questions,
-    };
-  }
-
-  // Mezclar también cualquier otro juego que estuviera en SAMPLE_GAMES
-  for (const [key, g] of Object.entries(SAMPLE_GAMES)) {
-    if (!defaults[key] && g.title) {
-      defaults[key] = {
-        id: g.id || key,
-        teacherId: g.teacherId || 'teacher-1',
-        title: g.title,
-        description: g.description || '',
-        subject: g.subject || 'General',
-        topic: g.topic || '',
-        gradeLevel: g.gradeLevel || 'secondary',
-        difficulty: g.difficulty || 'medium',
-        gameMode: g.gameMode || 'battle_live',
-        scoringMode: g.scoringMode || 'time_based',
-        isPublic: g.isPublic ?? true,
-        status: g.status || 'published',
-        questionsCount: g.questions?.length || 0,
-        createdAt: g.createdAt || new Date().toISOString(),
-        updatedAt: g.updatedAt || new Date().toISOString(),
-        settings: g.settings ? { ...DEFAULT_GAME_SETTINGS, ...g.settings } : DEFAULT_GAME_SETTINGS,
-        questions: (g.questions as Question[]) || [],
-      };
-    }
-  }
-
-  return defaults;
+  return {};
 }
 
 interface GameStoreState {
@@ -156,23 +46,26 @@ interface GameStoreState {
 
 export const useGameStore = create<GameStoreState>((set, get) => {
   const loadInitial = (): Record<string, Game> => {
-    if (typeof window === 'undefined') return getInitialDefaultGames();
+    if (typeof window === 'undefined') return {};
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-          return parsed;
+        if (parsed && typeof parsed === 'object') {
+          // Filtrar cualquier juego predeterminado antiguo (g-1 a g-4 o SAMPLE_GAMES)
+          const filtered: Record<string, Game> = {};
+          for (const [id, g] of Object.entries(parsed)) {
+            if (!/^g-[1-4]$/.test(id) && id !== 'demo' && id !== 'sample') {
+              filtered[id] = g as Game;
+            }
+          }
+          return filtered;
         }
       }
     } catch (err) {
       console.warn('Error loading games from localStorage', err);
     }
-    const defaults = getInitialDefaultGames();
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
-    } catch {}
-    return defaults;
+    return {};
   };
 
   const persist = (items: Record<string, Game>) => {
@@ -204,15 +97,10 @@ export const useGameStore = create<GameStoreState>((set, get) => {
         const merged: Record<string, Game> = {};
         let changed = false;
 
-        // 1. Agregar todos los juegos de la nube
+        // 1. Agregar todos los juegos de la nube (filtrando los predeterminados si existieran)
         for (const [id, cg] of Object.entries(cloudGames)) {
-          merged[id] = cg;
-        }
-
-        // 2. Agregar juegos locales que son DEFAULT (g-1 a g-4) si no están en nube
-        for (const [id, lg] of Object.entries(localGames)) {
-          if (/^g-[1-4]$/.test(id) && !merged[id]) {
-            merged[id] = lg;
+          if (!/^g-[1-4]$/.test(id)) {
+            merged[id] = cg;
           }
         }
 

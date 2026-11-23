@@ -11,97 +11,11 @@ function generateHomeworkPin(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Grupos iniciales de demostración pedagógica
-const INITIAL_GROUPS: CourseGroup[] = [
-  {
-    id: 'grp-demo-1',
-    code: '601001',
-    name: 'Grado 6°A - Ciencias y Movilidad',
-    category: 'Secundaria',
-    description: 'Espacio de trabajo del curso 6°A para cargar tareas, talleres y evidencias de cuaderno.',
-    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-];
+// Grupos iniciales (vacíos para que el docente solo vea los creados por él)
+const INITIAL_GROUPS: CourseGroup[] = [];
 
-// Datos iniciales de demostración pedagógica
-const INITIAL_ASSIGNMENTS: HomeworkAssignment[] = [
-  {
-    id: 'hw-demo-1',
-    pin: '784210',
-    groupId: 'grp-demo-1',
-    title: 'Taller para Casa: Seguridad Vial y Movilidad Escolar',
-    description: 'Responde a tu propio ritmo sin afán. Recuerda que tienes 3 oportunidades de corregir tus respuestas si dudas.',
-    gradeGroupTarget: 'Grado 6°A',
-    gameId: 'g-1',
-    maxCorrections: 3,
-    status: 'active',
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    submissions: [
-      {
-        id: 'sub-1',
-        assignmentId: 'hw-demo-1',
-        groupId: 'grp-demo-1',
-        studentFullName: 'Pepito Pérez',
-        gradeGroup: 'Grado 6°A',
-        avatar: 'Fox',
-        score: 1850,
-        totalQuestions: 5,
-        correctAnswers: 5,
-        accuracy: 100,
-        correctionsUsed: 1,
-        submittedAt: new Date(Date.now() - 3600000 * 6).toISOString(),
-        answers: [
-          {
-            questionIndex: 0,
-            questionPrompt: '¿Qué significa la luz roja del semáforo?',
-            selectedOptionText: 'Detenerse completamente antes de la línea',
-            correctOptionText: 'Detenerse completamente antes de la línea',
-            isCorrect: true,
-            wasCorrected: false,
-          },
-          {
-            questionIndex: 1,
-            questionPrompt: '¿Por dónde deben cruzar los peatones la calle?',
-            selectedOptionText: 'Por el paso de cebra o cruce peatonal',
-            correctOptionText: 'Por el paso de cebra o cruce peatonal',
-            isCorrect: true,
-            wasCorrected: true, // Usó corrección
-          },
-        ],
-      },
-      {
-        id: 'sub-2',
-        assignmentId: 'hw-demo-1',
-        groupId: 'grp-demo-1',
-        studentFullName: 'Pepito Pérez',
-        gradeGroup: 'Grado 6°A',
-        avatar: 'Dragon',
-        score: 1420,
-        totalQuestions: 5,
-        correctAnswers: 4,
-        accuracy: 80,
-        correctionsUsed: 2,
-        submittedAt: new Date(Date.now() - 3600000 * 3).toISOString(),
-        answers: [],
-      },
-      {
-        id: 'sub-3',
-        assignmentId: 'hw-demo-1',
-        groupId: 'grp-demo-1',
-        studentFullName: 'Pepito Pérez',
-        gradeGroup: 'Grado 6°A',
-        avatar: 'Wizard',
-        score: 1780,
-        totalQuestions: 5,
-        correctAnswers: 5,
-        accuracy: 100,
-        correctionsUsed: 0,
-        submittedAt: new Date(Date.now() - 3600000 * 1).toISOString(),
-        answers: [],
-      },
-    ],
-  },
-];
+// Asignaciones iniciales (vacías para que el docente solo vea las creadas por él)
+const INITIAL_ASSIGNMENTS: HomeworkAssignment[] = [];
 
 interface HomeworkState {
   groups: CourseGroup[];
@@ -154,34 +68,34 @@ interface HomeworkState {
 export const useHomeworkStore = create<HomeworkState>((set, get) => {
   // Cargar Grupos desde localStorage
   const loadInitialGroups = (): CourseGroup[] => {
-    if (typeof window === 'undefined') return INITIAL_GROUPS;
+    if (typeof window === 'undefined') return [];
     try {
       const stored = localStorage.getItem(GROUPS_STORAGE_KEY);
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed = JSON.parse(stored) as CourseGroup[];
+        if (Array.isArray(parsed)) {
+          // Filtrar grupo demo si existía
+          return parsed.filter((g) => g.id !== 'grp-demo-1');
+        }
+      }
     } catch {}
-    return INITIAL_GROUPS;
+    return [];
   };
 
   // Cargar Asignaciones desde localStorage
   const loadInitialAssignments = (): HomeworkAssignment[] => {
-    const sanitizeNames = (list: HomeworkAssignment[]): HomeworkAssignment[] => {
-      return list.map((a) => ({
-        ...a,
-        submissions: (a.submissions || []).map((s) => {
-          if (/Valentina|Camilo|Mariana/i.test(s.studentFullName)) {
-            return { ...s, studentFullName: 'Pepito Pérez' };
-          }
-          return s;
-        }),
-      }));
-    };
-
-    if (typeof window === 'undefined') return sanitizeNames(INITIAL_ASSIGNMENTS);
+    if (typeof window === 'undefined') return [];
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) return sanitizeNames(JSON.parse(stored));
+      if (stored) {
+        const parsed = JSON.parse(stored) as HomeworkAssignment[];
+        if (Array.isArray(parsed)) {
+          // Filtrar tarea demo si existía
+          return parsed.filter((a) => a.id !== 'hw-demo-1');
+        }
+      }
     } catch {}
-    return sanitizeNames(INITIAL_ASSIGNMENTS);
+    return [];
   };
 
   const persistAssignments = (items: HomeworkAssignment[]) => {
@@ -213,44 +127,34 @@ export const useHomeworkStore = create<HomeworkState>((set, get) => {
         const cloudGroups = await cloudSync.loadAll<CourseGroup>('groups');
         const localGroups = get().groups;
         if (!cloudGroups || Object.keys(cloudGroups).length === 0) {
-          // Primera vez: subir todo a la nube
-          const map: Record<string, CourseGroup> = {};
-          localGroups.forEach((g) => { map[g.id] = g; });
-          await cloudSync.saveAll('groups', map);
+          // Primera vez: subir todo a la nube si hay locales
+          if (localGroups.length > 0) {
+            const map: Record<string, CourseGroup> = {};
+            localGroups.forEach((g) => { map[g.id] = g; });
+            await cloudSync.saveAll('groups', map);
+          }
         } else {
-          // La nube tiene datos → usarla como fuente de verdad
-          const cloudArr = Object.values(cloudGroups);
-          const defaultGroupIds = ['grp-demo-1'];
-          const finalGroups = [...cloudArr];
-          localGroups.forEach((lg) => {
-            if (!cloudGroups[lg.id] && defaultGroupIds.includes(lg.id)) {
-              finalGroups.push(lg);
-            }
-          });
-          persistGroups(finalGroups);
-          set({ groups: finalGroups });
+          // La nube tiene datos → usarla como fuente de verdad (filtrando demos)
+          const cloudArr = Object.values(cloudGroups).filter((g) => g.id !== 'grp-demo-1');
+          persistGroups(cloudArr);
+          set({ groups: cloudArr });
         }
 
         // --- Tareas (Assignments) ---
         const cloudAssign = await cloudSync.loadAll<HomeworkAssignment>('assignments');
         const localAssign = get().assignments;
         if (!cloudAssign || Object.keys(cloudAssign).length === 0) {
-          // Primera vez: subir todo a la nube
-          const map: Record<string, HomeworkAssignment> = {};
-          localAssign.forEach((a) => { map[a.id] = a; });
-          await cloudSync.saveAll('assignments', map);
+          // Primera vez: subir todo a la nube si hay locales
+          if (localAssign.length > 0) {
+            const map: Record<string, HomeworkAssignment> = {};
+            localAssign.forEach((a) => { map[a.id] = a; });
+            await cloudSync.saveAll('assignments', map);
+          }
         } else {
-          // La nube tiene datos → usarla como fuente de verdad
-          const cloudArr = Object.values(cloudAssign);
-          const defaultAssignIds = ['hw-demo-1'];
-          const finalAssign = [...cloudArr];
-          localAssign.forEach((la) => {
-            if (!cloudAssign[la.id] && defaultAssignIds.includes(la.id)) {
-              finalAssign.push(la);
-            }
-          });
-          persistAssignments(finalAssign);
-          set({ assignments: finalAssign });
+          // La nube tiene datos → usarla como fuente de verdad (filtrando demos)
+          const cloudArr = Object.values(cloudAssign).filter((a) => a.id !== 'hw-demo-1');
+          persistAssignments(cloudArr);
+          set({ assignments: cloudArr });
         }
         console.log('[CloudSync] ✅ Tareas y grupos sincronizados (nube = fuente de verdad)');
       } catch (e) {

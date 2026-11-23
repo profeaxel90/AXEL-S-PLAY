@@ -15,6 +15,7 @@ import { useGameStore } from '../../stores/gameStore';
 import { useAuthStore } from '../../stores/authStore';
 import { encodeAssignmentPayload } from '../../lib/assignmentPayload';
 import { homeworkSync } from '../../lib/homeworkSync';
+import { cloudSync } from '../../lib/firestoreSync';
 import { extractTextFromFile } from '../../lib/documentQuestionExtractor';
 import type { HomeworkAssignment, HomeworkSubmission, CourseGroup, HomeworkQuestion } from '../../types/homework';
 import MascotAvatar from '../../components/game/MascotAvatar';
@@ -1646,6 +1647,43 @@ export default function HomeworkPage() {
       }
     };
     return () => { homeworkSync.onSubmissionReceived = null; };
+  }, []);
+
+  // Sincronizar entregas respaldadas en Firestore para que el profesor las reciba incluso si estaba desconectado
+  useEffect(() => {
+    const syncSubmissionsFromCloud = async () => {
+      try {
+        const cloudSubmissions = await cloudSync.loadAll<HomeworkSubmission & { pin?: string }>('homework_submissions');
+        if (!cloudSubmissions || Object.keys(cloudSubmissions).length === 0) return;
+
+        let anyAdded = false;
+        const currentAssignments = useHomeworkStore.getState().assignments;
+
+        Object.values(cloudSubmissions).forEach((sub) => {
+          if (!sub || !sub.assignmentId) return;
+          const target = currentAssignments.find(
+            (a) => a.id === sub.assignmentId || (sub.pin && a.pin === sub.pin)
+          );
+          if (target) {
+            const alreadyExists = (target.submissions || []).some((s) => s.id === sub.id);
+            if (!alreadyExists) {
+              useHomeworkStore.getState().submitHomework(target.id, sub);
+              anyAdded = true;
+            }
+          }
+        });
+
+        if (anyAdded) {
+          console.log('[Homework] ✅ Entregas de estudiantes actualizadas desde Firestore');
+        }
+      } catch (err) {
+        console.warn('[Homework] Error sincronizando entregas de Firestore:', err);
+      }
+    };
+
+    syncSubmissionsFromCloud();
+    const interval = setInterval(syncSubmissionsFromCloud, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleCreate = (data: Parameters<typeof createAssignment>[0]) => {

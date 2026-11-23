@@ -12,6 +12,7 @@ import {
   getDocs,
   deleteDoc,
   writeBatch,
+  onSnapshot,
   type DocumentData,
 } from 'firebase/firestore';
 
@@ -20,15 +21,18 @@ export { isFirebaseConfigured };
 /**
  * Sanitiza datos antes de enviar a Firestore:
  * - Elimina undefined (Firestore no lo soporta)
- * - Reemplaza fotos base64 grandes (se mantienen solo en localStorage)
- * - Reemplaza PDFs base64 grandes
+ * - Mantiene fotos y evidencias de tamaño razonable (hasta 450 KB por imagen base64).
+ *   Firestore admite hasta 1 MB por documento individual.
+ * - Reemplaza archivos extremadamente grandes (> 450 KB) para evitar rechazo de Firestore.
  */
 function sanitizeForFirestore(data: unknown): DocumentData {
   return JSON.parse(
     JSON.stringify(data, (_key, value) => {
       if (typeof value === 'string') {
-        if (value.startsWith('data:image/') && value.length > 5000) return '__LOCAL_PHOTO__';
-        if (value.startsWith('data:application/pdf') && value.length > 5000) return '__LOCAL_PDF__';
+        // Permitir fotos comprimidas de estudiantes de hasta 450,000 caracteres (~330 KB reales)
+        if (value.startsWith('data:image/') && value.length > 450000) return '__LOCAL_PHOTO__';
+        // Permitir PDFs de hasta 450,000 caracteres
+        if (value.startsWith('data:application/pdf') && value.length > 450000) return '__LOCAL_PDF__';
       }
       return value;
     })
@@ -112,6 +116,25 @@ export const cloudSync = {
       console.log(`[CloudSync] 🗑️ Colección '${collectionName}' limpiada`);
     } catch (e) {
       console.warn(`[CloudSync] ⚠️ Error limpiando ${collectionName}:`, e);
+    }
+  },
+
+  /** Escucha cambios en tiempo real en una colección de Firestore. */
+  listenCollection<T>(collectionName: string, onUpdate: (items: Record<string, T>) => void): () => void {
+    if (!db || !isFirebaseConfigured()) return () => {};
+    try {
+      const unsubscribe = onSnapshot(collection(db, collectionName), (snapshot) => {
+        const result: Record<string, T> = {};
+        snapshot.forEach((d) => {
+          result[d.id] = d.data() as T;
+        });
+        onUpdate(result);
+      }, (err) => {
+        console.warn(`[CloudSync] Error listening to ${collectionName}:`, err);
+      });
+      return unsubscribe;
+    } catch {
+      return () => {};
     }
   },
 };
